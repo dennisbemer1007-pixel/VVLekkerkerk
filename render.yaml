@@ -27,6 +27,11 @@ services:
         value: admin@vvl.local
       - key: ADMIN_PASSWORD
         value: demo-test-2026
+      # Vite-env: beschikbaar bij build (klikbare demo-logins op het startscherm)
+      - key: VITE_SHOW_DEMO_LOGINS
+        value: "true"
+      - key: VITE_DEMO_ADMIN_PASSWORD
+        value: demo-test-2026
       # APP_URL wordt in startscript gezet via RENDER_EXTERNAL_URL
       - key: MAIL_SECRET
         generateValue: true

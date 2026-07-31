@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
-const DEMO_ACCOUNTS = [
-  { role: 'Bestuur', email: 'admin@vvl.local', password: 'admin123' },
-  { role: 'Coördinator', email: 'mark@vvl.demo', password: 'demo123' },
-  { role: 'Teamcoördinator', email: 'sandra@vvl.demo', password: 'demo123' },
-  { role: 'Vrijwilliger', email: 'lisa@vvl.demo', password: 'demo123' },
-];
+const SHOW_DEMO_LOGINS =
+  import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_LOGINS === 'true';
+
+const ADMIN_DEMO_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'admin123';
 
 export default function Login() {
   const { login, isLoggedIn, loading: authLoading } = useAuth();
@@ -18,6 +16,54 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const demoAccounts = useMemo(
+    () => [
+      {
+        role: 'Bestuur',
+        name: 'Beheerder',
+        email: 'admin@vvl.local',
+        password: ADMIN_DEMO_PASSWORD,
+        note: 'Alles beheren',
+      },
+      {
+        role: 'Coördinator',
+        name: 'Mark Jansen',
+        email: 'mark@vvl.demo',
+        password: 'demo123',
+        note: 'Clubbrede planning',
+      },
+      {
+        role: 'Teamcoördinator',
+        name: 'Sandra de Vries',
+        email: 'sandra@vvl.demo',
+        password: 'demo123',
+        note: 'Team JO15',
+      },
+      {
+        role: 'Vrijwilliger (full)',
+        name: 'Lisa Bakker',
+        email: 'lisa@vvl.demo',
+        password: 'demo123',
+        note: 'Volledige verplichting',
+      },
+      {
+        role: 'Vrijwilliger (half)',
+        name: 'Anneke Mulder',
+        email: 'anneke@vvl.demo',
+        password: 'demo123',
+        note: 'Halve verplichting',
+      },
+      {
+        role: 'Vrijwilliger',
+        name: 'Tom van Dam',
+        email: 'tom@vvl.demo',
+        password: 'demo123',
+        note: 'Geen verplichting',
+      },
+    ],
+    [],
+  );
 
   useEffect(() => {
     if (!authLoading && isLoggedIn) navigate('/', { replace: true });
@@ -103,14 +149,16 @@ export default function Login() {
           </p>
         </form>
 
-        {import.meta.env.DEV ? (
+        {SHOW_DEMO_LOGINS ? (
           <section className="vvl-card space-y-3">
             <div>
               <p className="vvl-label mb-0">Demo-accounts</p>
-              <p className="mt-1 text-xs text-gray-600">Klik om direct in te loggen (alleen in development).</p>
+              <p className="mt-1 text-xs text-gray-600">
+                Klik op een account om direct in te loggen — handig om alle rollen te testen.
+              </p>
             </div>
             <ul className="space-y-2">
-              {DEMO_ACCOUNTS.map((account) => (
+              {demoAccounts.map((account) => (
                 <li key={account.email}>
                   <button
                     type="button"
@@ -118,9 +166,12 @@ export default function Login() {
                     onClick={() => loginAsDemo(account)}
                     className="flex w-full items-center justify-between gap-3 rounded-sm border border-vvl-border bg-white px-3 py-2.5 text-left transition hover:border-vvl-primary hover:bg-vvl-muted disabled:opacity-60"
                   >
-                    <span>
+                    <span className="min-w-0">
                       <span className="block text-sm font-bold text-vvl-primary">{account.role}</span>
-                      <span className="block text-xs text-gray-600">{account.email}</span>
+                      <span className="block truncate text-xs text-gray-700">
+                        {account.name} · {account.email}
+                      </span>
+                      <span className="block text-xs text-gray-500">{account.note}</span>
                     </span>
                     <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-vvl-accent">
                       Inloggen
