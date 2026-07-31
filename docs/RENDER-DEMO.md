@@ -21,7 +21,7 @@ Of handmatig **Web Service**:
 |------|--------|
 | Runtime | Node |
 | Plan | Free |
-| Build | `npm install && npm run build:render` |
+| Build | `npm install --include=dev && npm run build:render` |
 | Start | `npm run start:render` |
 | Health check | `/api/health` |
 

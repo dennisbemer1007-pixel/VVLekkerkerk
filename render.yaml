@@ -10,7 +10,8 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: npm install && npm run build:render
+    # --include=dev: Vite e.d. staan in devDependencies; Render zet NODE_ENV=production
+    buildCommand: npm install --include=dev && npm run build:render
     startCommand: npm run start:render
     healthCheckPath: /api/health
     envVars:
