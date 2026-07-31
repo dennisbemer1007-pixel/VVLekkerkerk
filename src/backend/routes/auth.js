@@ -40,6 +40,70 @@ router.get(
   }),
 );
 
+/**
+ * Demo one-click logins — alleen als SEED_DEMO=true (of lokaal development).
+ * Runtime-endpoint: Vite-build env is niet nodig.
+ */
+router.get('/demo-accounts', (_req, res) => {
+  const isDemo = process.env.SEED_DEMO === 'true';
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!isDemo && !isDev) {
+    return res.json({ enabled: false, accounts: [] });
+  }
+
+  const adminPassword =
+    process.env.ADMIN_PASSWORD ||
+    (isDemo ? 'demo-test-2026' : 'admin123');
+
+  res.json({
+    enabled: true,
+    accounts: [
+      {
+        role: 'Bestuur',
+        name: 'Beheerder',
+        email: (process.env.ADMIN_EMAIL || 'admin@vvl.local').toLowerCase(),
+        password: adminPassword,
+        note: 'Alles beheren',
+      },
+      {
+        role: 'Coördinator',
+        name: 'Mark Jansen',
+        email: 'mark@vvl.demo',
+        password: 'demo123',
+        note: 'Clubbrede planning',
+      },
+      {
+        role: 'Teamcoördinator',
+        name: 'Sandra de Vries',
+        email: 'sandra@vvl.demo',
+        password: 'demo123',
+        note: 'Team JO15',
+      },
+      {
+        role: 'Vrijwilliger (full)',
+        name: 'Lisa Bakker',
+        email: 'lisa@vvl.demo',
+        password: 'demo123',
+        note: 'Volledige verplichting',
+      },
+      {
+        role: 'Vrijwilliger (half)',
+        name: 'Anneke Mulder',
+        email: 'anneke@vvl.demo',
+        password: 'demo123',
+        note: 'Halve verplichting',
+      },
+      {
+        role: 'Vrijwilliger',
+        name: 'Tom van Dam',
+        email: 'tom@vvl.demo',
+        password: 'demo123',
+        note: 'Geen verplichting',
+      },
+    ],
+  });
+});
+
 /** Inloggen */
 router.post('/login', async (req, res, next) => {
   try {

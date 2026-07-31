@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { api } from '../hooks/useApi.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
-
-const SHOW_DEMO_LOGINS =
-  import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_LOGINS === 'true';
-
-const ADMIN_DEMO_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'admin123';
 
 export default function Login() {
   const { login, isLoggedIn, loading: authLoading } = useAuth();
@@ -16,58 +12,28 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const demoAccounts = useMemo(
-    () => [
-      {
-        role: 'Bestuur',
-        name: 'Beheerder',
-        email: 'admin@vvl.local',
-        password: ADMIN_DEMO_PASSWORD,
-        note: 'Alles beheren',
-      },
-      {
-        role: 'Coördinator',
-        name: 'Mark Jansen',
-        email: 'mark@vvl.demo',
-        password: 'demo123',
-        note: 'Clubbrede planning',
-      },
-      {
-        role: 'Teamcoördinator',
-        name: 'Sandra de Vries',
-        email: 'sandra@vvl.demo',
-        password: 'demo123',
-        note: 'Team JO15',
-      },
-      {
-        role: 'Vrijwilliger (full)',
-        name: 'Lisa Bakker',
-        email: 'lisa@vvl.demo',
-        password: 'demo123',
-        note: 'Volledige verplichting',
-      },
-      {
-        role: 'Vrijwilliger (half)',
-        name: 'Anneke Mulder',
-        email: 'anneke@vvl.demo',
-        password: 'demo123',
-        note: 'Halve verplichting',
-      },
-      {
-        role: 'Vrijwilliger',
-        name: 'Tom van Dam',
-        email: 'tom@vvl.demo',
-        password: 'demo123',
-        note: 'Geen verplichting',
-      },
-    ],
-    [],
-  );
+  const [demoAccounts, setDemoAccounts] = useState([]);
 
   useEffect(() => {
     if (!authLoading && isLoggedIn) navigate('/', { replace: true });
   }, [authLoading, isLoggedIn, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .demoAccounts()
+      .then((data) => {
+        if (!cancelled && data?.enabled && Array.isArray(data.accounts)) {
+          setDemoAccounts(data.accounts);
+        }
+      })
+      .catch(() => {
+        /* stil: normale login blijft werken */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const doLogin = async (nextEmail, nextPassword) => {
     setError('');
@@ -149,7 +115,7 @@ export default function Login() {
           </p>
         </form>
 
-        {SHOW_DEMO_LOGINS ? (
+        {demoAccounts.length > 0 ? (
           <section className="vvl-card space-y-3">
             <div>
               <p className="vvl-label mb-0">Demo-accounts</p>

@@ -87,6 +87,7 @@ function qs(params) {
 }
 
 export const api = {
+  demoAccounts: () => json('/auth/demo-accounts'),
   login: (email, password) =>
     json('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => json('/auth/logout', { method: 'POST' }),
