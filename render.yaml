@@ -1,0 +1,31 @@
+# Blueprint: VVL Planning — klant-demo op Render Free
+# https://render.com/docs/blueprint-spec
+#
+# Let op: Free = ephemeral storage. Na idle sleep (~15 min) is de database weg
+# en wordt bij de volgende start opnieuw geseed. Prima voor testen, niet voor productie.
+
+services:
+  - type: web
+    name: vvl-planning-demo
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build:render
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SEED_DEMO
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        value: file:./demo.db
+      - key: ADMIN_EMAIL
+        value: admin@vvl.local
+      - key: ADMIN_PASSWORD
+        value: demo-test-2026
+      # APP_URL wordt in startscript gezet via RENDER_EXTERNAL_URL
+      - key: MAIL_SECRET
+        generateValue: true

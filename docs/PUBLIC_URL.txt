@@ -1,0 +1,8 @@
+https://vvllekkerkerk-planning.loca.lt
+
+Subdomein: vvllekkerkerk-planning
+Poort: 3080
+Gestart: 27-7-2026, 19:46:52
+
+Deze URL blijft hetzelfde zolang start-public.cmd draait.
+PC mag niet slapen/uit. Voor 24/7: hosten op een VPS.

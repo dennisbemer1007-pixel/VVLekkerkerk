@@ -1,0 +1,41 @@
+/** JO8–JO12 = ochtend; JO13–JO17 = middag + avond */
+
+const YOUNG_RE = /\bJO\s*(0?8|0?9|10|11|12)\b/i;
+const OLD_RE = /\bJO\s*(13|14|15|16|17)\b/i;
+
+export function parseJoAge(teamName) {
+  if (!teamName) return null;
+  const young = teamName.match(YOUNG_RE);
+  if (young) return { age: Number(young[1]), group: 'young' };
+  const old = teamName.match(OLD_RE);
+  if (old) return { age: Number(old[1]), group: 'old' };
+  return null;
+}
+
+export function isYoungYouthTeam(teamName) {
+  return parseJoAge(teamName)?.group === 'young';
+}
+
+export function isOldYouthTeam(teamName) {
+  return parseJoAge(teamName)?.group === 'old';
+}
+
+export function isYouthTeam(teamName) {
+  return Boolean(parseJoAge(teamName));
+}
+
+/** Standaardtijden zoals op het kantine-rooster */
+export const SLOT_TIMES = {
+  MORNING: {
+    BAR: '09:00 - 13:00',
+    KITCHEN: '09:00 - 12:00',
+  },
+  AFTERNOON: {
+    BAR: '12:00 - 16:30',
+    KITCHEN: '12:00 - 16:00',
+  },
+  EVENING: {
+    BAR: '16:30 - 19:30',
+    KITCHEN: '16:00 - 19:00',
+  },
+};

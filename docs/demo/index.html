@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VVL Planning App — Feature demo</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --ink: #111;
+      --muted: #555;
+      --border: #ccc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      background: #000;
+      color: #fff;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header span { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
+    main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    .lead { color: var(--muted); margin: 0 0 20px; }
+    video, .slide-img {
+      width: 100%;
+      background: #fff;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    button {
+      border: 1px solid #000;
+      background: #fff;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.primary { background: #000; color: #fff; }
+    .meta { font-size: 0.95rem; color: var(--muted); min-height: 3em; }
+    .meta strong { color: var(--ink); }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>V.V. Lekkerkerk</strong>
+    <span>Feature-demo</span>
+  </header>
+  <main>
+    <h1>VVL Planning App — demo</h1>
+    <p class="lead">
+      Bekijk het <a href="./VVL-Planning-App-Demo.mp4">demofilmpje (MP4, ~35 sec)</a>
+      of blader handmatig door de schermen (inclusief concept-planning en PDF-rooster).
+    </p>
+
+    <video controls playsinline src="./VVL-Planning-App-Demo.mp4">
+      Je browser ondersteunt geen video.
+    </video>
+
+    <div class="controls">
+      <button type="button" class="primary" id="play">Afspelen slideshow</button>
+      <button type="button" id="prev">Vorige</button>
+      <button type="button" id="next">Volgende</button>
+    </div>
+
+    <img class="slide-img" id="slide" alt="Demo frame" />
+    <p class="meta" id="caption"></p>
+  </main>
+  <script>
+    const slides = [
+      { src: '../demo-frames/01-inloggen.png', title: '1. Inloggen', text: 'Log in met e-mail en wachtwoord.' },
+      { src: '../demo-frames/02-dashboard.png', title: '2. Dashboard', text: 'Tellingen, bezetting en snelle navigatie.' },
+      { src: '../demo-frames/03-inschrijven.png', title: '3. Inschrijven', text: 'Open diensten filteren en inschrijven (alleen namen).' },
+      { src: '../demo-frames/04-planning.png', title: '4. Planning', text: '6 weken overzicht + knop PDF-rooster.' },
+      { src: '../demo-frames/05-beheer-personen.png', title: '5. Beheer — Personen', text: 'Uitnodigen; e-mail/telefoon alleen voor beheer.' },
+      { src: '../demo-frames/06-beheer-diensten.png', title: '6. Beheer — Diensten', text: 'Extra diensten / concepten handmatig bijwerken.' },
+      { src: '../demo-frames/07-beheer-planning.png', title: '7. Beheer — Planning (nieuw)', text: 'Voorstel JO8–JO17, publiceren, mails, verplichte vullen.' },
+      { src: '../demo-frames/08-beheer-wedstrijden.png', title: '8. Beheer — Wedstrijden', text: 'KNVB/CSV importeren met JO-team.' },
+      { src: '../demo-frames/09-beheer-teams.png', title: '9. Beheer — Teams', text: 'Teams en leden inschrijven.' },
+      { src: '../demo-frames/10-beheer-email.png', title: '10. Beheer — E-mail', text: 'SMTP voor uitnodigingen en planningberichten.' },
+      { src: '../demo-frames/11-pdf-rooster.png', title: '11. PDF-rooster', text: 'A4-raster: weken × dagen, Bar/Keuken-rijen, gesloten of namen.' },
+    ];
+
+    let i = 0;
+    let timer = null;
+    const img = document.getElementById('slide');
+    const caption = document.getElementById('caption');
+
+    function show(n) {
+      i = (n + slides.length) % slides.length;
+      const s = slides[i];
+      img.src = s.src;
+      caption.innerHTML = '<strong>' + s.title + '</strong> — ' + s.text;
+    }
+
+    document.getElementById('prev').onclick = () => { stop(); show(i - 1); };
+    document.getElementById('next').onclick = () => { stop(); show(i + 1); };
+    document.getElementById('play').onclick = () => {
+      if (timer) { stop(); return; }
+      document.getElementById('play').textContent = 'Stop';
+      timer = setInterval(() => show(i + 1), 3200);
+    };
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      document.getElementById('play').textContent = 'Afspelen slideshow';
+    }
+    show(0);
+  </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-vvl-muted text-vvl-primary antialiased;
+  }
+}
+
+@layer components {
+  .vvl-btn-primary {
+    @apply inline-flex items-center justify-center rounded-full border-2 border-vvl-primary bg-vvl-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+  }
+
+  .vvl-btn-outline {
+    @apply inline-flex items-center justify-center rounded-full border-2 border-vvl-primary bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-vvl-primary transition hover:bg-vvl-primary hover:text-white;
+  }
+
+  .vvl-btn-outline-light {
+    @apply inline-flex items-center justify-center rounded-full border-2 border-white bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+  }
+
+  .vvl-card {
+    @apply rounded-sm border border-vvl-border bg-vvl-background p-4 shadow-sm;
+  }
+
+  .vvl-input {
+    @apply w-full rounded-sm border border-vvl-border bg-white px-3 py-2 text-sm outline-none ring-vvl-primary focus:ring-2;
+  }
+
+  .vvl-label {
+    @apply mb-1 block text-xs font-bold uppercase tracking-wide text-vvl-accent;
+  }
+
+  .page-title {
+    @apply font-heading text-2xl font-black uppercase tracking-tight text-vvl-primary md:text-3xl;
+  }
+
+  .vvl-logo {
+    @apply bg-transparent;
+    mix-blend-mode: multiply;
+  }
+}

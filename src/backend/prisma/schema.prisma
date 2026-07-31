@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Person {
+  id               Int          @id @default(autoincrement())
+  name             String
+  email            String?      @unique
+  phone            String?
+  photoUrl         String?
+  role             String       @default("Vrijwilliger")
+  active           Boolean      @default(true)
+  /** NONE | FULL (min 1x/6w) | HALF (min 3x/jaar) */
+  obligation       String       @default("NONE")
+  /** JSON array van weekdagen 0=zo … 6=za waarop iemand niet kan */
+  unavailableWeekdays String    @default("[]")
+  /** JSON array: MORNING | AFTERNOON | EVENING */
+  preferredSlots   String       @default("[]")
+  passwordHash     String?
+  inviteToken      String?      @unique
+  inviteExpiresAt  DateTime?
+  passwordResetToken     String?  @unique
+  passwordResetExpiresAt DateTime?
+  accountCreatedAt DateTime?
+  teamId           Int?
+  team             Team?        @relation(fields: [teamId], references: [id])
+  enrollments      Enrollment[]
+  coordinates      Team[]       @relation("TeamCoordinator")
+  sessions         Session[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  coordinatorId        Int?
+  coordinator          Person?   @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
+  /** Geschatte wedstrijdduur in minuten (KNVB geeft geen eindtijd) */
+  matchDurationMinutes Int       @default(90)
+  members              Person[]
+  matches              Match[]
+  assignedServices     Service[] @relation("AssignedTeam")
+}
+
+model Match {
+  id       Int      @id @default(autoincrement())
+  date     DateTime
+  home     Boolean  @default(true)
+  opponent String?
+  note     String?
+  teamId   Int?
+  team     Team?    @relation(fields: [teamId], references: [id])
+  services Service[]
+}
+
+model Service {
+  id             Int          @id @default(autoincrement())
+  type           ServiceType
+  date           DateTime
+  time           String
+  location       String
+  required       Int          @default(2)
+  active         Boolean      @default(true)
+  /** Concept-dienst: nog niet open voor inschrijving */
+  draft          Boolean      @default(false)
+  /** MORNING | AFTERNOON | EVENING | EXTRA */
+  slot           String?
+  note           String?
+  matchId        Int?
+  match          Match?       @relation(fields: [matchId], references: [id])
+  assignedTeamId Int?
+  assignedTeam   Team?        @relation("AssignedTeam", fields: [assignedTeamId], references: [id])
+  enrollments    Enrollment[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Enrollment {
+  id        Int      @id @default(autoincrement())
+  serviceId Int
+  personId  Int
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  /** SELF | ADMIN | TEAM | AUTO */
+  source    String   @default("SELF")
+  createdAt DateTime @default(now())
+
+  @@unique([serviceId, personId])
+}
+
+enum ServiceType {
+  BAR
+  KITCHEN
+}
+
+/**
+ * Actuele planningsronde (inschrijfvensters).
+ * status: DRAFT | VOLUNTEER_OPEN | MANDATORY_OPEN | CLOSED
+ */
+model PlanningRound {
+  id                    Int       @id @default(1)
+  fromDate              DateTime?
+  toDate                DateTime?
+  status                String    @default("DRAFT")
+  volunteerDeadline     DateTime?
+  volunteerNotifiedAt   DateTime?
+  mandatoryNotifiedAt   DateTime?
+  updatedAt             DateTime  @updatedAt
+}
+
+/** Singleton: id is altijd 1. Mailserver-instellingen via Beheer in de app. */
+model MailSettings {
+  id        Int      @id @default(1)
+  enabled   Boolean  @default(false)
+  host      String   @default("")
+  port      Int      @default(587)
+  secure    Boolean  @default(false)
+  user      String   @default("")
+  password  String   @default("")
+  fromEmail String   @default("")
+  fromName  String   @default("V.V. Lekkerkerk")
+  updatedAt DateTime @updatedAt
+}
