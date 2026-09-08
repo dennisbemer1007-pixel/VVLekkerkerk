@@ -1026,16 +1026,16 @@ function PlanningBeheer() {
   return (
     <section className="space-y-4">
       <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-lg font-black uppercase">Kantinedienst-voorstel</h2>
+        <h2 className="font-heading text-lg font-black uppercase">Planning vanuit wedstrijden</h2>
         <p className="text-sm text-gray-700">
           Na het inladen van{' '}
           <Link to="/wedstrijden" className="font-semibold underline">
             KNVB-wedstrijden
           </Link>{' '}
-          (met team JO8–JO17 of O8–O17) maakt de app een{' '}
-          <strong>concept</strong>: JO8–JO12 ochtend (bar+keuken), JO13–JO17 middag én avond.
-          Je kunt daarna nog diensten wijzigen of extra activiteiten toevoegen voordat je
-          publiceert.
+          maakt de app automatisch een <strong>bardienst</strong> per aftrap van een{' '}
+          <strong>thuiswedstrijd</strong> (bijv. 09:00 → 09:00–12:00, bezetting 2). Meerdere
+          wedstrijden op hetzelfde tijdstip delen één dienst. Op Planning kun je ook op Update
+          drukken.
         </p>
         <p className="text-sm">
           Status:{' '}
@@ -1051,13 +1051,15 @@ function PlanningBeheer() {
             disabled={busy}
             onClick={() =>
               run(
-                () => api.proposePlanning({ weeks: 6, required: 2 }),
+                () => api.syncPlanningFromMatches({ required: 2 }),
                 (r) =>
-                  `Concept gemaakt: ${r.created} dienst(en)${r.skipped ? ` (${r.skipped} overgeslagen)` : ''}.`,
+                  r.created
+                    ? `Planning bijgewerkt: ${r.created} dienst(en) in ${r.slots ?? 0} tijdsblok(ken).`
+                    : 'Geen nieuwe diensten — planning was al actueel.',
               )
             }
           >
-            Voorstel maken (6 weken)
+            Planning bijwerken
           </button>
         </div>
       </div>

@@ -25,6 +25,7 @@ export const PAGE_HELP = {
     actions: [
       'Bekijk alle diensten in de periode (ongeveer 6 weken)',
       'Filter op open of jouw diensten',
+      'Als beheerder: Update om nieuwe thuiswedstrijden in de planning te zetten',
       'Download het PDF-rooster voor in de kantine',
     ],
   },
@@ -70,7 +71,7 @@ export const PAGE_HELP = {
     purpose:
       'De planningsronde: voorstel uit wedstrijden, publiceren voor vrijwilligers, mailen, en daarna open plekken vullen met verplichte bardienst.',
     actions: [
-      'Concept-voorstel maken uit thuiswedstrijden',
+      'Planning bijwerken vanuit thuiswedstrijden (bardienst per aftrap, 2 personen)',
       'Publiceren en vrijwilligersfase openen',
       'Mails sturen en open plekken automatisch vullen',
     ],
@@ -90,7 +91,7 @@ export const PAGE_HELP = {
     actions: [
       'Filteren op datum, team, wedstrijdnummer of spelniveau',
       'Ook gespeelde wedstrijden tonen via “Toon alle wedstrijden”',
-      'Als beheerder: KNVB-bestand (.xlsx of .csv) importeren of een wedstrijd handmatig toevoegen',
+      'Als beheerder: KNVB-bestand importeren; thuiswedstrijden krijgen automatisch een bardienst',
     ],
   },
   beheerMail: {

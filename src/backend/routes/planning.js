@@ -273,9 +273,21 @@ router.post(
   }),
 );
 
-/** Concept-planning JO8–JO17 (niet definitief) */
+/** Planning bijwerken vanuit thuiswedstrijden (bar + keuken per aftrap) */
 router.post(
   '/propose',
+  admin(async (req, res, next) => {
+    try {
+      const result = await proposeFromMatches(req.body ?? {});
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/sync',
   admin(async (req, res, next) => {
     try {
       const result = await proposeFromMatches(req.body ?? {});

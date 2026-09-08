@@ -167,7 +167,10 @@ export default function CsvMatchImport({ onImported }) {
       setMsg(
         `${res.created} wedstrijd(en) geïmporteerd` +
           (dupes ? ` · ${dupes} bestonden al (overgeslagen)` : '') +
-          (skipped ? ` · ${skipped} ongeldige rij(en) overgeslagen` : ''),
+          (skipped ? ` · ${skipped} ongeldige rij(en) overgeslagen` : '') +
+          (res.planningCreated
+            ? ` · ${res.planningCreated} bardienst(en) ingepland`
+            : ''),
       );
       setValidPreview([]);
       setValidCount(0);

@@ -150,6 +150,8 @@ export const api = {
     json('/planning/from-matches', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   proposePlanning: (data) =>
     json('/planning/propose', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  syncPlanningFromMatches: (data) =>
+    json('/planning/sync', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   publishPlanning: (data) =>
     json('/planning/publish', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   notifyVolunteers: (data) =>

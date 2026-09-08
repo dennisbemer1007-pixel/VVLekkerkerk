@@ -77,7 +77,7 @@ export default function Wedstrijden() {
     setError('');
     setMsg('');
     try {
-      await api.createMatch({
+      const created = await api.createMatch({
         ...form,
         teamId: form.teamId || null,
         time: form.time || null,
@@ -94,7 +94,11 @@ export default function Wedstrijden() {
         matchNumber: '',
         playLevel: '',
       });
-      setMsg('Wedstrijd opgeslagen.');
+      setMsg(
+        created?.planningCreated
+          ? 'Wedstrijd opgeslagen. De bardienst voor dit tijdsblok staat in de planning.'
+          : 'Wedstrijd opgeslagen.',
+      );
       await load();
     } catch (err) {
       setError(err.message);

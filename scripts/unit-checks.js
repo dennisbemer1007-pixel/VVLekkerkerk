@@ -12,6 +12,10 @@ import {
   prefersSlot,
   normalizeObligation,
 } from '../src/backend/lib/obligation.js';
+import {
+  groupHomeMatchesByKickoff,
+  serviceWindowForKickoff,
+} from '../src/backend/lib/matchPlanning.js';
 
 let pass = 0;
 let fail = 0;
@@ -80,6 +84,30 @@ assert(
 assert('O11-1 is young youth', isYoungYouthTeam('O11-1') === true);
 assert('JO15-1 is old youth', isOldYouthTeam('JO15-1') === true);
 assert('O16-1 is old youth', isOldYouthTeam('O16-1') === true);
+
+const win9 = serviceWindowForKickoff('09:00');
+assert('kickoff 09:00 → 09:00 - 12:00', win9.time === '09:00 - 12:00' && win9.slot === 'MORNING');
+assert('kickoff 08:30 → 08:30 - 11:30', serviceWindowForKickoff('08:30').time === '08:30 - 11:30');
+assert('kickoff 15:00 → 15:00 - 18:00', serviceWindowForKickoff('15:00').time === '15:00 - 18:00');
+
+const day = new Date('2026-09-12T12:00:00');
+const fiveSameTime = [1, 2, 3, 4, 5].map((n) => ({
+  home: true,
+  date: day,
+  time: '09:00',
+  opponent: `Tegen ${n}`,
+  team: { name: `O11-${n}` },
+}));
+const groupedSame = groupHomeMatchesByKickoff(fiveSameTime);
+assert('five home matches same kickoff → one slot', groupedSame.length === 1 && groupedSame[0].matches.length === 5);
+
+const mixedTimes = groupHomeMatchesByKickoff([
+  { home: true, date: day, time: '09:00', opponent: 'A' },
+  { home: true, date: day, time: '15:00', opponent: 'B' },
+  { home: false, date: day, time: '09:00', opponent: 'Uit' },
+]);
+assert('different kickoffs are separate slots', mixedTimes.length === 2);
+assert('away matches are ignored', mixedTimes.every((g) => g.matches.every((m) => m.home)));
 
 const xlsxPath = 'C:/Users/dbeme/Documents/KNVB-Wedstrijden.xlsx';
 if (fs.existsSync(xlsxPath)) {

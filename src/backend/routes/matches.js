@@ -6,6 +6,7 @@ import { objectsToMatchRows, parseCsv, validateMatchRows } from '../lib/csvMatch
 import { parseMatchDateInput } from '../lib/authz.js';
 import { combineDateAndTime } from '../lib/time.js';
 import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
+import { trySyncPlanningFromMatches } from '../lib/proposePlanning.js';
 import {
   addTeamToIndex,
   buildTeamIndex,
@@ -65,7 +66,8 @@ router.post(
         },
         include: { team: true },
       });
-      res.status(201).json(match);
+      const planning = home !== false ? await trySyncPlanningFromMatches() : { created: 0 };
+      res.status(201).json({ ...match, planningCreated: planning.created });
     } catch (err) {
       next(err);
     }
@@ -234,6 +236,8 @@ router.post(
       }
 
       const { created, persistErrors, skippedDuplicates } = await persistValidRows(result.rows);
+      const planning =
+        created.some((m) => m.home) ? await trySyncPlanningFromMatches() : { created: 0 };
 
       if (created.length === 0 && skippedDuplicates === 0) {
         return res.status(400).json({
@@ -254,6 +258,7 @@ router.post(
           invalidRows: result.invalidRows,
           errors: [...result.errors, ...persistErrors],
           format: result.format,
+          planningCreated: 0,
         });
       }
 
@@ -265,6 +270,7 @@ router.post(
         invalidRows: result.invalidRows,
         errors: [...result.errors, ...persistErrors],
         format: result.format,
+        planningCreated: planning.created,
       });
     } catch (err) {
       next(err);

@@ -7,12 +7,14 @@ import { api } from '../hooks/useApi.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Planning() {
-  const { personId } = useAuth();
+  const { personId, can } = useAuth();
   const [filter, setFilter] = useState('');
   const [services, setServices] = useState([]);
   const [period, setPeriod] = useState(null);
   const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   const load = useCallback(() => {
     const params = {};
@@ -50,13 +52,33 @@ export default function Planning() {
     }
   };
 
+  const updateFromMatches = async () => {
+    setUpdateBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const res = await api.syncPlanningFromMatches({ required: 2 });
+      setMsg(
+        res.created
+          ? `${res.created} dienst(en) toegevoegd uit thuiswedstrijden (${res.slots ?? 0} tijdsblok(ken)).`
+          : 'Planning is al actueel — geen nieuwe thuiswedstrijden.',
+      );
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <PageTitle {...PAGE_HELP.planning}>Planning</PageTitle>
           <p className="mt-1 text-sm text-gray-700">
-            Overzicht voor de komende 6 weken. Print de PDF voor in de kantine.
+            Overzicht voor de komende 6 weken. Thuiswedstrijden krijgen automatisch een
+            bardienst per aftrap (3 uur, 2 personen).
           </p>
           {period ? (
             <p className="mt-1 text-xs text-gray-600">
@@ -64,18 +86,35 @@ export default function Planning() {
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          className="vvl-btn-primary text-center"
-          disabled={pdfBusy}
-          onClick={downloadPdf}
-        >
-          {pdfBusy ? 'PDF laden…' : 'PDF-rooster (A4)'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {can('beheer') ? (
+            <button
+              type="button"
+              className="vvl-btn-outline text-center"
+              disabled={updateBusy}
+              onClick={updateFromMatches}
+            >
+              {updateBusy ? 'Bijwerken…' : 'Update'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="vvl-btn-primary text-center"
+            disabled={pdfBusy}
+            onClick={downloadPdf}
+          >
+            {pdfBusy ? 'PDF laden…' : 'PDF-rooster (A4)'}
+          </button>
+        </div>
       </header>
 
       <FilterChips value={filter} onChange={setFilter} showMine />
 
+      {msg ? (
+        <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+          {msg}
+        </p>
+      ) : null}
       {error ? (
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
