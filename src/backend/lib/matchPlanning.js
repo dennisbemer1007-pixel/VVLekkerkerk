@@ -81,6 +81,61 @@ export function groupHomeMatchesByKickoff(matches) {
   });
 }
 
+export function barSlotKey(date, startMinutes) {
+  return `${toIsoDate(startOfDay(date))}|BAR|${startMinutes}`;
+}
+
+export function barSlotKeyFromService(service) {
+  const start = parseTimeStartMinutes(service?.time);
+  if (start == null) return null;
+  return barSlotKey(service.date, start);
+}
+
+/**
+ * Houd max. één BAR per thuis-aftrap; rest (keuken, extra tijden, duplicaten) is wees.
+ */
+export function pickServicesMatchingHomeMatches(services, groups) {
+  const needed = new Map();
+  for (const group of groups || []) {
+    needed.set(barSlotKey(group.date, group.window.startMinutes), group);
+  }
+
+  const byKey = new Map();
+  const unmatched = [];
+
+  for (const service of services || []) {
+    const start = parseTimeStartMinutes(service.time);
+    if (service.type !== 'BAR' || start == null) {
+      unmatched.push(service);
+      continue;
+    }
+    const key = barSlotKey(service.date, start);
+    if (!needed.has(key)) {
+      unmatched.push(service);
+      continue;
+    }
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(service);
+  }
+
+  const keep = [];
+  const extras = [];
+  for (const [key, list] of byKey) {
+    const group = needed.get(key);
+    const matchIds = new Set((group.matches || []).map((m) => m.id).filter((id) => id != null));
+    const ranked = [...list].sort((a, b) => {
+      const aHit = a.matchId != null && matchIds.has(a.matchId) ? 0 : 1;
+      const bHit = b.matchId != null && matchIds.has(b.matchId) ? 0 : 1;
+      if (aHit !== bHit) return aHit - bHit;
+      return (a.id ?? 0) - (b.id ?? 0);
+    });
+    keep.push(ranked[0]);
+    extras.push(...ranked.slice(1));
+  }
+
+  return { keep, remove: [...unmatched, ...extras] };
+}
+
 export function planningNoteForGroup(group) {
   const names = (group.matches || []).map((m) => {
     const team = m.team?.name;

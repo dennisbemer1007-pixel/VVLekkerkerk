@@ -58,10 +58,17 @@ export default function Planning() {
     setMsg('');
     try {
       const res = await api.syncPlanningFromMatches({ required: 2 });
+      const parts = [];
+      if (res.created) parts.push(`${res.created} bardienst(en) toegevoegd`);
+      if (res.removed) {
+        parts.push(
+          `${res.removed} dienst(en) verwijderd die niet bij een thuiswedstrijd hoorden`,
+        );
+      }
       setMsg(
-        res.created
-          ? `${res.created} dienst(en) toegevoegd uit thuiswedstrijden (${res.slots ?? 0} tijdsblok(ken)).`
-          : 'Planning is al actueel — geen nieuwe thuiswedstrijden.',
+        parts.length
+          ? `Planning bijgewerkt: ${parts.join(', ')}.`
+          : 'Planning is al actueel — alleen bardiensten bij thuiswedstrijden blijven staan.',
       );
       await load();
     } catch (e) {
@@ -77,8 +84,8 @@ export default function Planning() {
         <div>
           <PageTitle {...PAGE_HELP.planning}>Planning</PageTitle>
           <p className="mt-1 text-sm text-gray-700">
-            Overzicht voor de komende 6 weken. Thuiswedstrijden krijgen automatisch een
-            bardienst per aftrap (3 uur, 2 personen).
+            Overzicht voor de komende 6 weken. Alleen bardiensten bij thuiswedstrijden
+            (3 uur vanaf de aftrap, 2 personen).
           </p>
           {period ? (
             <p className="mt-1 text-xs text-gray-600">

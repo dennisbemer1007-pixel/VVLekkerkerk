@@ -151,10 +151,8 @@ async function main() {
   const servicesSpec = [
     { type: 'BAR', day: 0, time: '18:00 - 22:00', required: 3, note: 'Dinsdagavond bar', location: 'Bar', slot: 'EXTRA' },
     { type: 'BAR', day: 3, time: '09:00 - 13:00', required: 2, note: 'Ochtend JO11', location: 'Bar', slot: 'MORNING', teamId: teamJO11.id },
-    { type: 'KITCHEN', day: 3, time: '09:00 - 12:00', required: 2, note: 'Keuken ochtend', location: 'Keuken', slot: 'MORNING', teamId: teamJO11.id },
     { type: 'BAR', day: 5, time: '19:00 - 23:00', required: 2, note: 'Vrijdagavond', location: 'Bar', slot: 'EXTRA' },
     { type: 'BAR', day: 7, time: '12:00 - 16:30', required: 2, note: 'Middag JO15', location: 'Bar', slot: 'AFTERNOON', teamId: teamJO15.id },
-    { type: 'KITCHEN', day: 7, time: '12:00 - 16:00', required: 2, note: null, location: 'Keuken', slot: 'AFTERNOON', teamId: teamJO15.id },
     { type: 'BAR', day: 7, time: '16:30 - 19:30', required: 2, note: 'Avond JO15', location: 'Bar', slot: 'EVENING', teamId: teamJO15.id },
     { type: 'BAR', day: 12, time: '18:00 - 22:00', required: 2, note: 'Doordeweeks', location: 'Bar', slot: 'EXTRA' },
     { type: 'BAR', day: 21, time: '19:00 - 23:30', required: 4, note: 'Klaverjasavond', location: 'Bar', slot: 'EXTRA' },
@@ -185,13 +183,11 @@ async function main() {
   const enrollments = [
     { service: services[0], people: [lisa, tom] },
     { service: services[1], people: [anneke, kevin] },
-    { service: services[2], people: [anneke] },
-    { service: services[3], people: [] },
-    { service: services[4], people: [tom, lisa] },
-    { service: services[5], people: [noa] },
-    { service: services[6], people: [erik] },
-    { service: services[7], people: [lisa] },
-    { service: services[8], people: [tom, peter, anneke] },
+    { service: services[2], people: [noa] },
+    { service: services[3], people: [tom, lisa] },
+    { service: services[4], people: [erik] },
+    { service: services[5], people: [lisa] },
+    { service: services[6], people: [tom, peter, anneke] },
   ];
 
   for (const e of enrollments) {

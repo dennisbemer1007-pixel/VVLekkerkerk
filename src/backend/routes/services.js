@@ -10,7 +10,7 @@ const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
 
 function buildServiceWhere(query) {
   const { from, to, filter, activeOnly, allDates, includeDraft } = query;
-  const where = {};
+  const where = { type: 'BAR' };
 
   if (activeOnly !== 'false') where.active = true;
   if (includeDraft !== 'true') where.draft = false;
@@ -72,22 +72,20 @@ router.post(
   '/',
   admin(async (req, res, next) => {
     try {
-      const { type, date, time, note, required, location, active, draft, slot, assignedTeamId } =
+      const { date, time, note, required, location, active, draft, slot, assignedTeamId } =
         req.body;
-      if (!type || !date || !time?.trim()) {
-        return res.status(400).json({ error: 'Type, datum en tijd zijn verplicht' });
+      if (!date || !time?.trim()) {
+        return res.status(400).json({ error: 'Datum en tijd zijn verplicht' });
       }
-      if (!['BAR', 'KITCHEN'].includes(type)) {
-        return res.status(400).json({ error: 'Type moet BAR of KITCHEN zijn' });
-      }
+      const serviceType = 'BAR';
       const service = await prisma.service.create({
         data: {
-          type,
+          type: serviceType,
           date: new Date(date),
           time: time.trim(),
           note: note?.trim() || null,
           required: Math.max(1, Number(required) || 2),
-          location: location?.trim() || serviceLocation(type),
+          location: location?.trim() || serviceLocation(serviceType),
           active: active !== false,
           draft: Boolean(draft),
           slot: slot?.trim() || 'EXTRA',
@@ -111,7 +109,7 @@ router.put(
       const service = await prisma.service.update({
         where: { id: Number(req.params.id) },
         data: {
-          ...(type !== undefined && { type }),
+          ...(type !== undefined && { type: 'BAR' }),
           ...(date !== undefined && { date: new Date(date) }),
           ...(time !== undefined && { time: time.trim() }),
           ...(note !== undefined && { note: note?.trim() || null }),

@@ -34,7 +34,7 @@ router.get(
   requireAuth(async (req, res, next) => {
   try {
     const services = await prisma.service.findMany({
-      where: { active: true, draft: false },
+      where: { active: true, draft: false, type: 'BAR' },
       include: { enrollments: true },
     });
 
@@ -58,11 +58,11 @@ router.get(
     const [personCount, serviceCount, enrollmentCount, teamCount, matchCount, draftCount] =
       await Promise.all([
         prisma.person.count({ where: { active: true } }),
-        prisma.service.count({ where: { active: true, draft: false } }),
+        prisma.service.count({ where: { active: true, draft: false, type: 'BAR' } }),
         prisma.enrollment.count(),
         prisma.team.count(),
         prisma.match.count(),
-        prisma.service.count({ where: { active: true, draft: true } }),
+        prisma.service.count({ where: { active: true, draft: true, type: 'BAR' } }),
       ]);
 
     const occupancyRate =
@@ -104,6 +104,7 @@ router.get(
         where: {
           active: true,
           draft: false,
+          type: 'BAR',
           date: { gte: startOfDay(round.fromDate), lte: endOfDay(round.toDate) },
         },
         select: { id: true },
@@ -172,7 +173,7 @@ router.get(
   requireAuth(async (req, res, next) => {
   try {
     const { from, to, filter, personId, includeDraft } = req.query;
-    const where = { active: true };
+    const where = { active: true, type: 'BAR' };
     if (includeDraft === 'true' && isAdminRole(req.person.role)) {
       // admin mag drafts zien
     } else {
@@ -273,7 +274,7 @@ router.post(
   }),
 );
 
-/** Planning bijwerken vanuit thuiswedstrijden (bar + keuken per aftrap) */
+/** Planning bijwerken vanuit thuiswedstrijden (bardienst per aftrap) */
 router.post(
   '/propose',
   admin(async (req, res, next) => {

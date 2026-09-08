@@ -1,33 +1,17 @@
 import prisma from './prisma.js';
-import { addWeeks, endOfDay, startOfDay, toIsoDate } from './dates.js';
+import { addWeeks, endOfDay, startOfDay } from './dates.js';
 import { mapService, serviceInclude, serviceLocation } from './serviceHelpers.js';
-import { parseTimeStartMinutes } from './time.js';
 import {
+  barSlotKey,
+  barSlotKeyFromService,
   groupHomeMatchesByKickoff,
+  pickServicesMatchingHomeMatches,
   planningNoteForGroup,
 } from './matchPlanning.js';
 
-function existingKey(date, type, startMinutes) {
-  return `${toIsoDate(startOfDay(date))}|${type}|${startMinutes}`;
-}
-
-async function loadExistingKeys(from) {
-  const services = await prisma.service.findMany({
-    where: { active: true, date: { gte: from } },
-    select: { date: true, type: true, time: true },
-  });
-  const keys = new Set();
-  for (const s of services) {
-    const start = parseTimeStartMinutes(s.time);
-    if (start == null) continue;
-    keys.add(existingKey(s.date, s.type, start));
-  }
-  return keys;
-}
-
 /**
- * Maak ontbrekende bardiensten voor toekomstige thuiswedstrijden.
- * Zelfde aftrap op dezelfde dag → één bardienst (3 uur, 2 personen).
+ * Maak ontbrekende bardiensten voor toekomstige thuiswedstrijden
+ * en verwijder diensten die niet bij een thuis-aftrap horen.
  */
 export async function syncServicesFromHomeMatches({ required = 2 } = {}) {
   const from = startOfDay(new Date());
@@ -38,55 +22,64 @@ export async function syncServicesFromHomeMatches({ required = 2 } = {}) {
   });
 
   const groups = groupHomeMatchesByKickoff(matches);
-  const existing = await loadExistingKeys(from);
-  const created = [];
-  let skipped = 0;
   const needed = Math.max(1, Number(required) || 2);
 
-  await prisma.service.updateMany({
-    where: {
-      active: true,
-      type: 'KITCHEN',
-      matchId: { not: null },
-      date: { gte: from },
-    },
-    data: { active: false },
+  const kitchenGone = await prisma.service.deleteMany({ where: { type: 'KITCHEN' } });
+
+  const futureServices = await prisma.service.findMany({
+    where: { date: { gte: from } },
+    select: { id: true, type: true, date: true, time: true, matchId: true },
   });
 
-  await prisma.service.updateMany({
-    where: {
-      active: true,
-      type: 'BAR',
-      matchId: { not: null },
-      date: { gte: from },
-    },
-    data: { required: needed },
-  });
+  const { keep, remove } = pickServicesMatchingHomeMatches(futureServices, groups);
+
+  if (remove.length) {
+    await prisma.service.deleteMany({
+      where: { id: { in: remove.map((s) => s.id) } },
+    });
+  }
+
+  const keepByKey = new Map();
+  for (const service of keep) {
+    const key = barSlotKeyFromService(service);
+    if (key) keepByKey.set(key, service);
+  }
+
+  const created = [];
+  let skipped = 0;
+  let updated = 0;
 
   for (const group of groups) {
-    const key = existingKey(group.date, 'BAR', group.window.startMinutes);
-    if (existing.has(key)) {
+    const key = barSlotKey(group.date, group.window.startMinutes);
+    const existingSvc = keepByKey.get(key) || null;
+
+    const payload = {
+      type: 'BAR',
+      date: group.date,
+      time: group.window.time,
+      slot: group.window.slot,
+      required: needed,
+      location: serviceLocation('BAR'),
+      draft: false,
+      active: true,
+      matchId: group.matches[0]?.id ?? null,
+      note: planningNoteForGroup(group),
+    };
+
+    if (existingSvc) {
       skipped += 1;
+      await prisma.service.update({
+        where: { id: existingSvc.id },
+        data: payload,
+      });
+      updated += 1;
       continue;
     }
 
     const service = await prisma.service.create({
-      data: {
-        type: 'BAR',
-        date: group.date,
-        time: group.window.time,
-        slot: group.window.slot,
-        required: needed,
-        location: serviceLocation('BAR'),
-        draft: false,
-        active: true,
-        matchId: group.matches[0]?.id ?? null,
-        note: planningNoteForGroup(group),
-      },
+      data: payload,
       include: serviceInclude,
     });
-
-    existing.add(key);
     created.push(mapService(service));
   }
 
@@ -115,6 +108,8 @@ export async function syncServicesFromHomeMatches({ required = 2 } = {}) {
   return {
     created: created.length,
     skipped,
+    updated,
+    removed: remove.length + kitchenGone.count,
     slots: groups.length,
     services: created,
     period: { from, to },
@@ -126,7 +121,15 @@ export async function trySyncPlanningFromMatches(options) {
     return await syncServicesFromHomeMatches(options);
   } catch (err) {
     console.error('[planning] sync from matches failed:', err);
-    return { created: 0, skipped: 0, slots: 0, services: [], error: err.message };
+    return {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      removed: 0,
+      slots: 0,
+      services: [],
+      error: err.message,
+    };
   }
 }
 

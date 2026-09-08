@@ -14,6 +14,7 @@ import servicesRouter from './routes/services.js';
 import settingsRouter from './routes/settings.js';
 import teamsRouter from './routes/teams.js';
 import { ensureAdmin } from './lib/seed.js';
+import { trySyncPlanningFromMatches } from './lib/proposePlanning.js';
 import prisma from './lib/prisma.js';
 import { UPLOADS_DIR, ensureUploadDirs } from './lib/uploads.js';
 
@@ -137,6 +138,17 @@ ensureAdmin()
           '[Security] Development mode — wijzig standaard admin-wachtwoord vóór productie.',
         );
       }
+      trySyncPlanningFromMatches().then((result) => {
+        if (result?.error) {
+          console.error('[planning] startup sync failed:', result.error);
+          return;
+        }
+        if (result?.created || result?.removed) {
+          console.log(
+            `[planning] startup sync: +${result.created} −${result.removed} (${result.slots} thuis-tijdsblokken)`,
+          );
+        }
+      });
     });
   })
   .catch((err) => {

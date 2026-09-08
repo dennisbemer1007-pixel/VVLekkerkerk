@@ -14,8 +14,16 @@ import {
 } from '../src/backend/lib/obligation.js';
 import {
   groupHomeMatchesByKickoff,
+  pickServicesMatchingHomeMatches,
   serviceWindowForKickoff,
 } from '../src/backend/lib/matchPlanning.js';
+import {
+  SLOT_ROWS,
+  inferSlot,
+  rosterDaySections,
+  servicesForSlotRow,
+  slotCellText,
+} from '../src/backend/lib/pdfRoster.js';
 
 let pass = 0;
 let fail = 0;
@@ -108,6 +116,60 @@ const mixedTimes = groupHomeMatchesByKickoff([
 ]);
 assert('different kickoffs are separate slots', mixedTimes.length === 2);
 assert('away matches are ignored', mixedTimes.every((g) => g.matches.every((m) => m.home)));
+
+const groupsForPick = groupHomeMatchesByKickoff([
+  { id: 10, home: true, date: day, time: '09:00', opponent: 'A' },
+]);
+const picked = pickServicesMatchingHomeMatches(
+  [
+    { id: 1, type: 'BAR', date: day, time: '09:00 - 12:00', matchId: 10 },
+    { id: 2, type: 'KITCHEN', date: day, time: '09:00 - 12:00', matchId: 10 },
+    { id: 3, type: 'BAR', date: day, time: '18:00 - 22:00', matchId: null },
+    { id: 4, type: 'BAR', date: day, time: '09:00 - 13:00', matchId: null },
+  ],
+  groupsForPick,
+);
+assert('matching bar is kept', picked.keep.length === 1 && picked.keep[0].id === 1);
+assert('kitchen and evening bar are unmatched', picked.remove.map((s) => s.id).sort().join(',') === '2,3,4');
+
+const pdfDays = rosterDaySections();
+assert('pdf has 7 days', pdfDays.length === 7);
+assert(
+  'weekdays use same slot rows as weekend',
+  pdfDays[0].rows === SLOT_ROWS && pdfDays[5].rows === SLOT_ROWS && pdfDays[6].rows.length === 3,
+);
+assert('pdf has no kitchen rows', SLOT_ROWS.every((row) => row.type === 'BAR'));
+assert('infer 19:00 as evening', inferSlot({ time: '19:00 - 22:00', slot: 'EXTRA' }) === 'EVENING');
+assert('infer 09:00 as morning', inferSlot({ time: '09:00 - 12:00' }) === 'MORNING');
+assert(
+  'empty slot cell is gesloten',
+  slotCellText(servicesForSlotRow([], SLOT_ROWS[0])) === 'gesloten',
+);
+assert(
+  'named bar fills morning bar row',
+  slotCellText(
+    servicesForSlotRow(
+      [
+        {
+          type: 'BAR',
+          slot: 'MORNING',
+          time: '09:00 - 13:00',
+          enrollments: [{ person: { name: 'Lisa' } }],
+        },
+      ],
+      SLOT_ROWS[0],
+    ),
+  ) === 'Lisa',
+);
+assert(
+  'kitchen is ignored in bar-only pdf rows',
+  slotCellText(
+    servicesForSlotRow(
+      [{ type: 'KITCHEN', slot: 'MORNING', time: '09:00 - 12:00', enrollments: [] }],
+      SLOT_ROWS[0],
+    ),
+  ) === 'gesloten',
+);
 
 const xlsxPath = 'C:/Users/dbeme/Documents/KNVB-Wedstrijden.xlsx';
 if (fs.existsSync(xlsxPath)) {

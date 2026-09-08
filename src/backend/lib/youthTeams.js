@@ -28,14 +28,11 @@ export function isYouthTeam(teamName) {
 export const SLOT_TIMES = {
   MORNING: {
     BAR: '09:00 - 13:00',
-    KITCHEN: '09:00 - 12:00',
   },
   AFTERNOON: {
     BAR: '12:00 - 16:30',
-    KITCHEN: '12:00 - 16:00',
   },
   EVENING: {
     BAR: '16:30 - 19:30',
-    KITCHEN: '16:00 - 19:00',
   },
 };

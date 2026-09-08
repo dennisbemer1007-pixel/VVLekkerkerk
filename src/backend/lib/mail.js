@@ -243,7 +243,7 @@ export function volunteerOpenEmail({ name, deadline, appUrl }) {
     : 'Schrijf je zo snel mogelijk in via de app.';
   const text = `Hoi ${name},
 
-De kantinediensten (bar/keuken) voor de komende weken staan open.
+De bardiensten voor de komende weken staan open.
 ${deadlineText}
 
 Log in via: ${appUrl || 'de VVL Planning App'}
@@ -252,7 +252,7 @@ Groet,
 V.V. Lekkerkerk`;
   const html = `
     <p>Hoi ${escapeHtml(name)},</p>
-    <p>De kantinediensten (bar/keuken) voor de komende weken staan open.</p>
+    <p>De bardiensten voor de komende weken staan open.</p>
     <p><strong>${escapeHtml(deadlineText)}</strong></p>
     <p><a href="${escapeHtml(appUrl || '#')}">Open de VVL Planning App</a></p>
     <p>Groet,<br>V.V. Lekkerkerk</p>

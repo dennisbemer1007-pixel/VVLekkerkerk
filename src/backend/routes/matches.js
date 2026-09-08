@@ -236,8 +236,7 @@ router.post(
       }
 
       const { created, persistErrors, skippedDuplicates } = await persistValidRows(result.rows);
-      const planning =
-        created.some((m) => m.home) ? await trySyncPlanningFromMatches() : { created: 0 };
+      const planning = await trySyncPlanningFromMatches();
 
       if (created.length === 0 && skippedDuplicates === 0) {
         return res.status(400).json({
@@ -258,7 +257,8 @@ router.post(
           invalidRows: result.invalidRows,
           errors: [...result.errors, ...persistErrors],
           format: result.format,
-          planningCreated: 0,
+          planningCreated: planning.created ?? 0,
+          planningRemoved: planning.removed ?? 0,
         });
       }
 
@@ -271,6 +271,7 @@ router.post(
         errors: [...result.errors, ...persistErrors],
         format: result.format,
         planningCreated: planning.created,
+        planningRemoved: planning.removed ?? 0,
       });
     } catch (err) {
       next(err);
@@ -282,7 +283,10 @@ router.delete(
   '/:id',
   admin(async (req, res, next) => {
     try {
-      await prisma.match.delete({ where: { id: Number(req.params.id) } });
+      const id = Number(req.params.id);
+      await prisma.service.updateMany({ where: { matchId: id }, data: { matchId: null } });
+      await prisma.match.delete({ where: { id } });
+      await trySyncPlanningFromMatches();
       res.status(204).end();
     } catch (err) {
       next(err);

@@ -565,7 +565,7 @@ function DienstenBeheer() {
     setError('');
     setMsg('');
     try {
-      const location = form.type === 'KITCHEN' ? 'Keuken' : 'Bar';
+      const location = 'Bar';
       const payload = { ...form, required: Number(form.required), location };
       if (editId) await api.updateService(editId, payload);
       else await api.createService(payload);
@@ -580,7 +580,7 @@ function DienstenBeheer() {
   const startEdit = (s) => {
     setEditId(s.id);
     setForm({
-      type: s.type,
+      type: 'BAR',
       date: toDateInputValue(s.date),
       time: s.time,
       required: s.required,
@@ -625,20 +625,9 @@ function DienstenBeheer() {
           {editId ? 'Dienst bewerken' : 'Dienst toevoegen'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          Extra diensten, handmatige wijzigingen, of <strong>historische planning</strong> (datum in
-          het verleden) zodat eerdere diensten meetellen in het overzicht.
+          Extra bardiensten, handmatige wijzigingen, of <strong>historische planning</strong> (datum
+          in het verleden) zodat eerdere diensten meetellen in het overzicht.
         </p>
-        <div>
-          <label className="vvl-label">Type</label>
-          <select
-            className="vvl-input"
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
-          >
-            <option value="BAR">Bardienst (Bar)</option>
-            <option value="KITCHEN">Keukendienst (Keuken)</option>
-          </select>
-        </div>
         <div>
           <label className="vvl-label">Datum</label>
           <input
@@ -1034,8 +1023,8 @@ function PlanningBeheer() {
           </Link>{' '}
           maakt de app automatisch een <strong>bardienst</strong> per aftrap van een{' '}
           <strong>thuiswedstrijd</strong> (bijv. 09:00 → 09:00–12:00, bezetting 2). Meerdere
-          wedstrijden op hetzelfde tijdstip delen één dienst. Op Planning kun je ook op Update
-          drukken.
+          wedstrijden op hetzelfde tijdstip delen één dienst. Diensten zonder bijbehorende
+          thuiswedstrijd worden verwijderd. Op Planning kun je ook op Update drukken.
         </p>
         <p className="text-sm">
           Status:{' '}
@@ -1052,10 +1041,18 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.syncPlanningFromMatches({ required: 2 }),
-                (r) =>
-                  r.created
-                    ? `Planning bijgewerkt: ${r.created} dienst(en) in ${r.slots ?? 0} tijdsblok(ken).`
-                    : 'Geen nieuwe diensten — planning was al actueel.',
+                (r) => {
+                  const parts = [];
+                  if (r.created) parts.push(`${r.created} bardienst(en) toegevoegd`);
+                  if (r.removed) {
+                    parts.push(
+                      `${r.removed} dienst(en) verwijderd die niet bij een thuiswedstrijd hoorden`,
+                    );
+                  }
+                  return parts.length
+                    ? `Planning bijgewerkt: ${parts.join(', ')}.`
+                    : 'Planning is al actueel — alleen bardiensten bij thuiswedstrijden blijven staan.';
+                },
               )
             }
           >

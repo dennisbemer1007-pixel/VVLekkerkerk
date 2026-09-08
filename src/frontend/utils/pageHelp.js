@@ -3,16 +3,16 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Je ziet in één oogopslag hoe vol de bardiensten en keukendiensten zijn, en je gaat snel naar inschrijven of planning.',
+      'Dit is je startscherm. Je ziet in één oogopslag hoe vol de bardiensten zijn, en je gaat snel naar inschrijven of planning.',
     actions: [
-      'Bekijk bezetting (groen = vol, geel = nog 1 nodig, rood = open)',
+      'Bekijk bezetting van bardiensten (groen = vol, geel = nog 1 nodig, rood = open)',
       'Open snelle knoppen naar Inschrijven, Planning of Beheer',
       'Als beheerder: zie wie vaak heeft gestaan en wie zich niet zelf inschrijft',
     ],
   },
   inschrijven: {
     purpose:
-      'Hier schrijf je jezelf in of uit voor open bardiensten en keukendiensten. Zo vullen we het rooster samen.',
+      'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
     actions: [
       'Filter op open diensten, deze week, vandaag of jouw diensten',
       'Schrijf je in op een dienst met nog plek',
@@ -25,8 +25,8 @@ export const PAGE_HELP = {
     actions: [
       'Bekijk alle diensten in de periode (ongeveer 6 weken)',
       'Filter op open of jouw diensten',
-      'Als beheerder: Update om nieuwe thuiswedstrijden in de planning te zetten',
-      'Download het PDF-rooster voor in de kantine',
+      'Als beheerder: Update om de planning gelijk te trekken met thuiswedstrijden',
+      'Download het PDF-rooster (zelfde tijdsblokken ma–zo) voor in de kantine',
     ],
   },
   voorkeuren: {
@@ -60,9 +60,9 @@ export const PAGE_HELP = {
   },
   beheerDiensten: {
     purpose:
-      'Handmatig diensten toevoegen of aanpassen, ook in het verleden. Zo kun je een handmatig gemaakt rooster alsnog laten meetellen.',
+      'Handmatig bardiensten toevoegen of aanpassen, ook in het verleden. Zo kun je een handmatig gemaakt rooster alsnog laten meetellen.',
     actions: [
-      'Bar- of keukendienst toevoegen (ook historische datums)',
+      'Bardienst toevoegen (ook historische datums)',
       'Bezetting en tijden wijzigen',
       'Personen op een dienst zetten of eraf halen (beheer-override)',
     ],
@@ -71,7 +71,7 @@ export const PAGE_HELP = {
     purpose:
       'De planningsronde: voorstel uit wedstrijden, publiceren voor vrijwilligers, mailen, en daarna open plekken vullen met verplichte bardienst.',
     actions: [
-      'Planning bijwerken vanuit thuiswedstrijden (bardienst per aftrap, 2 personen)',
+      'Planning bijwerken: bardienst per thuis-aftrap, overige diensten verwijderen',
       'Publiceren en vrijwilligersfase openen',
       'Mails sturen en open plekken automatisch vullen',
     ],
