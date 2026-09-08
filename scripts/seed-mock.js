@@ -150,10 +150,10 @@ async function main() {
   // --- Diensten ---
   const servicesSpec = [
     { type: 'BAR', day: 0, time: '18:00 - 22:00', required: 3, note: 'Dinsdagavond bar', location: 'Bar', slot: 'EXTRA' },
-    { type: 'BAR', day: 3, time: '09:00 - 13:00', required: 2, note: 'Ochtend JO11', location: 'Bar', slot: 'MORNING', teamId: teamJO11.id },
+    { type: 'BAR', day: 3, time: '09:00 - 12:00', required: 2, note: 'Ochtend JO11', location: 'Bar', slot: 'MORNING', teamId: teamJO11.id },
     { type: 'BAR', day: 5, time: '19:00 - 23:00', required: 2, note: 'Vrijdagavond', location: 'Bar', slot: 'EXTRA' },
-    { type: 'BAR', day: 7, time: '12:00 - 16:30', required: 2, note: 'Middag JO15', location: 'Bar', slot: 'AFTERNOON', teamId: teamJO15.id },
-    { type: 'BAR', day: 7, time: '16:30 - 19:30', required: 2, note: 'Avond JO15', location: 'Bar', slot: 'EVENING', teamId: teamJO15.id },
+    { type: 'BAR', day: 7, time: '12:00 - 16:00', required: 2, note: 'Middag JO15', location: 'Bar', slot: 'AFTERNOON', teamId: teamJO15.id },
+    { type: 'BAR', day: 7, time: '16:00 - 20:30', required: 2, note: 'Avond JO15', location: 'Bar', slot: 'EVENING', teamId: teamJO15.id },
     { type: 'BAR', day: 12, time: '18:00 - 22:00', required: 2, note: 'Doordeweeks', location: 'Bar', slot: 'EXTRA' },
     { type: 'BAR', day: 21, time: '19:00 - 23:30', required: 4, note: 'Klaverjasavond', location: 'Bar', slot: 'EXTRA' },
   ];

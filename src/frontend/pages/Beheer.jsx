@@ -36,7 +36,7 @@ const WEEKDAYS = [
 const SLOT_OPTS = [
   { id: 'MORNING', label: 'Ochtend' },
   { id: 'AFTERNOON', label: 'Middag' },
-  { id: 'EVENING', label: 'Avond' },
+  { id: 'EVENING', label: 'Late middag/avond' },
 ];
 
 export default function Beheer({ mode = 'full' }) {
@@ -1021,9 +1021,9 @@ function PlanningBeheer() {
           <Link to="/wedstrijden" className="font-semibold underline">
             KNVB-wedstrijden
           </Link>{' '}
-          maakt de app automatisch een <strong>bardienst</strong> per aftrap van een{' '}
-          <strong>thuiswedstrijd</strong> (bijv. 09:00 → 09:00–12:00, bezetting 2). Meerdere
-          wedstrijden op hetzelfde tijdstip delen één dienst. Diensten zonder bijbehorende
+          maakt de app automatisch bardiensten bij <strong>thuiswedstrijden</strong>: ochtend
+          09:00–12:00, middag 12:00–16:00 en late middag/avond 16:00–20:30 (elk 2 personen).
+          Meerdere wedstrijden in hetzelfde dagdeel delen één dienst. Diensten zonder
           thuiswedstrijd worden verwijderd. Op Planning kun je ook op Update drukken.
         </p>
         <p className="text-sm">

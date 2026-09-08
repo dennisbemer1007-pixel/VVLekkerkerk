@@ -11,7 +11,7 @@ import {
 
 /**
  * Maak ontbrekende bardiensten voor toekomstige thuiswedstrijden
- * en verwijder diensten die niet bij een thuis-aftrap horen.
+ * en verwijder diensten die niet bij een thuis-dagdeel horen.
  */
 export async function syncServicesFromHomeMatches({ required = 2 } = {}) {
   const from = startOfDay(new Date());
@@ -50,7 +50,7 @@ export async function syncServicesFromHomeMatches({ required = 2 } = {}) {
   let updated = 0;
 
   for (const group of groups) {
-    const key = barSlotKey(group.date, group.window.startMinutes);
+    const key = barSlotKey(group.date, group.window.slot);
     const existingSvc = keepByKey.get(key) || null;
 
     const payload = {

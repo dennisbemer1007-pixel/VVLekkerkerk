@@ -95,8 +95,9 @@ assert('O16-1 is old youth', isOldYouthTeam('O16-1') === true);
 
 const win9 = serviceWindowForKickoff('09:00');
 assert('kickoff 09:00 → 09:00 - 12:00', win9.time === '09:00 - 12:00' && win9.slot === 'MORNING');
-assert('kickoff 08:30 → 08:30 - 11:30', serviceWindowForKickoff('08:30').time === '08:30 - 11:30');
-assert('kickoff 15:00 → 15:00 - 18:00', serviceWindowForKickoff('15:00').time === '15:00 - 18:00');
+assert('kickoff 08:30 → ochtend 09:00 - 12:00', serviceWindowForKickoff('08:30').time === '09:00 - 12:00');
+assert('kickoff 15:00 → middag 12:00 - 16:00', serviceWindowForKickoff('15:00').time === '12:00 - 16:00');
+assert('kickoff 16:00 → avond 16:00 - 20:30', serviceWindowForKickoff('16:00').time === '16:00 - 20:30');
 
 const day = new Date('2026-09-12T12:00:00');
 const fiveSameTime = [1, 2, 3, 4, 5].map((n) => ({
@@ -109,12 +110,19 @@ const fiveSameTime = [1, 2, 3, 4, 5].map((n) => ({
 const groupedSame = groupHomeMatchesByKickoff(fiveSameTime);
 assert('five home matches same kickoff → one slot', groupedSame.length === 1 && groupedSame[0].matches.length === 5);
 
+const morningSpread = groupHomeMatchesByKickoff([
+  { home: true, date: day, time: '08:30', opponent: 'A' },
+  { home: true, date: day, time: '10:15', opponent: 'B' },
+  { home: true, date: day, time: '11:00', opponent: 'C' },
+]);
+assert('morning kickoffs share 09:00-12:00', morningSpread.length === 1 && morningSpread[0].window.time === '09:00 - 12:00');
+
 const mixedTimes = groupHomeMatchesByKickoff([
   { home: true, date: day, time: '09:00', opponent: 'A' },
   { home: true, date: day, time: '15:00', opponent: 'B' },
   { home: false, date: day, time: '09:00', opponent: 'Uit' },
 ]);
-assert('different kickoffs are separate slots', mixedTimes.length === 2);
+assert('morning and afternoon are separate slots', mixedTimes.length === 2);
 assert('away matches are ignored', mixedTimes.every((g) => g.matches.every((m) => m.home)));
 
 const groupsForPick = groupHomeMatchesByKickoff([
@@ -139,6 +147,10 @@ assert(
   pdfDays[0].rows === SLOT_ROWS && pdfDays[5].rows === SLOT_ROWS && pdfDays[6].rows.length === 3,
 );
 assert('pdf has no kitchen rows', SLOT_ROWS.every((row) => row.type === 'BAR'));
+assert(
+  'pdf slot times',
+  SLOT_ROWS.map((r) => r.time).join('|') === '09:00 - 12:00|12:00 - 16:00|16:00 - 20:30',
+);
 assert('infer 19:00 as evening', inferSlot({ time: '19:00 - 22:00', slot: 'EXTRA' }) === 'EVENING');
 assert('infer 09:00 as morning', inferSlot({ time: '09:00 - 12:00' }) === 'MORNING');
 assert(

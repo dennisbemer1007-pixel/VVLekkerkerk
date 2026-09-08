@@ -274,7 +274,7 @@ router.post(
   }),
 );
 
-/** Planning bijwerken vanuit thuiswedstrijden (bardienst per aftrap) */
+/** Planning bijwerken vanuit thuiswedstrijden (ochtend/middag/avond) */
 router.post(
   '/propose',
   admin(async (req, res, next) => {

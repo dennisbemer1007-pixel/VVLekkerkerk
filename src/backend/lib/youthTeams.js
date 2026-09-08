@@ -24,15 +24,15 @@ export function isYouthTeam(teamName) {
   return Boolean(parseJoAge(teamName));
 }
 
-/** Standaardtijden zoals op het kantine-rooster */
+/** Standaardtijden bardienst (bezetting 2) */
 export const SLOT_TIMES = {
   MORNING: {
-    BAR: '09:00 - 13:00',
+    BAR: '09:00 - 12:00',
   },
   AFTERNOON: {
-    BAR: '12:00 - 16:30',
+    BAR: '12:00 - 16:00',
   },
   EVENING: {
-    BAR: '16:30 - 19:30',
+    BAR: '16:00 - 20:30',
   },
 };

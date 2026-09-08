@@ -134,6 +134,6 @@ export default function DienstCard({
 function slotLabel(slot) {
   if (slot === 'MORNING') return 'ochtend';
   if (slot === 'AFTERNOON') return 'middag';
-  if (slot === 'EVENING') return 'avond';
+  if (slot === 'EVENING') return 'late middag/avond';
   return slot;
 }

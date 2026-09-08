@@ -17,7 +17,7 @@ const WEEKDAYS = [
 const SLOTS = [
   { id: 'MORNING', label: 'Ochtend' },
   { id: 'AFTERNOON', label: 'Middag' },
-  { id: 'EVENING', label: 'Avond' },
+  { id: 'EVENING', label: 'Late middag/avond' },
 ];
 
 export default function Voorkeuren() {

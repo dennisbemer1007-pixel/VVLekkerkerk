@@ -1,8 +1,27 @@
 import { startOfDay, toIsoDate } from './dates.js';
 import { parseTimeStartMinutes } from './time.js';
+import { SLOT_TIMES } from './youthTeams.js';
 
-/** Kantinedienst duurt 3 uur vanaf de aftrap. */
-export const SERVICE_DURATION_MINUTES = 180;
+export const BAR_SLOTS = [
+  {
+    slot: 'MORNING',
+    label: 'Ochtend',
+    time: SLOT_TIMES.MORNING.BAR,
+    startMinutes: 9 * 60,
+  },
+  {
+    slot: 'AFTERNOON',
+    label: 'Middag',
+    time: SLOT_TIMES.AFTERNOON.BAR,
+    startMinutes: 12 * 60,
+  },
+  {
+    slot: 'EVENING',
+    label: 'Late middag/avond',
+    time: SLOT_TIMES.EVENING.BAR,
+    startMinutes: 16 * 60,
+  },
+];
 
 export function formatHm(totalMinutes) {
   const clamped = Math.max(0, Math.min(23 * 60 + 59, Number(totalMinutes) || 0));
@@ -30,6 +49,7 @@ export function kickoffTimeFromMatch(match) {
   return '09:00';
 }
 
+/** Aftrap voor 12:00 → ochtend, tot 16:00 → middag, daarna avond. */
 export function slotForKickoff(kickoffHm) {
   const mins = parseTimeStartMinutes(kickoffHm);
   if (mins == null || mins < 12 * 60) return 'MORNING';
@@ -37,24 +57,32 @@ export function slotForKickoff(kickoffHm) {
   return 'EVENING';
 }
 
-/** Wedstrijd 09:00 → dienst 09:00 - 12:00. */
-export function serviceWindowForKickoff(kickoffHm) {
-  const start = parseTimeStartMinutes(kickoffHm) ?? 9 * 60;
-  const end = start + SERVICE_DURATION_MINUTES;
-  const startHm = formatHm(start);
-  const endHm = formatHm(end);
+export function slotFromService(service) {
+  if (service?.slot && service.slot !== 'EXTRA') return service.slot;
+  return slotForKickoff(service?.time);
+}
+
+export function windowForSlot(slot) {
+  const spec = BAR_SLOTS.find((s) => s.slot === slot) || BAR_SLOTS[0];
+  const [start, end] = spec.time.split(' - ');
   return {
-    start: startHm,
-    end: endHm,
-    time: `${startHm} - ${endHm}`,
-    slot: slotForKickoff(startHm),
-    startMinutes: start,
+    start,
+    end,
+    time: spec.time,
+    slot: spec.slot,
+    startMinutes: spec.startMinutes,
+    label: spec.label,
   };
 }
 
+/** Aftrap 08:30 of 11:00 → vaste ochtenddienst 09:00 - 12:00. */
+export function serviceWindowForKickoff(kickoffHm) {
+  return windowForSlot(slotForKickoff(kickoffHm));
+}
+
 /**
- * Thuiswedstrijden groeperen per dag + aftrap.
- * Vijf wedstrijden om 09:00 → één bardienst.
+ * Thuiswedstrijden groeperen per dag + dagdeel.
+ * Meerdere ochtendwedstrijden → één bardienst 09:00–12:00.
  */
 export function groupHomeMatchesByKickoff(matches) {
   const groups = new Map();
@@ -62,13 +90,14 @@ export function groupHomeMatchesByKickoff(matches) {
     if (match?.home === false) continue;
     const day = toIsoDate(startOfDay(match.date));
     const kickoff = kickoffTimeFromMatch(match);
-    const key = `${day}|${kickoff}`;
+    const slot = slotForKickoff(kickoff);
+    const key = `${day}|${slot}`;
     if (!groups.has(key)) {
       groups.set(key, {
         key,
         date: startOfDay(match.date),
-        kickoff,
-        window: serviceWindowForKickoff(kickoff),
+        slot,
+        window: windowForSlot(slot),
         matches: [],
       });
     }
@@ -81,36 +110,35 @@ export function groupHomeMatchesByKickoff(matches) {
   });
 }
 
-export function barSlotKey(date, startMinutes) {
-  return `${toIsoDate(startOfDay(date))}|BAR|${startMinutes}`;
+export function barSlotKey(date, slot) {
+  return `${toIsoDate(startOfDay(date))}|BAR|${slot}`;
 }
 
 export function barSlotKeyFromService(service) {
-  const start = parseTimeStartMinutes(service?.time);
-  if (start == null) return null;
-  return barSlotKey(service.date, start);
+  const slot = slotFromService(service);
+  if (!slot) return null;
+  return barSlotKey(service.date, slot);
 }
 
 /**
- * Houd max. één BAR per thuis-aftrap; rest (keuken, extra tijden, duplicaten) is wees.
+ * Houd max. één BAR per dagdeel met thuiswedstrijd; rest is wees.
  */
 export function pickServicesMatchingHomeMatches(services, groups) {
   const needed = new Map();
   for (const group of groups || []) {
-    needed.set(barSlotKey(group.date, group.window.startMinutes), group);
+    needed.set(barSlotKey(group.date, group.window.slot), group);
   }
 
   const byKey = new Map();
   const unmatched = [];
 
   for (const service of services || []) {
-    const start = parseTimeStartMinutes(service.time);
-    if (service.type !== 'BAR' || start == null) {
+    if (service.type !== 'BAR') {
       unmatched.push(service);
       continue;
     }
-    const key = barSlotKey(service.date, start);
-    if (!needed.has(key)) {
+    const key = barSlotKeyFromService(service);
+    if (!key || !needed.has(key)) {
       unmatched.push(service);
       continue;
     }
@@ -146,5 +174,6 @@ export function planningNoteForGroup(group) {
   const shown = unique.slice(0, 4);
   const extra = unique.length > 4 ? ` +${unique.length - 4}` : '';
   const teams = shown.length ? shown.join(', ') + extra : `${group.matches.length} thuiswedstrijd(en)`;
-  return `Thuis ${group.window.time} · ${teams}`;
+  const label = group.window.label || 'Bardienst';
+  return `${label} ${group.window.time} · ${teams}`;
 }

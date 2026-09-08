@@ -71,7 +71,7 @@ export const PAGE_HELP = {
     purpose:
       'De planningsronde: voorstel uit wedstrijden, publiceren voor vrijwilligers, mailen, en daarna open plekken vullen met verplichte bardienst.',
     actions: [
-      'Planning bijwerken: bardienst per thuis-aftrap, overige diensten verwijderen',
+      'Planning bijwerken: ochtend/middag/avond uit thuiswedstrijden, overige diensten verwijderen',
       'Publiceren en vrijwilligersfase openen',
       'Mails sturen en open plekken automatisch vullen',
     ],
@@ -91,7 +91,7 @@ export const PAGE_HELP = {
     actions: [
       'Filteren op datum, team, wedstrijdnummer of spelniveau',
       'Ook gespeelde wedstrijden tonen via “Toon alle wedstrijden”',
-      'Als beheerder: KNVB-bestand importeren; thuiswedstrijden krijgen automatisch een bardienst',
+      'Als beheerder: KNVB-bestand importeren; thuiswedstrijden vullen ochtend-, middag- of avonddienst',
     ],
   },
   beheerMail: {

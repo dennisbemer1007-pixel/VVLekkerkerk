@@ -96,7 +96,7 @@ export default function Wedstrijden() {
       });
       setMsg(
         created?.planningCreated
-          ? 'Wedstrijd opgeslagen. De bardienst voor dit tijdsblok staat in de planning.'
+          ? 'Wedstrijd opgeslagen. De bardienst voor dit dagdeel staat in de planning.'
           : 'Wedstrijd opgeslagen.',
       );
       await load();

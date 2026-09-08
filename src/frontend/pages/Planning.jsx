@@ -84,8 +84,8 @@ export default function Planning() {
         <div>
           <PageTitle {...PAGE_HELP.planning}>Planning</PageTitle>
           <p className="mt-1 text-sm text-gray-700">
-            Overzicht voor de komende 6 weken. Alleen bardiensten bij thuiswedstrijden
-            (3 uur vanaf de aftrap, 2 personen).
+            Overzicht voor de komende 6 weken. Thuiswedstrijden vullen ochtend (09:00–12:00),
+            middag (12:00–16:00) en avond (16:00–20:30), elk 2 personen.
           </p>
           {period ? (
             <p className="mt-1 text-xs text-gray-600">
