@@ -51,7 +51,7 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // Foto's: onvoorspelbare bestandsnamen; geen directory listing
 app.use(

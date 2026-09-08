@@ -11,6 +11,7 @@ import Uitnodiging from './pages/Uitnodiging.jsx';
 import Voorkeuren from './pages/Voorkeuren.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
 import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
+import Wedstrijden from './pages/Wedstrijden.jsx';
 
 function Protected({ children, feature }) {
   const { isLoggedIn, loading, can } = useAuth();
@@ -68,6 +69,14 @@ export default function App() {
                 element={
                   <Protected feature="planning">
                     <Planning />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/wedstrijden"
+                element={
+                  <Protected feature="wedstrijden">
+                    <Wedstrijden />
                   </Protected>
                 }
               />

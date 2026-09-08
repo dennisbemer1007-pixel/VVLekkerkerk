@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
-import CsvMatchImport from '../components/CsvMatchImport.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
@@ -13,7 +12,6 @@ const TABS = [
   { id: 'diensten', label: 'Diensten' },
   { id: 'planning', label: 'Planning' },
   { id: 'teams', label: 'Teams' },
-  { id: 'wedstrijden', label: 'Wedstrijden' },
   { id: 'mail', label: 'E-mail' },
 ];
 
@@ -95,7 +93,6 @@ export default function Beheer({ mode = 'full' }) {
       {tab === 'diensten' ? <DienstenBeheer /> : null}
       {tab === 'planning' ? <PlanningBeheer /> : null}
       {tab === 'teams' ? <TeamsBeheer /> : null}
-      {tab === 'wedstrijden' ? <WedstrijdenBeheer /> : null}
       {tab === 'mail' ? <MailBeheer /> : null}
     </div>
   );
@@ -1031,7 +1028,11 @@ function PlanningBeheer() {
       <div className="vvl-card space-y-3">
         <h2 className="font-heading text-lg font-black uppercase">Kantinedienst-voorstel</h2>
         <p className="text-sm text-gray-700">
-          Na het inladen van KNVB-wedstrijden (met team JO8–JO17) maakt de app een{' '}
+          Na het inladen van{' '}
+          <Link to="/wedstrijden" className="font-semibold underline">
+            KNVB-wedstrijden
+          </Link>{' '}
+          (met team JO8–JO17 of O8–O17) maakt de app een{' '}
           <strong>concept</strong>: JO8–JO12 ochtend (bar+keuken), JO13–JO17 middag én avond.
           Je kunt daarna nog diensten wijzigen of extra activiteiten toevoegen voordat je
           publiceert.
@@ -1152,130 +1153,6 @@ function PlanningBeheer() {
           </div>
         )}
       </div>
-    </section>
-  );
-}
-
-function WedstrijdenBeheer() {
-  const [matches, setMatches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [form, setForm] = useState({
-    date: todayInputValue(),
-    home: true,
-    opponent: '',
-    note: '',
-    teamId: '',
-  });
-  const [error, setError] = useState('');
-  const [msg, setMsg] = useState('');
-
-  const load = () =>
-    Promise.all([api.getMatches(), api.getTeams()])
-      .then(([m, t]) => {
-        setMatches(m);
-        setTeams(t);
-      })
-      .catch((e) => setError(e.message));
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    try {
-      await api.createMatch({
-        ...form,
-        teamId: form.teamId || null,
-      });
-      setForm({ date: todayInputValue(), home: true, opponent: '', note: '', teamId: '' });
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  return (
-    <section className="space-y-4">
-      <form onSubmit={submit} className="vvl-card grid gap-3 sm:grid-cols-2">
-        <h2 className="sm:col-span-2 font-heading text-lg font-black uppercase">Wedstrijd toevoegen</h2>
-        <p className="sm:col-span-2 text-sm text-gray-700">
-          Koppel een jeugdteam (JO8–JO17) voor het automatische kantinedienst-voorstel.
-        </p>
-        <div>
-          <label className="vvl-label">Datum</label>
-          <input
-            type="date"
-            className="vvl-input"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            required
-          />
-        </div>
-        <div>
-          <label className="vvl-label">Team (JO)</label>
-          <select
-            className="vvl-input"
-            value={form.teamId}
-            onChange={(e) => setForm({ ...form, teamId: e.target.value })}
-          >
-            <option value="">— Kies team —</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="vvl-label">Tegenstander</label>
-          <input
-            className="vvl-input"
-            value={form.opponent}
-            onChange={(e) => setForm({ ...form, opponent: e.target.value })}
-            placeholder="Optioneel"
-          />
-        </div>
-        <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={form.home}
-            onChange={(e) => setForm({ ...form, home: e.target.checked })}
-          />
-          Thuiswedstrijd
-        </label>
-        <button type="submit" className="vvl-btn-primary sm:w-fit">
-          Wedstrijd opslaan
-        </button>
-      </form>
-
-      <CsvMatchImport onImported={load} />
-
-      {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
-
-      <ul className="vvl-card divide-y divide-vvl-border">
-        {matches.length === 0 ? (
-          <li className="py-2 text-sm text-gray-600">Nog geen wedstrijden.</li>
-        ) : (
-          matches.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-              <span>
-                {new Date(m.date).toLocaleDateString('nl-NL')} — {m.home ? 'Thuis' : 'Uit'}
-                {m.team ? ` · ${m.team.name}` : ''}
-                {m.opponent ? ` vs ${m.opponent}` : ''}
-              </span>
-              <button
-                type="button"
-                className="text-xs font-bold uppercase text-red-700"
-                onClick={() => api.deleteMatch(m.id).then(load)}
-              >
-                Verwijder
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
     </section>
   );
 }

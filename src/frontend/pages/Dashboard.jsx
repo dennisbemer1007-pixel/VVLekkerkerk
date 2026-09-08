@@ -12,6 +12,7 @@ const FEATURE_LABELS = {
   dashboard: 'Dashboard',
   inschrijven: 'Inschrijven',
   planning: 'Planning & PDF',
+  wedstrijden: 'Wedstrijden',
   voorkeuren: 'Voorkeuren',
   teams: 'Teamleden inschrijven',
   beheer: 'Beheer & uitnodigen',
@@ -115,6 +116,11 @@ export default function Dashboard() {
         {can('planning') ? (
           <Link to="/planning" className="vvl-btn-outline">
             Planning &amp; PDF
+          </Link>
+        ) : null}
+        {can('wedstrijden') ? (
+          <Link to="/wedstrijden" className="vvl-btn-outline">
+            Wedstrijden
           </Link>
         ) : null}
         {can('voorkeuren') ? (

@@ -58,14 +58,19 @@ model Team {
 }
 
 model Match {
-  id       Int      @id @default(autoincrement())
-  date     DateTime
-  home     Boolean  @default(true)
-  opponent String?
-  note     String?
-  teamId   Int?
-  team     Team?    @relation(fields: [teamId], references: [id])
-  services Service[]
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  /** Aanvangstijd HH:MM (KNVB) */
+  time        String?
+  home        Boolean  @default(true)
+  opponent    String?
+  note        String?
+  matchNumber String?
+  matchType   String?
+  playLevel   String?
+  teamId      Int?
+  team        Team?    @relation(fields: [teamId], references: [id])
+  services    Service[]
 }
 
 model Service {

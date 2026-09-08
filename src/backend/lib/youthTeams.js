@@ -1,7 +1,7 @@
-/** JO8–JO12 = ochtend; JO13–JO17 = middag + avond */
+/** JO8–JO12 / O8–O12 = ochtend; JO13–JO17 / O13–O17 = middag + avond */
 
-const YOUNG_RE = /\bJO\s*(0?8|0?9|10|11|12)\b/i;
-const OLD_RE = /\bJO\s*(13|14|15|16|17)\b/i;
+const YOUNG_RE = /\bJ?O\s*(0?8|0?9|10|11|12)\b/i;
+const OLD_RE = /\bJ?O\s*(13|14|15|16|17)\b/i;
 
 export function parseJoAge(teamName) {
   if (!teamName) return null;

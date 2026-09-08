@@ -10,22 +10,22 @@ import {
 export const ROLE_ACCESS = {
   Vrijwilliger: {
     label: 'Vrijwilliger',
-    can: ['dashboard', 'inschrijven', 'planning', 'voorkeuren'],
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren'],
     description: 'Zelf inschrijven op open diensten, voorkeuren instellen en de planning bekijken.',
   },
   Teamcoördinator: {
     label: 'Teamcoördinator',
-    can: ['dashboard', 'inschrijven', 'planning', 'voorkeuren', 'teams'],
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'teams'],
     description: 'Zoals vrijwilliger, plus ouders uitnodigen en voor je team inschrijven.',
   },
   Coördinator: {
     label: 'Coördinator (bardienst)',
-    can: ['dashboard', 'inschrijven', 'planning', 'voorkeuren', 'beheer'],
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'beheer'],
     description: 'Volledig beheer: personen uitnodigen, diensten, teams en wedstrijden.',
   },
   Bestuur: {
     label: 'Bestuur',
-    can: ['dashboard', 'inschrijven', 'planning', 'voorkeuren', 'beheer'],
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'beheer'],
     description: 'Volledig beheer, inclusief uitnodigingen en PDF-planning.',
   },
 };

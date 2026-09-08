@@ -24,6 +24,23 @@ export function todayInputValue() {
   return toDateInputValue(new Date());
 }
 
+export function formatMatchDate(date) {
+  return new Date(date).toLocaleDateString('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+export function isFutureMatchDate(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d >= today;
+}
+
 export function occupancyStatus(enrolled, required) {
   if (enrolled >= required) return 'full';
   if (enrolled === required - 1) return 'almost';

@@ -44,7 +44,7 @@ export const PAGE_HELP = {
       'Personen uitnodigen en rollen/verplichtingen instellen',
       'Diensten toevoegen of historiek nabouwen',
       'Concept-planning maken, publiceren en open plekken vullen',
-      'Wedstrijden importeren (CSV) en e-mailserver instellen',
+      'Wedstrijden bekijken en importeren, e-mailserver instellen',
     ],
   },
   beheerPersonen: {
@@ -84,13 +84,13 @@ export const PAGE_HELP = {
       'Als teamcoördinator: leden op open diensten inschrijven',
     ],
   },
-  beheerWedstrijden: {
+  wedstrijden: {
     purpose:
-      'Wedstrijden vastleggen of importeren (KNVB-CSV). Thuiswedstrijden van jeugdteams sturen het automatische dienstenvoorstel.',
+      'Alle clubwedstrijden in één overzicht. Filter op datum, team, wedstrijdnummer of spelniveau. Standaard zie je alleen komende wedstrijden.',
     actions: [
-      'Losse wedstrijd toevoegen',
-      'CSV slepen of uploaden; alleen geldige rijen worden geïmporteerd',
-      'Foute rijen in het grid corrigeren en per stuk laden',
+      'Filteren op datum, team, wedstrijdnummer of spelniveau',
+      'Ook gespeelde wedstrijden tonen via “Toon alle wedstrijden”',
+      'Als beheerder: KNVB-bestand (.xlsx of .csv) importeren of een wedstrijd handmatig toevoegen',
     ],
   },
   beheerMail: {
@@ -163,7 +163,6 @@ export function helpForBeheerTab(tab, mode = 'full') {
     diensten: PAGE_HELP.beheerDiensten,
     planning: PAGE_HELP.beheerPlanning,
     teams: PAGE_HELP.beheerTeams,
-    wedstrijden: PAGE_HELP.beheerWedstrijden,
     mail: PAGE_HELP.beheerMail,
   };
   return map[tab] || PAGE_HELP.beheer;
