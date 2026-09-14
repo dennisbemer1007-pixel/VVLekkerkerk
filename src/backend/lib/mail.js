@@ -326,7 +326,7 @@ export async function notifyMandatory({ appUrl }) {
     where: {
       active: true,
       email: { not: null },
-      obligation: { in: ['FULL', 'HALF'] },
+      obligation: { in: ['FULL', 'VR18'] },
     },
   });
   return sendBulk(people, (p) => mandatoryOpenEmail({ name: p.name, appUrl }));

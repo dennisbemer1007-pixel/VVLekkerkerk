@@ -8,9 +8,7 @@ import { combineDateAndTime } from '../lib/time.js';
 import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
 import { trySyncPlanningFromMatches } from '../lib/proposePlanning.js';
 import {
-  addTeamToIndex,
   buildTeamIndex,
-  clubTeamLabel,
   findTeamInIndex,
 } from '../lib/knvbTeams.js';
 
@@ -125,6 +123,8 @@ async function persistValidRows(validRows) {
   const created = [];
   const persistErrors = [];
   let skippedDuplicates = 0;
+  const recognizedTeamNames = new Set();
+  const unknownTeamNames = new Set();
 
   for (const row of validRows) {
     try {
@@ -141,13 +141,11 @@ async function persistValidRows(validRows) {
       const teamName = (row.team || '').trim();
       if (teamName) {
         const found = findTeamInIndex(index, teamName);
-        if (found) teamId = found.id;
-        else {
-          const createdTeam = await prisma.team.create({
-            data: { name: clubTeamLabel(teamName) || teamName },
-          });
-          addTeamToIndex(index, createdTeam);
-          teamId = createdTeam.id;
+        if (found) {
+          teamId = found.id;
+          recognizedTeamNames.add(found.name);
+        } else {
+          unknownTeamNames.add(teamName);
         }
       }
 
@@ -175,7 +173,13 @@ async function persistValidRows(validRows) {
     }
   }
 
-  return { created, persistErrors, skippedDuplicates };
+  return {
+    created,
+    persistErrors,
+    skippedDuplicates,
+    teamsRecognized: [...recognizedTeamNames],
+    unknownTeams: [...unknownTeamNames],
+  };
 }
 
 function validationPayload(result) {
@@ -235,7 +239,8 @@ router.post(
         });
       }
 
-      const { created, persistErrors, skippedDuplicates } = await persistValidRows(result.rows);
+      const { created, persistErrors, skippedDuplicates, teamsRecognized, unknownTeams } =
+        await persistValidRows(result.rows);
       const planning = await trySyncPlanningFromMatches();
 
       if (created.length === 0 && skippedDuplicates === 0) {
@@ -248,21 +253,7 @@ router.post(
         });
       }
 
-      if (created.length === 0 && skippedDuplicates > 0) {
-        return res.status(200).json({
-          created: 0,
-          skippedDuplicates,
-          skipped: result.invalidRows.length,
-          matches: [],
-          invalidRows: result.invalidRows,
-          errors: [...result.errors, ...persistErrors],
-          format: result.format,
-          planningCreated: planning.created ?? 0,
-          planningRemoved: planning.removed ?? 0,
-        });
-      }
-
-      res.status(201).json({
+      const summary = {
         created: created.length,
         skippedDuplicates,
         matches: created,
@@ -270,9 +261,20 @@ router.post(
         invalidRows: result.invalidRows,
         errors: [...result.errors, ...persistErrors],
         format: result.format,
-        planningCreated: planning.created,
+        teamsRecognized: teamsRecognized.length,
+        teamsRecognizedNames: teamsRecognized,
+        unknownTeams,
+        unknownTeamCount: unknownTeams.length,
+        planningCreated: planning.created ?? 0,
         planningRemoved: planning.removed ?? 0,
-      });
+        teamDutiesCreated: planning.teamDuties ?? 0,
+      };
+
+      if (created.length === 0 && skippedDuplicates > 0) {
+        return res.status(200).json(summary);
+      }
+
+      res.status(201).json(summary);
     } catch (err) {
       next(err);
     }

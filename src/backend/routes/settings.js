@@ -7,9 +7,12 @@ import {
   sendMail,
   verifyMailConnection,
 } from '../lib/mail.js';
+import { publicClubSettings, rolloverSeason } from '../lib/season.js';
+import { cleanupPrivacy } from '../lib/privacy.js';
+import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
-const ADMIN = ['Coördinator', 'Bestuur'];
+const ADMIN = ['Barcommissie', 'Bestuur', 'Coördinator'];
 
 /** Status voor iedereen die mag uitnodigen (zodat UI weet of mail aanstaat) */
 router.get(
@@ -91,6 +94,58 @@ router.post(
       res.status(400).json({
         error: `Mailtest mislukt: ${err.message}`,
       });
+    }
+  }),
+);
+
+router.get(
+  '/club',
+  requireRole(...ADMIN)(async (_req, res, next) => {
+    try {
+      res.json(await publicClubSettings());
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/club/rollover',
+  requireRole(...ADMIN)(async (req, res, next) => {
+    try {
+      const result = await rolloverSeason({
+        actorId: req.person.id,
+        newLabel: req.body?.seasonLabel,
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'season.rollover',
+        entity: 'ClubSettings',
+        entityId: 1,
+        detail: `${result.oldLabel} → ${result.seasonLabel}`,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/privacy/cleanup',
+  requireRole(...ADMIN)(async (req, res, next) => {
+    try {
+      const result = await cleanupPrivacy();
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'privacy.cleanup',
+        entity: 'ClubSettings',
+        entityId: 1,
+        detail: `${result.auditDeleted} audit, ${result.contactsCleared} contacten`,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
     }
   }),
 );

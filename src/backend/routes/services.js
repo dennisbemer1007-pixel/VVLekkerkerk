@@ -9,8 +9,9 @@ const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
 
 function buildServiceWhere(query) {
-  const { from, to, filter, activeOnly, allDates, includeDraft } = query;
-  const where = { type: 'BAR' };
+  const { from, to, filter, activeOnly, allDates, includeDraft, type } = query;
+  const where = {};
+  if (type === 'BAR' || type === 'KITCHEN') where.type = type;
 
   if (activeOnly !== 'false') where.active = true;
   if (includeDraft !== 'true') where.draft = false;
@@ -72,12 +73,13 @@ router.post(
   '/',
   admin(async (req, res, next) => {
     try {
-      const { date, time, note, required, location, active, draft, slot, assignedTeamId } =
+      const { date, time, note, required, location, active, draft, slot, assignedTeamId, type, locked, kind } =
         req.body;
       if (!date || !time?.trim()) {
         return res.status(400).json({ error: 'Datum en tijd zijn verplicht' });
       }
-      const serviceType = 'BAR';
+      const serviceType = type === 'KITCHEN' ? 'KITCHEN' : 'BAR';
+      const serviceKind = kind === 'TEAM' || assignedTeamId ? 'TEAM' : 'PERSONAL';
       const service = await prisma.service.create({
         data: {
           type: serviceType,
@@ -88,6 +90,9 @@ router.post(
           location: location?.trim() || serviceLocation(serviceType),
           active: active !== false,
           draft: Boolean(draft),
+          locked: Boolean(locked),
+          kind: serviceKind,
+          origin: 'MANUAL',
           slot: slot?.trim() || 'EXTRA',
           assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
         },
@@ -104,12 +109,12 @@ router.put(
   '/:id',
   admin(async (req, res, next) => {
     try {
-      const { type, date, time, note, required, location, active, draft, slot, assignedTeamId } =
+      const { type, date, time, note, required, location, active, draft, slot, assignedTeamId, locked, kind } =
         req.body;
       const service = await prisma.service.update({
         where: { id: Number(req.params.id) },
         data: {
-          ...(type !== undefined && { type: 'BAR' }),
+          ...(type !== undefined && { type: type === 'KITCHEN' ? 'KITCHEN' : 'BAR' }),
           ...(date !== undefined && { date: new Date(date) }),
           ...(time !== undefined && { time: time.trim() }),
           ...(note !== undefined && { note: note?.trim() || null }),
@@ -117,6 +122,8 @@ router.put(
           ...(location !== undefined && { location: location.trim() }),
           ...(active !== undefined && { active: Boolean(active) }),
           ...(draft !== undefined && { draft: Boolean(draft) }),
+          ...(locked !== undefined && { locked: Boolean(locked) }),
+          ...(kind !== undefined && { kind: kind === 'TEAM' ? 'TEAM' : 'PERSONAL' }),
           ...(slot !== undefined && { slot: slot?.trim() || null }),
           ...(assignedTeamId !== undefined && {
             assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,

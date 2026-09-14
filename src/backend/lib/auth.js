@@ -34,6 +34,22 @@ export async function verifyPassword(password, hash) {
   return bcrypt.compare(password, hash);
 }
 
+let dummyPasswordHash;
+async function dummyHash() {
+  if (!dummyPasswordHash) {
+    dummyPasswordHash = await hashPassword('timing-dummy');
+  }
+  return dummyPasswordHash;
+}
+
+/** Altijd bcrypt-vergelijking (geen timing-leak of e-mail bestaat wel/niet). */
+export async function passwordMatches(password, person) {
+  const hash =
+    person?.active && person.passwordHash ? person.passwordHash : await dummyHash();
+  const ok = await verifyPassword(password, hash);
+  return Boolean(ok && person?.active && person.passwordHash);
+}
+
 export function inviteLink(token, baseUrl) {
   const base = (baseUrl || process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
   return `${base}/uitnodiging/${token}`;

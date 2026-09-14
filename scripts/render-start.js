@@ -6,6 +6,7 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ensureDataDir, sqliteUrlForDataDir } from '../src/backend/lib/dataDir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -14,7 +15,10 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 process.env.SEED_DEMO = process.env.SEED_DEMO ?? 'true';
 process.env.TRUST_PROXY = process.env.TRUST_PROXY ?? '1';
 
-if (!process.env.DATABASE_URL) {
+ensureDataDir();
+if (process.env.DATA_DIR) {
+  process.env.DATABASE_URL = sqliteUrlForDataDir();
+} else if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'file:./demo.db';
 }
 

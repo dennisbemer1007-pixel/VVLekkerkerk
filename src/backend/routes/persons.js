@@ -2,21 +2,26 @@ import fs from 'fs';
 import path from 'path';
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { publicPerson, requireAuth, requireRole, hashPassword } from '../lib/auth.js';
-import { PHOTOS_DIR, photoUpload, publicPhotoPath } from '../lib/uploads.js';
+import { publicPerson, requireAuth, requireRole, hashPassword, createInviteToken, inviteExpiry, inviteLink } from '../lib/auth.js';
+import { PHOTOS_DIR, photoUpload, publicPhotoPath, assertImageMagic } from '../lib/uploads.js';
 import {
   normalizeObligation,
   serializeJsonArray,
   parseUnavailableWeekdays,
   parsePreferredSlots,
 } from '../lib/obligation.js';
-import { isAdminRole } from '../lib/roles.js';
-import { normalizeRole } from '../lib/appUrl.js';
+import { isAdminRole, ADMIN_ROLES } from '../lib/roles.js';
+import { normalizeRole, resolvePublicAppUrl } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
+import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
+import { writeAudit } from '../lib/audit.js';
+import { parsePersonCsv, validatePersonRows } from '../lib/csvPersons.js';
+import { trySendInviteEmail } from '../lib/mail.js';
+import { exportPersonData, wipePersonContact } from '../lib/privacy.js';
+import { getClubSettings } from '../lib/season.js';
 
 const router = Router();
-const ADMIN_ROLES = ['Coördinator', 'Bestuur'];
-const PHOTO_ROLES = ['Coördinator', 'Bestuur', 'Teamcoördinator'];
+const PHOTO_ROLES = [...ADMIN_ROLES, 'Teamcoördinator'];
 
 function preferenceFieldsFromBody(body) {
   const data = {};
@@ -48,14 +53,14 @@ router.get(
   '/',
   requireAuth(async (req, res, next) => {
     try {
-      const all = req.query.all === 'true';
-      const canListAll =
-        ADMIN_ROLES.includes(req.person.role) || req.person.role === 'Teamcoördinator';
-      if (all && !canListAll) {
-        return res.status(403).json({ error: 'Geen toegang' });
+      const isAdmin = isAdminRole(req.person.role);
+      const isTeamCo = req.person.role === 'Teamcoördinator';
+      if (!isAdmin && !isTeamCo) {
+        return res.status(403).json({ error: 'Geen toegang tot de personenlijst' });
       }
+      const includeInactive = req.query.all === 'true' && isAdmin;
       const persons = await prisma.person.findMany({
-        where: all ? undefined : { active: true },
+        where: includeInactive ? undefined : { active: true },
         include: { team: true },
         orderBy: { name: 'asc' },
       });
@@ -87,23 +92,144 @@ router.put(
   }),
 );
 
+router.get(
+  '/me/export',
+  requireAuth(async (req, res, next) => {
+    try {
+      const data = await exportPersonData(req.person.id);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.export',
+        entity: 'Person',
+        entityId: req.person.id,
+        detail: 'AVG-export eigen gegevens',
+      });
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/import',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const parsed = parsePersonCsv(req.body.csv || '');
+      if (parsed.headerError) {
+        return res.status(400).json({ error: parsed.headerError });
+      }
+      const teams = await prisma.team.findMany({ select: { id: true, name: true } });
+      const validated = validatePersonRows(parsed.rows, { teams });
+      if (!validated.ok) {
+        return res.status(400).json({
+          error: 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.',
+          invalidRows: validated.invalidRows,
+          unknownTeams: validated.unknownTeams,
+        });
+      }
+
+      const sendInvites = Boolean(req.body.sendInvites);
+      let appUrl = '';
+      if (sendInvites) {
+        try {
+          appUrl = resolvePublicAppUrl();
+        } catch (err) {
+          return next(err);
+        }
+      }
+
+      const settings = await getClubSettings();
+      let created = 0;
+      let updated = 0;
+      const invites = [];
+
+      for (const row of validated.rows) {
+        const existing = row.email
+          ? await prisma.person.findUnique({ where: { email: row.email } })
+          : null;
+        if (existing) {
+          await prisma.person.update({
+            where: { id: existing.id },
+            data: {
+              name: row.name,
+              phone: row.phone,
+              role: row.role,
+              obligation: row.obligation,
+              teamId: row.teamId,
+            },
+          });
+          if (row.teamId) await syncPrimaryTeamMembership(existing.id, row.teamId, prisma);
+          updated += 1;
+          continue;
+        }
+
+        const personNumber = await nextPersonNumber();
+        const inviteToken = sendInvites && row.email ? createInviteToken() : null;
+        const person = await prisma.person.create({
+          data: {
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            role: row.role,
+            obligation: row.obligation,
+            teamId: row.teamId,
+            personNumber,
+            inviteToken,
+            inviteExpiresAt: inviteToken ? inviteExpiry() : null,
+          },
+        });
+        if (row.teamId) await syncPrimaryTeamMembership(person.id, row.teamId, prisma);
+        created += 1;
+        if (inviteToken && row.email) {
+          const link = inviteLink(inviteToken, appUrl);
+          const mail = await trySendInviteEmail({ email: row.email, name: row.name, link });
+          invites.push({ email: row.email, sent: mail.sent });
+        }
+      }
+
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.import',
+        entity: 'Person',
+        detail: `${created} nieuw, ${updated} bijgewerkt (${settings.seasonLabel})`,
+      });
+
+      res.json({ created, updated, invites, seasonLabel: settings.seasonLabel });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
 router.post(
   '/',
   requireRole(...ADMIN_ROLES)(async (req, res, next) => {
     try {
-      const { name, phone, role, teamId, email } = req.body;
+      const { name, phone, role, teamId, email, exempted } = req.body;
       if (!name?.trim()) {
         return res.status(400).json({ error: 'Naam is verplicht' });
       }
+      const personNumber = await nextPersonNumber();
       const person = await prisma.person.create({
         data: {
           name: name.trim(),
+          personNumber,
           email: email?.trim().toLowerCase() || null,
           phone: phone?.trim() || null,
           role: normalizeRole(role, 'Vrijwilliger'),
           teamId: teamId ? Number(teamId) : null,
+          exempted: Boolean(exempted),
           ...preferenceFieldsFromBody(req.body),
         },
+      });
+      if (person.teamId) await syncPrimaryTeamMembership(person.id, person.teamId);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.create',
+        entity: 'Person',
+        entityId: person.id,
+        detail: person.name,
       });
       res.status(201).json(publicPerson(person, { viewerRole: req.person.role }));
     } catch (err) {
@@ -136,21 +262,57 @@ router.put(
         return res.json(publicPerson(person, { includeContact: true }));
       }
 
-      const { name, phone, role, active, teamId, email } = req.body;
+      const { name, phone, role, active, teamId, email, exempted } = req.body;
+      const data = {
+        ...(name !== undefined && { name: name.trim() }),
+        ...(email !== undefined && { email: email?.trim().toLowerCase() || null }),
+        ...(phone !== undefined && { phone: phone?.trim() || null }),
+        ...(role !== undefined && { role: normalizeRole(role, 'Vrijwilliger') }),
+        ...(exempted !== undefined && { exempted: Boolean(exempted) }),
+        ...(teamId !== undefined && { teamId: teamId ? Number(teamId) : null }),
+        ...preferenceFieldsFromBody(req.body),
+      };
+      if (active !== undefined) {
+        const nextActive = Boolean(active);
+        data.active = nextActive;
+        data.deactivatedAt = nextActive ? null : new Date();
+        if (!nextActive) {
+          await prisma.session.deleteMany({ where: { personId: id } });
+        }
+      }
       const person = await prisma.person.update({
         where: { id },
-        data: {
-          ...(name !== undefined && { name: name.trim() }),
-          ...(email !== undefined && { email: email?.trim().toLowerCase() || null }),
-          ...(phone !== undefined && { phone: phone?.trim() || null }),
-          ...(role !== undefined && { role: normalizeRole(role, 'Vrijwilliger') }),
-          ...(active !== undefined && { active: Boolean(active) }),
-          ...(teamId !== undefined && { teamId: teamId ? Number(teamId) : null }),
-          ...preferenceFieldsFromBody(req.body),
-        },
+        data,
         include: { team: true },
       });
+      if (teamId) await syncPrimaryTeamMembership(person.id, Number(teamId));
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.update',
+        entity: 'Person',
+        entityId: person.id,
+        detail: person.name,
+      });
       res.json(publicPerson(person, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/erase-contact',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const result = await wipePersonContact(req.params.id);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.erase-contact',
+        entity: 'Person',
+        entityId: result.id,
+        detail: 'contact gewist (AVG)',
+      });
+      res.json(result);
     } catch (err) {
       next(err);
     }
@@ -179,6 +341,13 @@ router.post(
         if (!(await canManagePersonAsTeamCoordinator(req.person, existing))) {
           fs.unlinkSync(req.file.path);
           return res.status(403).json({ error: 'Geen toegang tot deze persoon' });
+        }
+
+        try {
+          assertImageMagic(req.file.path);
+        } catch (magicErr) {
+          fs.unlinkSync(req.file.path);
+          return res.status(400).json({ error: magicErr.message });
         }
 
         // Oude foto verwijderen

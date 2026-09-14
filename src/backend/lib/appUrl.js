@@ -18,14 +18,10 @@ export function resolvePublicAppUrl() {
   return 'http://localhost:5173';
 }
 
-/** Optioneel: alleen toestaan als het exact overeenkomt met APP_URL (allowlist). */
-export function resolvePublicAppUrlStrict() {
-  return resolvePublicAppUrl();
-}
-
-export const KNOWN_ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Coördinator', 'Bestuur'];
+export const KNOWN_ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Bestuur'];
 
 export function normalizeRole(role, fallback = 'Vrijwilliger') {
   const r = String(role || '').trim();
+  if (r === 'Coördinator') return 'Barcommissie';
   return KNOWN_ROLES.includes(r) ? r : fallback;
 }

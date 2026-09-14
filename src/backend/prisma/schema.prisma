@@ -9,14 +9,19 @@ datasource db {
 
 model Person {
   id               Int          @id @default(autoincrement())
+  /** Uniek intern persoonsnummer: 7 cijfers */
+  personNumber     String?      @unique
   name             String
   email            String?      @unique
   phone            String?
   photoUrl         String?
   role             String       @default("Vrijwilliger")
   active           Boolean      @default(true)
-  /** NONE | FULL (min 1x/6w) | HALF (min 3x/jaar) */
+  /** NONE | FULL (1×/6w) | VR18 (1×/12w) */
   obligation       String       @default("NONE")
+  exempted         Boolean      @default(false)
+  /** Openstaande inhaaldiensten */
+  makeupDue        Int          @default(0)
   /** JSON array van weekdagen 0=zo … 6=za waarop iemand niet kan */
   unavailableWeekdays String    @default("[]")
   /** JSON array: MORNING | AFTERNOON | EVENING */
@@ -27,11 +32,17 @@ model Person {
   passwordResetToken     String?  @unique
   passwordResetExpiresAt DateTime?
   accountCreatedAt DateTime?
+  /** Moment van deactiveren (AVG: contact wissen na bewaartermijn) */
+  deactivatedAt    DateTime?
   teamId           Int?
   team             Team?        @relation(fields: [teamId], references: [id])
+  teamMemberships  PersonTeam[]
   enrollments      Enrollment[]
   coordinates      Team[]       @relation("TeamCoordinator")
   sessions         Session[]
+  auditLogs        AuditLog[]
+  swapRequests     SwapRequest[] @relation("SwapRequester")
+  swapOffers       SwapRequest[] @relation("SwapCounterparty")
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
@@ -45,22 +56,43 @@ model Session {
   createdAt DateTime @default(now())
 }
 
+model PersonTeam {
+  id        Int      @id @default(autoincrement())
+  personId  Int
+  teamId    Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season    String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([personId, teamId, season])
+}
+
 model Team {
   id                   Int       @id @default(autoincrement())
   name                 String
   coordinatorId        Int?
   coordinator          Person?   @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
-  /** Geschatte wedstrijdduur in minuten (KNVB geeft geen eindtijd) */
   matchDurationMinutes Int       @default(90)
+  active               Boolean   @default(true)
+  /** Wedstrijden tellen mee voor persoonlijke beschikbaarheid */
+  availabilityUse      Boolean   @default(true)
+  /** Thuiswedstrijden kunnen een teamdienst veroorzaken */
+  teamDutyUse          Boolean   @default(false)
+  /** JSON: MORNING | SECOND | LAST */
+  teamDutySlots        String    @default("[]")
+  functionsConfigured  Boolean   @default(false)
   members              Person[]
+  memberships          PersonTeam[]
   matches              Match[]
   assignedServices     Service[] @relation("AssignedTeam")
+  conditionRules       ServiceRule[] @relation("RuleConditionTeam")
 }
 
 model Match {
   id          Int      @id @default(autoincrement())
   date        DateTime
-  /** Aanvangstijd HH:MM (KNVB) */
   time        String?
   home        Boolean  @default(true)
   opponent    String?
@@ -73,6 +105,50 @@ model Match {
   services    Service[]
 }
 
+model Activity {
+  id        Int       @id @default(autoincrement())
+  name      String
+  date      DateTime
+  startTime String
+  endTime   String
+  /** klaverjas | toernooi | feest | ledenavond | opening | overig */
+  type      String    @default("overig")
+  location  String?
+  locked    Boolean   @default(false)
+  note      String?
+  services  Service[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ServiceRule {
+  id                    Int          @id @default(autoincrement())
+  name                  String
+  weekday               Int?
+  startTime             String
+  endTime               String
+  type                  ServiceType
+  required              Int          @default(1)
+  slot                  String?
+  /** ALWAYS | HOME_MATCH | HOME_MATCH_TEAM | ACTIVITY | MANUAL */
+  conditionType         String       @default("ALWAYS")
+  conditionTeamId       Int?
+  conditionTeam         Team?        @relation("RuleConditionTeam", fields: [conditionTeamId], references: [id])
+  conditionTeamName     String?
+  conditionActivityType String?
+  kickoffAfter          String?
+  teamDuty              Boolean      @default(false)
+  /** MORNING | SECOND | LAST */
+  teamDutySlotRole      String?
+  active                Boolean      @default(true)
+  validFrom             DateTime?
+  validTo               DateTime?
+  sortOrder             Int          @default(0)
+  services              Service[]
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+}
+
 model Service {
   id             Int          @id @default(autoincrement())
   type           ServiceType
@@ -81,15 +157,22 @@ model Service {
   location       String
   required       Int          @default(2)
   active         Boolean      @default(true)
-  /** Concept-dienst: nog niet open voor inschrijving */
   draft          Boolean      @default(false)
-  /** MORNING | AFTERNOON | EVENING | EXTRA */
+  locked         Boolean      @default(false)
+  /** PERSONAL | TEAM */
+  kind           String       @default("PERSONAL")
+  /** AUTO | MANUAL | YEAR */
+  origin         String       @default("AUTO")
   slot           String?
   note           String?
   matchId        Int?
   match          Match?       @relation(fields: [matchId], references: [id])
   assignedTeamId Int?
   assignedTeam   Team?        @relation("AssignedTeam", fields: [assignedTeamId], references: [id])
+  sourceRuleId   Int?
+  sourceRule     ServiceRule? @relation(fields: [sourceRuleId], references: [id])
+  activityId     Int?
+  activity       Activity?    @relation(fields: [activityId], references: [id])
   enrollments    Enrollment[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -103,9 +186,38 @@ model Enrollment {
   person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
   /** SELF | ADMIN | TEAM | AUTO */
   source    String   @default("SELF")
+  /** PERSONAL | TEAM */
+  kind      String   @default("PERSONAL")
+  reason    String?
+  makeup    Boolean  @default(false)
+  noShow    Boolean  @default(false)
+  remindedAt DateTime?
   createdAt DateTime @default(now())
+  swapsFrom SwapRequest[] @relation("SwapFrom")
+  swapsTo   SwapRequest[] @relation("SwapTo")
 
   @@unique([serviceId, personId])
+}
+
+/** Twee bestaande persoonlijke diensten ruilen. */
+model SwapRequest {
+  id               Int        @id @default(autoincrement())
+  fromEnrollmentId Int
+  toEnrollmentId   Int
+  fromEnrollment   Enrollment @relation("SwapFrom", fields: [fromEnrollmentId], references: [id], onDelete: Cascade)
+  toEnrollment     Enrollment @relation("SwapTo", fields: [toEnrollmentId], references: [id], onDelete: Cascade)
+  requesterId      Int
+  requester        Person     @relation("SwapRequester", fields: [requesterId], references: [id])
+  counterpartyId   Int
+  counterparty     Person     @relation("SwapCounterparty", fields: [counterpartyId], references: [id])
+  /** PENDING_PEER | PENDING_COMMITTEE | APPROVED | REJECTED | CANCELLED */
+  status           String     @default("PENDING_PEER")
+  matchBlockWarning Boolean   @default(false)
+  note             String?
+  decidedById      Int?
+  decidedAt        DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 }
 
 enum ServiceType {
@@ -113,10 +225,6 @@ enum ServiceType {
   KITCHEN
 }
 
-/**
- * Actuele planningsronde (inschrijfvensters).
- * status: DRAFT | VOLUNTEER_OPEN | MANDATORY_OPEN | CLOSED
- */
 model PlanningRound {
   id                    Int       @id @default(1)
   fromDate              DateTime?
@@ -125,10 +233,20 @@ model PlanningRound {
   volunteerDeadline     DateTime?
   volunteerNotifiedAt   DateTime?
   mandatoryNotifiedAt   DateTime?
+  publishedAt           DateTime?
+  official              Boolean   @default(false)
   updatedAt             DateTime  @updatedAt
 }
 
-/** Singleton: id is altijd 1. Mailserver-instellingen via Beheer in de app. */
+model ClubSettings {
+  id                   Int      @id @default(1)
+  seasonLabel          String   @default("2026-2027")
+  seasonStartMonth     Int      @default(8)
+  auditRetainMonths    Int      @default(24)
+  inactiveRetainMonths Int      @default(24)
+  updatedAt            DateTime @updatedAt
+}
+
 model MailSettings {
   id        Int      @id @default(1)
   enabled   Boolean  @default(false)
@@ -140,4 +258,15 @@ model MailSettings {
   fromEmail String   @default("")
   fromName  String   @default("V.V. Lekkerkerk")
   updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  actor     Person?  @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  Int?
+  detail    String   @default("")
+  createdAt DateTime @default(now())
 }

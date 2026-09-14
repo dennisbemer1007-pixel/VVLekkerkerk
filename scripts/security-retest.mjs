@@ -104,10 +104,9 @@ async function main() {
     }
   }
 
-  // Privacy persons
+  // Privacy persons: vrijwilligers zien geen clubbrede personenlijst
   const lisaPersons = await req('/persons', { token: lisaTok });
-  const hasContact = (lisaPersons.json || []).some((p) => 'email' in p || 'phone' in p);
-  mark(assert('volunteer persons hide contact', !hasContact));
+  mark(assert('volunteer persons blocked', lisaPersons.status === 403, String(lisaPersons.status)));
 
   const adminPersons = await req('/persons?all=true', { token: adminTok });
   const adminHas = (adminPersons.json || []).some((p) => p.email);
@@ -130,6 +129,7 @@ async function main() {
   // Helmet header
   const h = await fetch(`${API}/health`);
   mark(assert('helmet x-content-type-options', h.headers.get('x-content-type-options') === 'nosniff'));
+  mark(assert('api cache-control no-store', (h.headers.get('cache-control') || '').includes('no-store')));
 
   console.log(ok ? '\nALL SECURITY RETESTS PASSED' : '\nSOME SECURITY RETESTS FAILED');
   process.exit(ok ? 0 : 1);

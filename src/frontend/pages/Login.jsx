@@ -79,7 +79,7 @@ export default function Login() {
             </label>
             <input
               id="email"
-              type="text"
+              type="email"
               inputMode="email"
               autoComplete="username"
               className="vvl-input"
@@ -151,6 +151,11 @@ export default function Login() {
 
         <p className="text-center text-sm text-gray-600">
           Uitnodiging ontvangen? Open de link in je e-mail om een account te maken.
+        </p>
+        <p className="text-center text-xs text-gray-500">
+          <Link to="/privacy" className="underline">
+            Privacy
+          </Link>
         </p>
       </div>
     </div>

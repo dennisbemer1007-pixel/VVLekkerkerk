@@ -1,0 +1,202 @@
+/**
+ * Acceptatie + regressie (draaiende app nodig).
+ * Run: npm run test:accept
+ * Base: http://localhost:5173 (Vite-proxy) of ACCEPT_BASE=http://localhost:3001
+ */
+const base = (process.argv[2] || process.env.ACCEPT_BASE || 'http://localhost:5173').replace(
+  /\/$/,
+  '',
+);
+
+async function req(path, { method = 'GET', token, body, raw = false } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${base}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (raw) return { status: res.status, buf, type: res.headers.get('content-type') };
+  let json = null;
+  try {
+    json = buf.length ? JSON.parse(buf.toString('utf8')) : null;
+  } catch {
+    json = buf.toString('utf8').slice(0, 180);
+  }
+  return { status: res.status, json };
+}
+
+function record(name, cond, detail = '') {
+  const line = `${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`;
+  console.log(line);
+  return cond;
+}
+
+async function login(email, password) {
+  const r = await req('/api/auth/login', { method: 'POST', body: { email, password } });
+  return { token: r.json?.token, status: r.status, json: r.json };
+}
+
+async function main() {
+  console.log('Base URL:', base);
+  let ok = true;
+  const mark = (c) => {
+    ok = ok && Boolean(c);
+  };
+
+  const health = await req('/api/health');
+  mark(record('health', health.status === 200 && health.json?.ok === true));
+  if (!ok) {
+    console.error('Server niet bereikbaar. Start npm run dev.');
+    process.exit(1);
+  }
+
+  const helmet = await fetch(`${base}/api/health`);
+  mark(
+    record(
+      'helmet nosniff',
+      helmet.headers.get('x-content-type-options') === 'nosniff',
+    ),
+  );
+  mark(
+    record(
+      'api cache-control no-store',
+      (helmet.headers.get('cache-control') || '').includes('no-store'),
+    ),
+  );
+
+  const demo = await req('/api/auth/demo-accounts');
+  mark(record('demo-accounts enabled', demo.json?.enabled === true));
+  mark(
+    record(
+      'alle demo-logins in lijst',
+      (demo.json?.accounts || []).length >= 11,
+      String(demo.json?.accounts?.length),
+    ),
+  );
+
+  const logins = [
+    ['admin@vvl.local', 'admin123'],
+    ['mark@vvl.demo', 'demo123'],
+    ['sandra@vvl.demo', 'demo123'],
+    ['lisa@vvl.demo', 'demo123'],
+    ['tom@vvl.demo', 'demo123'],
+    ['fatima@vvl.demo', 'demo123'],
+    ['peter@vvl.demo', 'demo123'],
+    ['anneke@vvl.demo', 'demo123'],
+    ['kevin@vvl.demo', 'demo123'],
+    ['noa@vvl.demo', 'demo123'],
+    ['erik@vvl.demo', 'demo123'],
+  ];
+  const tokens = {};
+  for (const [email, password] of logins) {
+    const r = await login(email, password);
+    tokens[email] = r.token;
+    mark(record(`login ${email}`, Boolean(r.token), String(r.status)));
+  }
+
+  const admin = tokens['admin@vvl.local'];
+  const lisa = tokens['lisa@vvl.demo'];
+  const sandra = tokens['sandra@vvl.demo'];
+
+  mark(record('unauth enroll 401', (await req('/api/enrollments', { method: 'POST', body: { serviceId: 1, personId: 1 } })).status === 401));
+  mark(record('unauth PDF 401', (await req('/api/pdf/planning')).status === 401));
+
+  const club = await req('/api/settings/club', { token: admin });
+  mark(record('club seizoen', /^\d{4}-\d{4}$/.test(club.json?.seasonLabel || '')));
+
+  const badImport = await req('/api/persons/import', {
+    method: 'POST',
+    token: admin,
+    body: { csv: 'naam;email;team\nTest;test-fase@vvl.demo;OnbestaandElf' },
+  });
+  mark(record('import onbekend team 400', badImport.status === 400));
+
+  const excel = await req('/api/planning/export.xlsx', { token: admin, raw: true });
+  mark(record('excel zip', excel.status === 200 && excel.buf.slice(0, 2).toString() === 'PK'));
+
+  const pdf = await req('/api/pdf/planning?clubhouse=true', { token: admin, raw: true });
+  mark(record('clubhuis pdf', pdf.status === 200 && pdf.buf.slice(0, 4).toString() === '%PDF'));
+
+  const dash = await req('/api/teams/dashboard', { token: sandra });
+  mark(record('sandra teamdashboard', Array.isArray(dash.json?.teams) && dash.json.teams.length >= 1));
+
+  const teamsSandra = await req('/api/teams', { token: sandra });
+  const teamsAdmin = await req('/api/teams', { token: admin });
+  mark(
+    record(
+      'teamco ziet minder teams dan admin',
+      (teamsSandra.json?.length || 0) > 0 &&
+        (teamsAdmin.json?.length || 0) >= (teamsSandra.json?.length || 0),
+    ),
+  );
+
+  const exported = await req('/api/persons/me/export', { token: lisa });
+  mark(record('lisa AVG-export', exported.json?.person?.name && !exported.json?.person?.passwordHash));
+
+  const lisaPersons = await req('/api/persons', { token: lisa });
+  mark(record('vrijwilliger personenlijst 403', lisaPersons.status === 403, String(lisaPersons.status)));
+
+  const me = await req('/api/auth/me', { token: lisa });
+  mark(record('me zonder passwordHash', me.json?.passwordHash == null && me.json?.inviteToken == null));
+
+  const services = await req('/api/services', { token: lisa });
+  const open = (services.json || []).find((s) => !s.draft && s.status !== 'full' && s.kind !== 'TEAM');
+  if (open) {
+    const idor = await req('/api/enrollments', {
+      method: 'POST',
+      token: lisa,
+      body: { serviceId: open.id, personId: 1 },
+    });
+    mark(record('IDOR inschrijven als ander', idor.status === 403, String(idor.status)));
+  } else {
+    mark(record('IDOR inschrijven als ander', false, 'geen open dienst'));
+  }
+
+  const volunteerPropose = await req('/api/planning/propose', { method: 'POST', token: lisa, body: {} });
+  mark(record('vrijwilliger propose 403', volunteerPropose.status === 403));
+
+  const pdfQuery = await fetch(`${base}/api/pdf/planning?token=${admin}`);
+  mark(record('PDF query-token geweigerd', pdfQuery.status === 401));
+
+  const before = await req('/api/planning/round', { token: admin });
+  const { default: prisma } = await import('../src/backend/lib/prisma.js');
+  try {
+    const official = await req('/api/planning/official', { method: 'POST', token: admin });
+    mark(record('officieel lockt diensten', official.status === 200 && (official.json?.locked ?? 0) >= 0));
+    if (open) {
+      const lockedEnroll = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: open.id, personId: me.json.id },
+      });
+      mark(
+        record(
+          'lisa geblokkeerd na officieel',
+          lockedEnroll.status === 403,
+          String(lockedEnroll.status),
+        ),
+      );
+    }
+  } finally {
+    await prisma.service.updateMany({ data: { locked: false } });
+    const restoreStatus =
+      before.json?.status && before.json.status !== 'OFFICIAL' ? before.json.status : 'PUBLISHED';
+    await prisma.planningRound.update({
+      where: { id: 1 },
+      data: { official: false, status: restoreStatus },
+    });
+    await prisma.$disconnect();
+  }
+  const after = await req('/api/planning/round', { token: admin });
+  mark(record('officieel teruggezet na test', after.json?.official === false));
+
+  console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
+  process.exit(ok ? 0 : 1);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

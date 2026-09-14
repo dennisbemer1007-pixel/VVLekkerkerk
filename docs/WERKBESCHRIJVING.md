@@ -2,169 +2,234 @@
 
 **Applicatie:** VVL Planning App  
 **Organisatie:** V.V. Lekkerkerk  
-**Doel:** Digitaal plannen van bardiensten en keukendiensten voor vrijwilligers, teamcoördinatoren en bestuur.
+**Bron FO:** Functioneel Ontwerp Planning Bar- en Keukendiensten, concept 4.0  
+**Keuzes bij het FO:** [FO-KEUZES.md](FO-KEUZES.md)  
+**Beveiliging / AVG:** [SECURITY.md](SECURITY.md)  
+**Demo:** [DEMO.md](DEMO.md)
+
+Dit is de werkbeschrijving voor bestuur, barcommissie en testers. Technische keuzes en wat bewust níét is gebouwd staan in FO-KEUZES. Als het FO en de app verschillen, geldt FO-KEUZES.
 
 ---
 
 ## 1. Wat doet de app?
 
-De app vervangt een papieren of ad-hoc planning door één overzichtelijke tool waarin:
+De app plant **bar- en keukendiensten** voor de kantine van V.V. Lekkerkerk.
 
-- **bestuur / coördinatoren** diensten plannen en mensen uitnodigen;
-- **vrijwilligers** zichzelf inschrijven op open diensten;
-- **teamcoördinatoren** ouders/leden uitnodigen en namens hun team inschrijven;
-- iedereen een **planning van 6 weken** kan bekijken en als **PDF** kan printen voor in de kantine.
+- Vrijwilligers schrijven zich in of ruilen twee bestaande persoonlijke diensten.
+- Teamcoördinatoren vullen teamdiensten en schrijven teamleden in.
+- De barcommissie maakt de 6-wekenplanning, publiceert, vult verplichtingen, zet het rooster officieel en print voor het clubhuis.
 
-De huisstijl (zwart/wit/grijs) en het clublogo van V.V. Lekkerkerk zijn doorgevoerd in de hele interface.
-
----
-
-## 2. Voor wie? (rollen)
-
-| Rol | Wat mag je? |
-|-----|-------------|
-| **Vrijwilliger** | Dashboard, inschrijven, planning & PDF, eigen voorkeuren |
-| **Teamcoördinator** | Zelfde + teamleden inschrijven + ouders uitnodigen |
-| **Coördinator / Bestuur** (bardienstcoördinator) | Alles, inclusief Beheer (personen, diensten, teams, wedstrijden, e-mail) |
-
-Apart van de access-rol heeft iemand een **bardienst-verplichting**: geen / volledig (min. 1× per 6 weken) / half (min. 3× per jaar).
-
-Na inloggen of na het aanmaken van een account zie je onder **“Jouw rechten”** precies wat bij jouw rol hoort.
-
-Zie ook feedback/roadmap: [`docs/FEEDBACK-CHERYL-2026-07.md`](FEEDBACK-CHERYL-2026-07.md).
+Huisstijl: clubkleuren en logo van V.V. Lekkerkerk.
 
 ---
 
-## 3. Starten van de app
+## 2. Koppeling met het FO 4.0
 
-1. Open een terminal in de projectmap `dienst-planner`.
-2. Eerste keer: `npm.cmd install` → `npm.cmd run setup`
-3. Elke keer: `npm.cmd run dev` *(of dubbelklik `start-dev.cmd`)*
-4. Browser: **http://localhost:5173**
+Onderstaande tabel dekt de FO-onderwerpen. Geparkeerde punten verwijzen naar FO-KEUZES (akkoord 14 september 2026).
 
-**Standaard beheerder (eerste keer):**  
-`admin@vvl.local` / `admin123`
+| FO-onderwerp | In de app | Waar / toelichting |
+|--------------|-----------|-------------------|
+| Doel: bar- en keukenplanning kantine | Ja | Hele app |
+| Huisstijl club | Ja | Logo, kleuren, `/logo.png` |
+| Rollen vrijwilliger / teamco / barcommissie / bestuur | Ja | §3; oude naam “Coördinator” → Barcommissie |
+| Half-verplicht (3×/jaar) | Nee, bewust | Vervangen door volledig verplicht. [FO-KEUZES](FO-KEUZES.md) |
+| Verplicht 1× / 6 weken (`FULL`) | Ja | Personen + automatische vulling |
+| VR18+ 1× / 12 weken | Ja | Zelfde |
+| Vrijstelling | Ja | Telt niet mee voor quota |
+| Inhaaldienst | Ja | `makeupDue`; gaat voor bij automatisch vullen |
+| No-show | Ja | Beheer → Diensten; kan inhaal veroorzaken |
+| Persoonsnummer 7 cijfers | Ja | Automatisch `1000000`–`9999999` |
+| Uniek e-mailadres voor login | Ja | Gedeeld adres is geparkeerd. [FO-KEUZES](FO-KEUZES.md) |
+| Configureerbare dienstregels (FO §7) | Ja | Beheer → Dienstregels; zie §6 |
+| Standaard di–zo bar én keuken | Ja | Seed-regels bij eerste start |
+| Zondag keuken 12:00–15:00 | Ja | Altijd; extra voorwaarde geparkeerd. [FO-KEUZES](FO-KEUZES.md) |
+| Late keuken bij Lekkerkerk 1 thuis | Ja | Regel “Zaterdag keuken laat” |
+| Teamdienst jonge jeugd ochtend | Ja | O8–O12 / JO8–JO12 |
+| Teamdienst oudere jeugd 2e + laatste | Ja | o.a. JO15, JO16, MO17, O13-1 |
+| JO13-2 geen extra teamdienst | Ja | Alleen O13-1 / JO13-1 / O13-1JM |
+| Meerdere jeugdteams thuis extra verdeelregel | Nee, bewust | [FO-KEUZES](FO-KEUZES.md) |
+| Activiteiten (klaverjas e.d.) | Ja | Beheer → Jaarplanning |
+| Vrijdag bar alleen bij klaverjas | Ja | Dienstregel met voorwaarde activiteit |
+| Dashboard 4 controles | Ja | Open diensten, verplichtingen, inhaal, waarom niet ingepland |
+| Inschrijven tot vrijwilligersdeadline | Ja | Daarna alleen beheer (en teamco voor het team) |
+| Ruilen twee persoonlijke diensten (FO §53–56 / §89) | Ja | Beide akkoord + barcommissie; zie §7 |
+| Eerlijk automatisch vullen (FO §34 / §89) | Ja | Inhaal → verplicht → minst dit jaar → langst geleden → voorkeur |
+| Teamcoördinator-dashboard | Ja | Menu **Mijn team** |
+| Herinnering 1 dag van tevoren | Ja | Alleen e-mail (SMTP). Geen push/WhatsApp |
+| Bewerkbare mailteksten | Nee, bewust | Vaste teksten. [FO-KEUZES](FO-KEUZES.md) |
+| Publiceren / officieel vastzetten | Ja | Beheer → Planning → Maak officieel |
+| Seizoen 1 aug–31 jul | Ja | Beheer → Club; rollover archiveert lidmaatschappen |
+| Wedstrijden KNVB/CSV | Ja | Geen live VoetbalAssist. [FO-KEUZES](FO-KEUZES.md) |
+| Personenimport CSV | Ja | Geen automatische nieuwe teams |
+| Excel-export | Ja | Planning → Excel; personenblad alleen beheer |
+| Clubhuisprint deze week | Ja | Planning → Clubhuis-PDF (bar + keuken) |
+| 6-weken-PDF | Ja | Planning → PDF |
+| AVG / privacy | Ja | `/privacy`, export, retentie, wis contact |
+| Hosting persistente schijf | Vastgelegd | Productie: `DATA_DIR`. Free = alleen demo |
 
 ---
 
-## 4. Belangrijkste schermen
+## 3. Voor wie? (rollen)
 
-### 4.1 Inloggen
-- E-mail + wachtwoord.
-- Uitnodiging ontvangen? Open de **deeplink** uit de mail (of gekopieerde link) om een account te maken.
+Access-rol is iets anders dan bardienst-verplichting.
 
-### 4.2 Dashboard
-- Tellingen: personen, diensten, inschrijvingen, **bezettingsgraad %**.
-- Kleurstatus: **groen = vol**, **geel = nog 1 nodig**, **rood = open**.
-- Overzicht “deze week” + snelle knoppen naar Inschrijven / Planning / Beheer.
-- Beheer ziet ook: **wie heeft gestaan** (6 weken / jaar) en **wie zich niet zelf inschreef** in de huidige ronde.
+| Rol | Mag je |
+|-----|--------|
+| **Vrijwilliger** | Dashboard, inschrijven, ruilen, planning, wedstrijden, voorkeuren |
+| **Teamcoördinator** | Zelfde + Mijn team + ouders uitnodigen |
+| **Barcommissie** | Alles, inclusief Beheer |
+| **Bestuur** | Zelfde als barcommissie |
 
-### 4.3 Inschrijven
-- Filters: Komende diensten, Vandaag, Deze week, Open diensten, Mijn diensten.
-- Per dienst: type (bar/keuken), datum, tijd, locatie, bezetting, ingeschreven personen **met pasfoto of initialen**.
-- Knop **Inschrijven** / **Uitschrijven** (uitschrijven tot vrijwilligersdeadline; beheer mag altijd wijzigen).
+**Verplichting** (los van rol): geen / verplicht (min. 1× per 6 weken) / VR18+ (min. 1× per 12 weken). Vrijstelling telt niet mee. Inhaal komt bovenop.
 
-### 4.3b Voorkeuren
-- Vaste weekdagen afvinken waarop je niet kunt staan.
-- Optioneel voorkeur voor ochtend / middag / avond.
-- Beheer kan dit ook per persoon instellen.
+Na inloggen zie je onder je rechten wat bij jouw rol hoort.
 
-### 4.4 Planning
-- Overzicht van ca. **6 weken**.
-- Zelfde filters als bij Inschrijven.
-- Knop **PDF (6 weken)** voor een printbare kantineversie.
+---
 
-### 4.5 Beheer (coördinator / bestuur)
+## 4. Starten (lokaal)
+
+1. `npm.cmd install`
+2. `npm.cmd run setup`
+3. `npm.cmd run demo:users` (zet alle demo-logins klaar)
+4. `npm.cmd run dev` of `start-dev.cmd`
+5. Browser: http://localhost:5173
+
+**Bestuur (lokaal):** `admin@vvl.local` / `admin123`  
+**Overige demo’s:** wachtwoord `demo123` — zie [DEMO.md](DEMO.md).
+
+---
+
+## 5. De 6-wekenronde (zo werkt de barcommissie)
+
+1. **Dienstregels + wedstrijden kloppen** — Beheer → Dienstregels; Wedstrijden → KNVB-/CSV-import.
+2. **Update vanuit regels** — Beheer → Planning (of Planning-pagina): diensten worden (opnieuw) afgeleid uit regels, thuiswedstrijden en activiteiten.
+3. **Publiceren** — vrijwilligers mogen inschrijven tot de deadline.
+4. **Verplicht vullen** — open persoonlijke plekken volgens de eerlijke volgorde (FO §34).
+5. **Teamdiensten** — teamco’s vullen hun teamshifts **vóór** officieel.
+6. **Maak officieel** — gepubliceerde diensten in het venster gaan op slot. Alleen barcommissie/bestuur wijzigt daarna nog in- of uitschrijvingen.
+7. **Print / Excel** — clubhuis-PDF (deze week) en/of 6-weken-PDF en Excel.
+8. **Herinneringen** — 1 dag van tevoren per e-mail als SMTP aanstaat; handmatig “Herinneringen morgen” kan forceren.
+
+Concept-/conceptstatus van de ronde (`DRAFT` / gepubliceerd / `OFFICIAL`) staat onder Beheer → Planning.
+
+---
+
+## 6. Hoe ontstaat een dienst? (FO §7)
+
+Niet hardcoded “er is een thuiswedstrijd dus 09:00–12:00 bar”. De **dienstregels** zeggen:
+
+- altijd op deze weekdag, of
+- bij een thuiswedstrijd, of
+- bij een thuiswedstrijd van een bepaald team, of
+- bij een activiteit (bijv. klaverjas), of
+- alleen handmatig.
+
+**Standaardregels** (aanpasbaar in Beheer):
+
+| Wanneer | Wat |
+|---------|-----|
+| Di 19:00–22:00 | Bar (1) |
+| Wo 18:30–22:00 | Bar (1) |
+| Do 18:30–00:00 | Bar (1) |
+| Vr 18:30–00:00 | Bar (2), alleen bij klaverjasavond |
+| Za 07:30–12:00 | Bar ochtend (3), teamdienst ochtend |
+| Za 12:00–16:30 | Bar tweede shift (2), teamdienst tweede |
+| Za 16:30–19:30 | Bar laatste shift (2), teamdienst laatste |
+| Za 10:00–13:00 | Keuken ochtend (1) |
+| Za 13:00–16:00 | Keuken middag (2) |
+| Za 16:00–19:00 | Keuken laat (2), alleen Lekkerkerk 1 thuis |
+| Zo 09:00–13:00 | Bar ochtend (1) |
+| Zo 13:00–16:00 | Bar middag (1) |
+| Zo 12:00–15:00 | Keuken (1), altijd |
+
+Teamdiensten: jonge jeugd ochtend; oudere jeugd (o.a. JO15, JO16, MO17, O13-1) tweede + laatste shift. JO13-2 niet.
+
+---
+
+## 7. Inschrijven, ruilen, blokkades
+
+### Inschrijven
+Filters: komende / vandaag / deze week / open / mijn diensten. Inschrijven tot de vrijwilligersfase sluit. Beheer mag altijd wijzigen. Na **officieel** alleen barcommissie.
+
+Een vrijwilliger mag niet iemand anders inschrijven (IDOR-blokkade). Teamco mag teamleden inschrijven.
+
+Wedstrijdblokkade: rond de eigen wedstrijd (incl. marge) kun je niet op een overlappende dienst. Beheer kan bewust overrulen.
+
+### Ruilen (FO §53–56)
+Kies jouw komende **persoonlijke** dienst en die van iemand anders. Die persoon gaat akkoord; daarna keurt de barcommissie goed. Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator. Details: [FO-KEUZES](FO-KEUZES.md).
+
+---
+
+## 8. Schermen (wat je als gebruiker doet)
+
+### 8.1 Inloggen
+E-mail + wachtwoord. Wachtwoord vergeten stuurt een link (zelfde bevestiging of het adres bestaat, i.v.m. privacy). Uitnodiging: link uit de mail. Op demo/dev staan klikbare demo-accounts.
+
+### 8.2 Dashboard
+Tellingen en voor de barcommissie vier controles: open diensten, niet-ingevulde verplichtingen, inhaaldiensten, waarom iemand niet is ingepland.
+
+### 8.3 Inschrijven
+Zie §7.
+
+### 8.4 Ruilen
+Zie §7.
+
+### 8.5 Planning
+Ongeveer 6 weken. Excel, clubhuis-PDF (deze week) en 6-weken-PDF. Beheer: Update vanuit regels + wedstrijden.
+
+### 8.6 Wedstrijden
+Overzicht + KNVB-/CSV-import (geen live VoetbalAssist).
+
+### 8.7 Voorkeuren
+Weekdagen afvinken waarop je niet kunt. Voorkeur ochtend/middag/avond. **Gegevens downloaden** (AVG).
+
+### 8.8 Mijn team (teamcoördinator)
+Leden en resterende verplichting, komende wedstrijden, teamdiensten, lid inschrijven op een open persoonlijke plek.
+
+### 8.9 Beheer (barcommissie / bestuur)
 
 | Tab | Functie |
 |-----|---------|
-| **Personen** | Uitnodigen per e-mail, pasfoto, rol, team, verplichte bardienst, deactiveren, deeplink kopiëren |
-| **Diensten** | Bardienst/keukendienst toevoegen of bewerken (datum, tijd, bezetting, actief/uit) |
-| **Teams** | Teams + coördinator; lid inschrijven op open dienst |
-| **Wedstrijden** | Thuis/uitwedstrijden; knop om automatisch bardiensten te maken bij thuiswedstrijden |
-| **E-mail** | SMTP mailserver aansluiten (Gmail / Outlook / eigen server) + testmail |
-
-### 4.6 Teamcoördinator
-- Menu **Mijn team** en **Uitnodigen**.
-- Ouders toevoegen via e-mailuitnodiging (rol vrijwilliger).
-- Leden inschrijven op open bardiensten.
+| Personen | Uitnodigen, rol, verplichting, team, deactiveren, CSV-import, wis contact (AVG) |
+| Diensten | Handmatig / historisch invoeren, no-show |
+| Planning | Voorstel, publiceren, mailen, verplicht vullen, officieel, herinneringen |
+| Dienstregels | Dagen, tijden, aantallen, voorwaarden |
+| Jaarplanning | Klaverjas, toernooi, enz. |
+| Teams | Coördinator, wedstrijdduur, teamdienst-functies |
+| E-mail | SMTP |
+| Club | Seizoen, AVG-opschonen, hostingnotitie |
 
 ---
 
-## 5. Uitnodigingsproces (stap voor stap)
+## 9. AVG in de praktijk
 
-1. Beheerder gaat naar **Beheer → Personen**.
-2. Vult **naam**, **e-mail**, optioneel telefoon, rol, team, **pasfoto** in.
-3. Klikt **Uitnodiging maken**.
-4. Als mailserver aanstaat → e-mail wordt verstuurd.  
-   Zo niet → **kopieer de deeplink** (of open e-mailprogramma).
-5. De persoon opent `/uitnodiging/...`, ziet **rol + rechten**, kiest een wachtwoord.
-6. Account is actief; bij volgende bezoek: gewoon inloggen.
+Zie ook `/privacy` en [SECURITY.md](SECURITY.md).
 
-Uitnodigingslink is **14 dagen** geldig.
+- **Inzage / kopie:** Voorkeuren → Gegevens downloaden.
+- **Wijzigen:** barcommissie past personen aan.
+- **Wissen van contact:** account deactiveren, daarna **Wis contact** (e-mail, telefoon, foto, inlog). Namen in roosters blijven (verplichting/inhaal).
+- **Retentie:** audit 24 maanden; contact inactief 24 maanden (`deactivatedAt`).
+- **Dataminimalisatie:** vrijwilligers krijgen geen clubbrede personenlijst en geen e-mail/telefoon van anderen.
 
 ---
 
-## 6. Mailserver (optioneel)
+## 10. Productie
 
-Pad: **Beheer → E-mail**
+Zie [RENDER-DEMO.md](RENDER-DEMO.md) (Free = uitproberen) en [SECURITY.md](SECURITY.md).
 
-1. Kies voorinstelling (Gmail / Outlook / eigen server).
-2. Vul host, poort, gebruikersnaam, wachtwoord, afzender in.
-3. Zet **E-mail versturen** aan → Opslaan.
-4. Stuur een **testmail**.
-
-Zonder SMTP blijft de app werken met handmatig kopiëren van de uitnodigingslink.
-
----
-
-## 7. Pasfoto’s
-
-- Toe te voegen bij uitnodigen of bewerken van een persoon (JPG/PNG, max. 3 MB).
-- Zichtbaar in: personenlijst, **teamverdeling**, **bardiensten/keukendiensten**.
-- Geen foto? Dan initialen in een rond vlak.
+- Sterke `ADMIN_PASSWORD` (niet `admin123`)
+- Persistente schijf `DATA_DIR`
+- `SEED_DEMO=false`
+- `APP_URL` / `CORS_ORIGIN` / `MAIL_SECRET`
+- SMTP voor uitnodigingen en herinneringen
+- Backup: `npm run db:backup`
 
 ---
 
-## 8. Technische opbouw (kort)
+## 11. Testen
 
-| Onderdeel | Techniek |
-|-----------|----------|
-| Frontend | React + Vite + Tailwind |
-| Backend | Express (API) |
-| Database | Prisma + SQLite |
-| PDF | PDFKit |
-| Mail | Nodemailer (SMTP via Beheer) |
-| Foto’s | Upload naar `/uploads/photos` |
-
----
-
-## 9. Typische werkdag (voorbeeld)
-
-1. Bestuur plant diensten (handmatig of via thuiswedstrijden).  
-2. Nodigt nieuwe vrijwilligers uit (mail of WhatsApp-link).  
-3. Vrijwilligers loggen in en schrijven zich in op open diensten.  
-4. Teamcoördinator vult open plekken namens ouders.  
-5. Dashboard toont of alles vol/open is.  
-6. Planning → **PDF** printen voor in de kantine.
-
----
-
-## 10. Demo / filmpje
-
-Alles staat in de map `docs/`:
-
-| Bestand | Inhoud |
-|---------|--------|
-| `docs/WERKBESCHRIJVING.md` | Tekstversie |
-| `docs/WERKBESCHRIJVING.pdf` | **PDF-versie (printbaar)** |
-| `docs/demo/VVL-Planning-App-Demo.mp4` | Demofilmpje (~35 sec) met alle schermen + PDF-rooster |
-| `docs/demo/index.html` | Interactieve slideshow (afspelen / vorige-volgende) |
-
-**PDF openen:** dubbelklik `docs/WERKBESCHRIJVING.pdf`  
-**Filmpje openen:** dubbelklik `docs/demo/VVL-Planning-App-Demo.mp4`  
-**Slideshow:** open `docs/demo/index.html` in je browser.
-
----
-
-*Documentversie: juli 2026 — VVL Planning App*
+```bash
+npm.cmd run test          # unit (geen server)
+npm.cmd run test:accept   # acceptatie + regressie (server moet draaien)
+npm.cmd run test:security # OWASP-gerichte checks (server moet draaien)
+```

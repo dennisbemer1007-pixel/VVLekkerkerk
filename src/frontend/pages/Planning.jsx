@@ -13,7 +13,9 @@ export default function Planning() {
   const [period, setPeriod] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [round, setRound] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
   const [updateBusy, setUpdateBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -30,19 +32,27 @@ export default function Planning() {
   }, [filter, personId]);
 
   useEffect(() => {
+    api.getPlanningRound().then(setRound).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     load();
   }, [load]);
 
-  const downloadPdf = async () => {
+  const downloadPdf = async (clubhouse = false) => {
     setPdfBusy(true);
     setError('');
     try {
-      const params = period ? { from: period.from, to: period.to } : {};
+      const params = clubhouse
+        ? { clubhouse: 'true' }
+        : period
+          ? { from: period.from, to: period.to }
+          : {};
       const blob = await api.downloadPlanningPdf(params);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'vvl-rooster-6-weken.pdf';
+      a.download = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster-6-weken.pdf';
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -52,23 +62,39 @@ export default function Planning() {
     }
   };
 
+  const downloadExcel = async () => {
+    setExcelBusy(true);
+    setError('');
+    try {
+      const params = period ? { from: period.from, to: period.to } : {};
+      const blob = await api.downloadPlanningExcel(params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vvl-planning.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
   const updateFromMatches = async () => {
     setUpdateBusy(true);
     setError('');
     setMsg('');
     try {
-      const res = await api.syncPlanningFromMatches({ required: 2 });
+      const res = await api.syncPlanningFromMatches();
       const parts = [];
-      if (res.created) parts.push(`${res.created} bardienst(en) toegevoegd`);
-      if (res.removed) {
-        parts.push(
-          `${res.removed} dienst(en) verwijderd die niet bij een thuiswedstrijd hoorden`,
-        );
-      }
+      if (res.created) parts.push(`${res.created} dienst(en) toegevoegd`);
+      if (res.updated) parts.push(`${res.updated} bijgewerkt`);
+      if (res.removed) parts.push(`${res.removed} lege auto-dienst(en) verwijderd`);
       setMsg(
         parts.length
           ? `Planning bijgewerkt: ${parts.join(', ')}.`
-          : 'Planning is al actueel — alleen bardiensten bij thuiswedstrijden blijven staan.',
+          : 'Planning is al actueel volgens de dienstregels.',
       );
       await load();
     } catch (e) {
@@ -84,12 +110,13 @@ export default function Planning() {
         <div>
           <PageTitle {...PAGE_HELP.planning}>Planning</PageTitle>
           <p className="mt-1 text-sm text-gray-700">
-            Overzicht voor de komende 6 weken. Thuiswedstrijden vullen ochtend (09:00–12:00),
-            middag (12:00–16:00) en avond (16:00–20:30), elk 2 personen.
+            Overzicht voor de komende 6 weken: bar- en keukendiensten uit de
+            configureerbare regels, wedstrijden en activiteiten.
           </p>
           {period ? (
             <p className="mt-1 text-xs text-gray-600">
               Periode: {period.from} t/m {period.to}
+              {round?.official ? ' · officieel rooster' : ''}
             </p>
           ) : null}
         </div>
@@ -106,11 +133,27 @@ export default function Planning() {
           ) : null}
           <button
             type="button"
+            className="vvl-btn-outline text-center"
+            disabled={excelBusy}
+            onClick={downloadExcel}
+          >
+            {excelBusy ? 'Excel laden…' : 'Excel'}
+          </button>
+          <button
+            type="button"
+            className="vvl-btn-outline text-center"
+            disabled={pdfBusy}
+            onClick={() => downloadPdf(true)}
+          >
+            Clubhuis-PDF
+          </button>
+          <button
+            type="button"
             className="vvl-btn-primary text-center"
             disabled={pdfBusy}
-            onClick={downloadPdf}
+            onClick={() => downloadPdf(false)}
           >
-            {pdfBusy ? 'PDF laden…' : 'PDF-rooster (A4)'}
+            {pdfBusy ? 'PDF laden…' : 'PDF 6 weken'}
           </button>
         </div>
       </header>

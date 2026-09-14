@@ -11,11 +11,14 @@ export const DAY_LABELS = [
   'Zondag',
 ];
 
-/** Zelfde bardienst-dagdelen voor elke dag (kantine-Excelrooster). */
+/** Zelfde dagdelen voor bar én keuken (kantine-print). */
 export const SLOT_ROWS = [
-  { slot: 'MORNING', type: 'BAR', label: 'Ochtend', time: SLOT_TIMES.MORNING.BAR },
-  { slot: 'AFTERNOON', type: 'BAR', label: 'Middag', time: SLOT_TIMES.AFTERNOON.BAR },
-  { slot: 'EVENING', type: 'BAR', label: 'Avond', time: SLOT_TIMES.EVENING.BAR },
+  { slot: 'MORNING', type: 'BAR', label: 'Bar ochtend', time: SLOT_TIMES.MORNING.BAR },
+  { slot: 'AFTERNOON', type: 'BAR', label: 'Bar middag', time: SLOT_TIMES.AFTERNOON.BAR },
+  { slot: 'EVENING', type: 'BAR', label: 'Bar avond', time: SLOT_TIMES.EVENING.BAR },
+  { slot: 'MORNING', type: 'KITCHEN', label: 'Keuken ochtend', time: '10:00 - 13:00' },
+  { slot: 'AFTERNOON', type: 'KITCHEN', label: 'Keuken middag', time: '13:00 - 16:00' },
+  { slot: 'EVENING', type: 'KITCHEN', label: 'Keuken laat', time: '16:00 - 19:00' },
 ];
 
 export function dayIndex(d) {
@@ -125,9 +128,17 @@ function drawCell(doc, x, y, w, h, text, opts = {}) {
 }
 
 /** Tekent het liggende A4-rooster op een pdfkit-document. */
-export function renderPlanningRoster(doc, { services, from, to, generatedAt = new Date() }) {
-  const weekStarts = weekStartsInRange(from, to);
-  const byWeekDay = groupServicesByWeekDay((services || []).filter((s) => s.type !== 'KITCHEN'));
+export function renderPlanningRoster(doc, {
+  services,
+  from,
+  to,
+  generatedAt = new Date(),
+  official = false,
+  clubhouse = false,
+  maxWeeks = 6,
+}) {
+  const weekStarts = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
+  const byWeekDay = groupServicesByWeekDay(services || []);
   const daySections = rosterDaySections();
 
   const pageW = doc.page.width - 48;
@@ -145,19 +156,33 @@ export function renderPlanningRoster(doc, { services, from, to, generatedAt = ne
       .fontSize(13)
       .font('Helvetica-Bold')
       .fillColor('#000000')
-      .text('V.V. Lekkerkerk — Rooster kantinediensten', left, y, {
-        width: pageW,
-        align: 'center',
-      });
+      .text(
+        official
+          ? 'V.V. Lekkerkerk — Officieel rooster kantinediensten'
+          : 'V.V. Lekkerkerk — Rooster kantinediensten',
+        left,
+        y,
+        {
+          width: pageW,
+          align: 'center',
+        },
+      );
     y = doc.y + 2;
     doc
       .fontSize(7)
       .font('Helvetica')
       .fillColor('#555555')
-      .text('Alleen namen · bardienst per tijdsblok (ma–zo)', left, y, {
-        width: pageW,
-        align: 'center',
-      });
+      .text(
+        clubhouse
+          ? 'Clubhuisprint · bar én keuken · namen per tijdsblok'
+          : 'Bar- en keukendienst per tijdsblok (ma–zo)',
+        left,
+        y,
+        {
+          width: pageW,
+          align: 'center',
+        },
+      );
     doc.fillColor('#000000');
     y = doc.y + 8;
   };

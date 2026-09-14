@@ -14,6 +14,7 @@ const FEATURE_LABELS = {
   planning: 'Planning & PDF',
   wedstrijden: 'Wedstrijden',
   voorkeuren: 'Voorkeuren',
+  ruilen: 'Ruilen',
   teams: 'Teamleden inschrijven',
   beheer: 'Beheer & uitnodigen',
 };
@@ -21,7 +22,7 @@ const FEATURE_LABELS = {
 const OBLIGATION_SHORT = {
   NONE: '',
   FULL: 'verplicht',
-  HALF: 'half verplicht',
+  VR18: 'VR18+',
 };
 
 export default function Dashboard() {
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [services, setServices] = useState([]);
   const [error, setError] = useState('');
+  const [controlView, setControlView] = useState(null);
 
   useEffect(() => {
     Promise.all([api.getStats(), api.getServices({ filter: 'week' })])
@@ -41,13 +43,15 @@ export default function Dashboard() {
 
   const underQuota = (stats?.dutyStats || []).filter((p) => p.underQuota);
   const notSelf = stats?.notSelfEnrolled || [];
+  const controls = stats?.controls;
+  const summary = controls?.summary;
 
   return (
     <div className="space-y-8">
       <header className="space-y-2">
         <PageTitle {...PAGE_HELP.dashboard}>Dashboard</PageTitle>
         <p className="text-sm text-gray-700">
-          Welkom {user?.name}. Groen = vol, geel = nog 1 nodig, rood = open.
+          Welkom {user?.name}. De kernvraag: <strong>wat moet er nog geregeld worden?</strong>
         </p>
       </header>
 
@@ -69,6 +73,135 @@ export default function Dashboard() {
 
       {error ? (
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
+      ) : null}
+
+      {can('beheer') && summary ? (
+        <section className="space-y-3">
+          <h2 className="font-heading text-xl font-black uppercase">Wat is nog niet geregeld?</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setControlView(controlView === 'open' ? null : 'open')}
+              className="vvl-card text-left border-l-4 border-l-red-500 transition hover:shadow-md"
+            >
+              <p className="text-xs font-bold uppercase text-vvl-accent">Open diensten</p>
+              <p className="font-heading text-3xl font-black">{summary.openServiceCount}</p>
+              <p className="text-sm text-gray-600">
+                {summary.fullyStaffed}/{summary.serviceCount} volledig bezet
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setControlView(controlView === 'obligations' ? null : 'obligations')}
+              className="vvl-card text-left border-l-4 border-l-amber-500 transition hover:shadow-md"
+            >
+              <p className="text-xs font-bold uppercase text-vvl-accent">Verplichtingen open</p>
+              <p className="font-heading text-3xl font-black">{summary.unfilledObligationCount}</p>
+              <p className="text-sm text-gray-600">Nog niet ingedeeld</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setControlView(controlView === 'makeup' ? null : 'makeup')}
+              className="vvl-card text-left border-l-4 border-l-vvl-primary transition hover:shadow-md"
+            >
+              <p className="text-xs font-bold uppercase text-vvl-accent">Inhaaldiensten</p>
+              <p className="font-heading text-3xl font-black">{summary.makeupDueCount}</p>
+              <p className="text-sm text-gray-600">Openstaand</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setControlView(controlView === 'gaps' ? null : 'gaps')}
+              className="vvl-card text-left border-l-4 border-l-gray-500 transition hover:shadow-md"
+            >
+              <p className="text-xs font-bold uppercase text-vvl-accent">Waarom niet ingepland</p>
+              <p className="font-heading text-3xl font-black">{summary.assignmentGapCount}</p>
+              <p className="text-sm text-gray-600">Toelichting</p>
+            </button>
+          </div>
+          <p className="text-xs text-gray-600">
+            {summary.enrolledPersonCount} personen ingepland in de komende 6 weken.
+          </p>
+
+          {controlView === 'open' ? (
+            <div className="overflow-x-auto vvl-card p-0">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead className="bg-vvl-secondary text-xs font-bold uppercase">
+                  <tr>
+                    <th className="p-3 text-left">Datum</th>
+                    <th className="p-3 text-left">Tijd</th>
+                    <th className="p-3 text-left">Type</th>
+                    <th className="p-3 text-right">Nodig</th>
+                    <th className="p-3 text-right">Ingevuld</th>
+                    <th className="p-3 text-right">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(controls.openServices || []).map((s) => (
+                    <tr key={s.id} className="border-t border-vvl-border">
+                      <td className="p-3">
+                        <Link className="font-semibold underline" to="/beheer?tab=diensten">
+                          {new Date(s.date).toLocaleDateString('nl-NL')}
+                        </Link>
+                      </td>
+                      <td className="p-3">{s.time}</td>
+                      <td className="p-3">
+                        {s.type === 'KITCHEN' ? 'Keuken' : 'Bar'}
+                        {s.kind === 'TEAM' ? ' · team' : ''}
+                      </td>
+                      <td className="p-3 text-right">{s.required}</td>
+                      <td className="p-3 text-right">{s.enrolled}</td>
+                      <td className="p-3 text-right font-semibold">{s.open}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {controlView === 'obligations' || controlView === 'gaps' ? (
+            <div className="overflow-x-auto vvl-card p-0">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="bg-vvl-secondary text-xs font-bold uppercase">
+                  <tr>
+                    <th className="p-3 text-left">Persoon</th>
+                    <th className="p-3 text-left">Type</th>
+                    <th className="p-3 text-right">Ingepland</th>
+                    <th className="p-3 text-right">Inhaal</th>
+                    <th className="p-3 text-right">Nog nodig</th>
+                    <th className="p-3 text-left">Reden</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(controlView === 'gaps' ? controls.assignmentGaps : controls.unfilledObligations).map(
+                    (p) => (
+                      <tr key={p.id} className="border-t border-vvl-border">
+                        <td className="p-3 font-semibold">{p.name}</td>
+                        <td className="p-3">{OBLIGATION_SHORT[p.obligation] || p.obligation}</td>
+                        <td className="p-3 text-right">{p.planned}</td>
+                        <td className="p-3 text-right">{p.makeupDue}</td>
+                        <td className="p-3 text-right">{p.stillNeeded}</td>
+                        <td className="p-3 text-gray-700">{p.reason || '—'}</td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {controlView === 'makeup' ? (
+            <ul className="vvl-card divide-y divide-vvl-border p-0">
+              {(controls.makeupDue || []).map((p) => (
+                <li key={p.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
+                  <span className="font-semibold">{p.name}</span>
+                  <span>
+                    {p.makeupDue} inhaaldienst{p.makeupDue === 1 ? '' : 'en'} · nog nodig {p.stillNeeded}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
       ) : null}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

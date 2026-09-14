@@ -7,34 +7,28 @@ import { notifyMandatory, notifyVolunteers } from '../lib/mail.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
 import {
-  isUnavailableOn,
-  OBLIGATIONS,
-  prefersSlot,
+  executedCountForObligation,
+  personalEnrollmentCount,
+  remainingObligation,
   underQuota,
-  POST_MATCH_BUFFER_MINUTES,
 } from '../lib/obligation.js';
-import { combineDateAndTime, addMinutesToDate } from '../lib/time.js';
 import { resolvePublicAppUrl } from '../lib/appUrl.js';
+import { fillMandatoryPersonal } from '../lib/autoFill.js';
+import { buildPlanningControls } from '../lib/planningControls.js';
+import { writeAudit } from '../lib/audit.js';
+import { markPlanningOfficial } from '../lib/official.js';
+import { runDutyReminders } from '../lib/reminders.js';
+import { workbookToXlsx } from '../lib/xlsxWrite.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
-
-function barEnrollmentCount(enrollments, from, to) {
-  return enrollments.filter((e) => {
-    const d = new Date(e.service?.date ?? e.createdAt);
-    if (e.service && e.service.type !== 'BAR') return false;
-    if (from && d < from) return false;
-    if (to && d > to) return false;
-    return true;
-  }).length;
-}
 
 router.get(
   '/stats',
   requireAuth(async (req, res, next) => {
   try {
     const services = await prisma.service.findMany({
-      where: { active: true, draft: false, type: 'BAR' },
+      where: { active: true, draft: false },
       include: { enrollments: true },
     });
 
@@ -58,11 +52,11 @@ router.get(
     const [personCount, serviceCount, enrollmentCount, teamCount, matchCount, draftCount] =
       await Promise.all([
         prisma.person.count({ where: { active: true } }),
-        prisma.service.count({ where: { active: true, draft: false, type: 'BAR' } }),
+        prisma.service.count({ where: { active: true, draft: false } }),
         prisma.enrollment.count(),
         prisma.team.count(),
         prisma.match.count(),
-        prisma.service.count({ where: { active: true, draft: true, type: 'BAR' } }),
+        prisma.service.count({ where: { active: true, draft: true } }),
       ]);
 
     const occupancyRate =
@@ -72,6 +66,7 @@ router.get(
     const sixWeeksAgo = startOfDay(addWeeks(now, -6));
     const yearStart = new Date(now.getFullYear(), 0, 1);
 
+    const twelveWeeksAgo = startOfDay(addWeeks(now, -12));
     const people = await prisma.person.findMany({
       where: { active: true },
       include: {
@@ -84,18 +79,31 @@ router.get(
     });
 
     const dutyStats = people.map((p) => {
-      const last6 = barEnrollmentCount(p.enrollments, sixWeeksAgo, endOfDay(now));
-      const thisYear = barEnrollmentCount(p.enrollments, yearStart, endOfDay(now));
+      const last6 = personalEnrollmentCount(p.enrollments, sixWeeksAgo, endOfDay(now));
+      const last12 = personalEnrollmentCount(p.enrollments, twelveWeeksAgo, endOfDay(now));
+      const thisYear = personalEnrollmentCount(p.enrollments, yearStart, endOfDay(now));
+      const executed = executedCountForObligation(p, {
+        count6w: last6,
+        count12w: last12,
+        countYear: thisYear,
+      });
       return {
         id: p.id,
         name: p.name,
         team: p.team?.name ?? null,
         obligation: p.obligation,
+        exempted: p.exempted,
+        makeupDue: p.makeupDue ?? 0,
+        personNumber: p.personNumber,
         barLast6Weeks: last6,
+        barLast12Weeks: last12,
         barThisYear: thisYear,
-        underQuota: underQuota(p, last6, thisYear),
+        underQuota: underQuota(p, last6, thisYear, last12),
+        stillNeeded: remainingObligation(p, executed),
       };
     });
+
+    const controls = isAdminRole(req.person.role) ? await buildPlanningControls(now) : null;
 
     let round = await prisma.planningRound.findUnique({ where: { id: 1 } });
     let notSelfEnrolled = [];
@@ -104,7 +112,6 @@ router.get(
         where: {
           active: true,
           draft: false,
-          type: 'BAR',
           date: { gte: startOfDay(round.fromDate), lte: endOfDay(round.toDate) },
         },
         select: { id: true },
@@ -144,6 +151,7 @@ router.get(
             dutyStats,
             notSelfEnrolled,
             planningRound: round,
+            controls,
           }
         : {}),
     });
@@ -172,8 +180,9 @@ router.get(
   '/',
   requireAuth(async (req, res, next) => {
   try {
-    const { from, to, filter, personId, includeDraft } = req.query;
-    const where = { active: true, type: 'BAR' };
+    const { from, to, filter, personId, includeDraft, type } = req.query;
+    const where = { active: true };
+    if (type === 'BAR' || type === 'KITCHEN') where.type = type;
     if (includeDraft === 'true' && isAdminRole(req.person.role)) {
       // admin mag drafts zien
     } else {
@@ -305,6 +314,13 @@ router.post(
   admin(async (req, res, next) => {
     try {
       const result = await publishDraftServices(req.body ?? {});
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'planning.publish',
+        entity: 'PlanningRound',
+        entityId: 1,
+        detail: `${result.published} concept(en) gepubliceerd`,
+      });
       res.json(result);
     } catch (err) {
       next(err);
@@ -353,142 +369,154 @@ router.post(
 );
 
 /**
- * Vul open plekken met verplichte vrijwilligers (quota, team, beschikbaarheid, voorkeur).
+ * Vul open persoonlijke plekken met verplichte leden / VR18+ / inhaaldiensten.
  */
 router.post(
   '/fill-mandatory',
+  admin(async (req, res, next) => {
+    try {
+      const result = await fillMandatoryPersonal({ actorId: req.person.id });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/controls',
   admin(async (_req, res, next) => {
     try {
-      const from = startOfDay(new Date());
-      const to = endOfDay(addWeeks(from, 6));
-      const sixWeeksAgo = startOfDay(addWeeks(from, -6));
-      const yearStart = new Date(from.getFullYear(), 0, 1);
+      const controls = await buildPlanningControls();
+      res.json(controls);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
 
+router.post(
+  '/official',
+  admin(async (req, res, next) => {
+    try {
+      const result = await markPlanningOfficial({ weeks: Number(req.body?.weeks) || 6 });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'planning.official',
+        entity: 'PlanningRound',
+        entityId: 1,
+        detail: `${result.locked} dienst(en) vergrendeld`,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/remind',
+  admin(async (_req, res, next) => {
+    try {
+      const result = await runDutyReminders();
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/export.xlsx',
+  requireAuth(async (req, res, next) => {
+    try {
+      const now = startOfDay(new Date());
+      const from = req.query.from ? startOfDay(new Date(req.query.from)) : now;
+      const to = req.query.to ? endOfDay(new Date(req.query.to)) : endOfDay(addWeeks(now, 6));
       const services = await prisma.service.findMany({
-        where: {
-          active: true,
-          draft: false,
-          type: 'BAR',
-          date: { gte: from, lte: to },
-        },
+        where: { active: true, draft: false, date: { gte: from, lte: to } },
         include: {
-          enrollments: true,
-          assignedTeam: { include: { members: true } },
-          match: { include: { team: true } },
+          enrollments: { include: { person: true }, orderBy: { createdAt: 'asc' } },
+          assignedTeam: true,
         },
         orderBy: [{ date: 'asc' }, { time: 'asc' }],
       });
 
-      const mandatory = await prisma.person.findMany({
-        where: {
-          active: true,
-          obligation: { in: [OBLIGATIONS.FULL, OBLIGATIONS.HALF] },
-        },
-        include: {
-          enrollments: { include: { service: true } },
-          team: true,
-        },
-      });
-
-      const homeMatches = await prisma.match.findMany({
-        where: {
-          home: true,
-          date: { gte: from, lte: to },
-          teamId: { not: null },
-        },
-        include: { team: true },
-      });
-
-      const busyUntilByTeamDay = new Map();
-      for (const m of homeMatches) {
-        if (!m.teamId || !m.team) continue;
-        const dayKey = `${m.teamId}:${startOfDay(m.date).toISOString()}`;
-        const duration = m.team.matchDurationMinutes ?? 90;
-        const busyUntil = addMinutesToDate(m.date, duration + POST_MATCH_BUFFER_MINUTES);
-        const prev = busyUntilByTeamDay.get(dayKey);
-        if (!prev || busyUntil > prev) busyUntilByTeamDay.set(dayKey, busyUntil);
-      }
-
-      const counts6w = Object.fromEntries(
-        mandatory.map((p) => [p.id, barEnrollmentCount(p.enrollments, sixWeeksAgo, to)]),
-      );
-      const countsYear = Object.fromEntries(
-        mandatory.map((p) => [p.id, barEnrollmentCount(p.enrollments, yearStart, to)]),
+      const dienstRows = services.map((s) => [
+        toIsoDate(s.date),
+        s.time,
+        s.type === 'KITCHEN' ? 'Keuken' : 'Bar',
+        s.kind,
+        s.required,
+        s.enrollments.length,
+        s.assignedTeam?.name || '',
+        s.locked ? 'ja' : 'nee',
+        (s.enrollments || []).map((e) => e.person?.name).filter(Boolean).join(', '),
+      ]);
+      const adminExport = isAdminRole(req.person.role);
+      const inschrijfRows = services.flatMap((s) =>
+        (s.enrollments || []).map((e) => {
+          const row = [
+            toIsoDate(s.date),
+            s.time,
+            s.type === 'KITCHEN' ? 'Keuken' : 'Bar',
+            e.person?.name || '',
+          ];
+          if (adminExport) row.push(e.person?.personNumber || '');
+          row.push(
+            e.kind,
+            e.source,
+            e.makeup ? 'ja' : 'nee',
+            e.noShow ? 'ja' : 'nee',
+            e.reason || '',
+          );
+          return row;
+        }),
       );
 
-      const enrolledToday = new Set();
-      let filled = 0;
-      const details = [];
+      const sheets = [
+        {
+          name: 'Diensten',
+          headers: ['Datum', 'Tijd', 'Type', 'Soort', 'Nodig', 'Ingeschreven', 'Team', 'Officieel', 'Namen'],
+          rows: dienstRows,
+        },
+        {
+          name: 'Inschrijvingen',
+          headers: adminExport
+            ? ['Datum', 'Tijd', 'Type', 'Naam', 'Persoonsnr', 'Soort', 'Bron', 'Inhaal', 'No-show', 'Reden']
+            : ['Datum', 'Tijd', 'Type', 'Naam', 'Soort', 'Bron', 'Inhaal', 'No-show', 'Reden'],
+          rows: inschrijfRows,
+        },
+      ];
 
-      for (const service of services) {
-        let open = service.required - service.enrollments.length;
-        if (open <= 0) continue;
-
-        const already = new Set(service.enrollments.map((e) => e.personId));
-        const serviceStart = combineDateAndTime(service.date, service.time);
-        const dayIso = startOfDay(service.date).toISOString();
-
-        const eligible = (p) => {
-          if (already.has(p.id) || enrolledToday.has(`${p.id}:${dayIso}`)) return false;
-          if (isUnavailableOn(p, service.date)) return false;
-          if (p.teamId) {
-            const busy = busyUntilByTeamDay.get(`${p.teamId}:${dayIso}`);
-            if (busy && serviceStart < busy) return false;
-          }
-          return true;
-        };
-
-        let candidates = mandatory.filter(
-          (p) =>
-            eligible(p) &&
-            (service.assignedTeamId ? p.teamId === service.assignedTeamId : true),
-        );
-
-        if (candidates.length === 0 && service.assignedTeamId) {
-          candidates = mandatory.filter((p) => eligible(p));
-        }
-
-        candidates.sort((a, b) => {
-          const aUnder = underQuota(a, counts6w[a.id], countsYear[a.id]) ? 0 : 1;
-          const bUnder = underQuota(b, counts6w[b.id], countsYear[b.id]) ? 0 : 1;
-          if (aUnder !== bUnder) return aUnder - bUnder;
-
-          const aPref = prefersSlot(a, service.slot) ? 0 : 1;
-          const bPref = prefersSlot(b, service.slot) ? 0 : 1;
-          if (aPref !== bPref) return aPref - bPref;
-
-          const aCount = (counts6w[a.id] ?? 0) + (countsYear[a.id] ?? 0);
-          const bCount = (counts6w[b.id] ?? 0) + (countsYear[b.id] ?? 0);
-          return aCount - bCount;
+      if (adminExport) {
+        const people = await prisma.person.findMany({
+          where: { active: true },
+          include: { team: true },
+          orderBy: { name: 'asc' },
         });
-
-        for (const person of candidates) {
-          if (open <= 0) break;
-          await prisma.enrollment.create({
-            data: { serviceId: service.id, personId: person.id, source: 'AUTO' },
-          });
-          counts6w[person.id] = (counts6w[person.id] ?? 0) + 1;
-          countsYear[person.id] = (countsYear[person.id] ?? 0) + 1;
-          enrolledToday.add(`${person.id}:${dayIso}`);
-          open -= 1;
-          filled += 1;
-          details.push({
-            serviceId: service.id,
-            personId: person.id,
-            personName: person.name,
-            team: service.assignedTeam?.name ?? null,
-            obligation: person.obligation,
-          });
-        }
+        sheets.push({
+          name: 'Personen',
+          headers: ['Persoonsnr', 'Naam', 'Rol', 'Verplichting', 'Team', 'Vrijgesteld', 'Inhaal'],
+          rows: people.map((p) => [
+            p.personNumber || '',
+            p.name,
+            p.role,
+            p.obligation,
+            p.team?.name || '',
+            p.exempted ? 'ja' : 'nee',
+            p.makeupDue ?? 0,
+          ]),
+        });
       }
 
-      await prisma.planningRound.upsert({
-        where: { id: 1 },
-        create: { id: 1, status: 'CLOSED' },
-        update: { status: 'CLOSED' },
-      });
-
-      res.json({ filled, details });
+      const buf = workbookToXlsx(sheets);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="vvl-planning.xlsx"');
+      res.send(buf);
     } catch (err) {
       next(err);
     }

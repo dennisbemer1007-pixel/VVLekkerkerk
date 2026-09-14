@@ -4,14 +4,26 @@
  */
 import fs from 'fs';
 import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/lib/csvMatches.js';
+import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
+import { seasonLabelForDate, nextSeasonLabel } from '../src/backend/lib/season.js';
+import { parsePersonCsv, validatePersonRows } from '../src/backend/lib/csvPersons.js';
+import { dutyReminderEmail } from '../src/backend/lib/reminders.js';
 import { isYoungYouthTeam, isOldYouthTeam } from '../src/backend/lib/youthTeams.js';
 import {
   underQuota,
   isUnavailableOn,
   prefersSlot,
   normalizeObligation,
+  remainingObligation,
 } from '../src/backend/lib/obligation.js';
+import { isCanonicalPersonNumber } from '../src/backend/lib/personNumber.js';
+import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
+import { swapBlockers } from '../src/backend/lib/swapRules.js';
+import { normalizeRole } from '../src/backend/lib/appUrl.js';
+import { evaluateRule } from '../src/backend/lib/serviceRuleLogic.js';
+import { matchBlockRange, serviceOutsideMatchBlocks } from '../src/backend/lib/matchBlocks.js';
+import { defaultTeamFunctions, isO13FirstTeam } from '../src/backend/lib/teamFunctions.js';
 import {
   groupHomeMatchesByKickoff,
   pickServicesMatchingHomeMatches,
@@ -144,12 +156,14 @@ const pdfDays = rosterDaySections();
 assert('pdf has 7 days', pdfDays.length === 7);
 assert(
   'weekdays use same slot rows as weekend',
-  pdfDays[0].rows === SLOT_ROWS && pdfDays[5].rows === SLOT_ROWS && pdfDays[6].rows.length === 3,
+  pdfDays[0].rows === SLOT_ROWS && pdfDays[5].rows === SLOT_ROWS && pdfDays[6].rows.length === 6,
 );
-assert('pdf has no kitchen rows', SLOT_ROWS.every((row) => row.type === 'BAR'));
+assert('pdf includes kitchen rows', SLOT_ROWS.some((row) => row.type === 'KITCHEN'));
 assert(
-  'pdf slot times',
-  SLOT_ROWS.map((r) => r.time).join('|') === '09:00 - 12:00|12:00 - 16:00|16:00 - 20:30',
+  'pdf slot times bar',
+  SLOT_ROWS.filter((r) => r.type === 'BAR')
+    .map((r) => r.time)
+    .join('|') === '09:00 - 12:00|12:00 - 16:00|16:00 - 20:30',
 );
 assert('infer 19:00 as evening', inferSlot({ time: '19:00 - 22:00', slot: 'EXTRA' }) === 'EVENING');
 assert('infer 09:00 as morning', inferSlot({ time: '09:00 - 12:00' }) === 'MORNING');
@@ -182,6 +196,22 @@ assert(
     ),
   ) === 'gesloten',
 );
+assert(
+  'kitchen fills kitchen pdf row',
+  slotCellText(
+    servicesForSlotRow(
+      [
+        {
+          type: 'KITCHEN',
+          slot: 'MORNING',
+          time: '10:00 - 13:00',
+          enrollments: [{ person: { name: 'Piet' } }],
+        },
+      ],
+      SLOT_ROWS.find((r) => r.type === 'KITCHEN' && r.slot === 'MORNING'),
+    ),
+  ) === 'Piet',
+);
 
 const xlsxPath = 'C:/Users/dbeme/Documents/KNVB-Wedstrijden.xlsx';
 if (fs.existsSync(xlsxPath)) {
@@ -204,9 +234,134 @@ if (fs.existsSync(xlsxPath)) {
 
 assert('FULL under quota', underQuota({ obligation: 'FULL' }, 0, 5) === true);
 assert('FULL met', underQuota({ obligation: 'FULL' }, 1, 5) === false);
-assert('HALF under quota', underQuota({ obligation: 'HALF' }, 10, 2) === true);
-assert('HALF met', underQuota({ obligation: 'HALF' }, 0, 3) === false);
+assert('HALF normalizes to FULL', normalizeObligation('HALF') === 'FULL');
+assert('HALF uses FULL 6-week quota', underQuota({ obligation: 'HALF' }, 0, 5) === true);
+assert('HALF met after one 6w duty', underQuota({ obligation: 'HALF' }, 1, 2) === false);
+assert('VR18 under quota 12w', underQuota({ obligation: 'VR18' }, 1, 4, 0) === true);
+assert('VR18 met 12w', underQuota({ obligation: 'VR18' }, 1, 4, 1) === false);
+assert('exempted not under quota', underQuota({ obligation: 'FULL', exempted: true }, 0, 0, 0) === false);
+assert('makeup remaining on top', remainingObligation({ obligation: 'FULL', makeupDue: 2 }, 1) === 2);
 assert('normalize legacy mandatory', normalizeObligation(undefined, true) === 'FULL');
+assert('normalize VR18', normalizeObligation('VR18') === 'VR18');
+
+const friday = {
+  name: 'Vrijdag bar',
+  weekday: 5,
+  conditionType: 'ACTIVITY',
+  conditionActivityType: 'klaverjas',
+  active: true,
+};
+assert(
+  'vrijdag bar zonder klaverjas',
+  evaluateRule(friday, { date: new Date('2026-09-18T12:00:00'), weekday: 5, activities: [] }).ok === false,
+);
+assert(
+  'vrijdag bar met klaverjas',
+  evaluateRule(friday, {
+    date: new Date('2026-09-18T12:00:00'),
+    weekday: 5,
+    activities: [{ type: 'klaverjas', name: 'Klaverjasavond' }],
+  }).ok === true,
+);
+
+const homeBlock = matchBlockRange({
+  home: true,
+  date: new Date('2026-09-12T14:30:00'),
+  time: '14:30',
+  team: { matchDurationMinutes: 105, availabilityUse: true },
+});
+assert(
+  'thuisblokkade 1 uur voor/na',
+  homeBlock.from.getHours() === 13 && homeBlock.from.getMinutes() === 30,
+);
+const afternoonBar = { date: new Date('2026-09-12T12:00:00'), time: '12:00 - 16:30' };
+const morningBar = { date: new Date('2026-09-12T12:00:00'), time: '07:30 - 12:00' };
+assert('middag bar valt in blokkade', serviceOutsideMatchBlocks(afternoonBar, [homeBlock]) === false);
+assert('ochtend bar valt buiten blokkade', serviceOutsideMatchBlocks(morningBar, [homeBlock]) === true);
+
+assert('O11 is teamdienst ochtend', defaultTeamFunctions('O11-1').teamDutySlots[0] === 'MORNING');
+assert('O15 is tweede+laatste', defaultTeamFunctions('O15-1').teamDutySlots.join(',') === 'SECOND,LAST');
+assert('JO15 is tweede+laatste', defaultTeamFunctions('JO15-1').teamDutySlots.join(',') === 'SECOND,LAST');
+assert('O13-1JM is tweede+laatste', defaultTeamFunctions('O13-1JM').teamDutySlots.join(',') === 'SECOND,LAST');
+assert('O13-1 is eerste O13', isO13FirstTeam('O13-1') === true);
+assert('JO13-2 geen extra teamdienst', defaultTeamFunctions('JO13-2').teamDutyUse === false);
+assert('Lekkerkerk 3 alleen beschikbaarheid', defaultTeamFunctions('Lekkerkerk 3').teamDutyUse === false);
+
+assert('person number 7 digits', isCanonicalPersonNumber('4829103') === true);
+assert('person number rejects VVL prefix', isCanonicalPersonNumber('VVL-00001') === false);
+assert('role Coördinator becomes Barcommissie', normalizeRole('Coördinator') === 'Barcommissie');
+
+const makeupFirst = compareFillCandidates(
+  { person: { makeupDue: 1, obligation: 'FULL', personNumber: '2000000' }, counts: { countYear: 4 }, lastPersonalAt: new Date('2026-06-01') },
+  { person: { makeupDue: 0, obligation: 'FULL', personNumber: '1000000' }, counts: { countYear: 0 }, lastPersonalAt: null },
+  { slot: 'MORNING' },
+);
+assert('planner: inhaal gaat voor', makeupFirst < 0);
+
+const fullBeforeVr18 = compareFillCandidates(
+  { person: { makeupDue: 0, obligation: 'FULL', personNumber: '2000000' }, counts: { countYear: 2 }, lastPersonalAt: new Date('2026-06-01') },
+  { person: { makeupDue: 0, obligation: 'VR18', personNumber: '1000000' }, counts: { countYear: 0 }, lastPersonalAt: null },
+  { slot: 'MORNING' },
+);
+assert('planner: FULL voor VR18+', fullBeforeVr18 < 0);
+
+const neverServed = compareFillCandidates(
+  { person: { makeupDue: 0, obligation: 'FULL', personNumber: '2000000' }, counts: { countYear: 0 }, lastPersonalAt: null },
+  { person: { makeupDue: 0, obligation: 'FULL', personNumber: '1000000' }, counts: { countYear: 0 }, lastPersonalAt: new Date('2026-01-01') },
+  { slot: 'MORNING' },
+);
+assert('planner: nooit gestaan eerst', neverServed < 0);
+
+const teamSwap = swapBlockers({
+  fromEnrollment: { id: 1, personId: 1, kind: 'TEAM', noShow: false, service: { active: true, draft: false, date: new Date('2026-10-01') } },
+  toEnrollment: { id: 2, personId: 2, kind: 'PERSONAL', noShow: false, service: { active: true, draft: false, date: new Date('2026-10-08') } },
+  fromPerson: { blocks: [] },
+  toPerson: { blocks: [] },
+  now: new Date('2026-09-13'),
+});
+assert('ruil weigert teamdienst', teamSwap.ok === false);
+
+const futureSwap = swapBlockers({
+  fromEnrollment: {
+    id: 1,
+    personId: 1,
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { active: true, draft: false, date: new Date('2026-10-01'), enrollments: [{ personId: 1, id: 1 }] },
+  },
+  toEnrollment: {
+    id: 2,
+    personId: 2,
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { active: true, draft: false, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
+  },
+  fromPerson: { blocks: [] },
+  toPerson: { blocks: [] },
+  now: new Date('2026-09-13'),
+});
+assert('ruil twee toekomstige persoonlijke diensten ok', futureSwap.ok === true);
+
+const lockedSwap = swapBlockers({
+  fromEnrollment: {
+    id: 1,
+    personId: 1,
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { active: true, draft: false, locked: true, date: new Date('2026-10-01'), enrollments: [{ personId: 1, id: 1 }] },
+  },
+  toEnrollment: {
+    id: 2,
+    personId: 2,
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { active: true, draft: false, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
+  },
+  fromPerson: { blocks: [] },
+  toPerson: { blocks: [] },
+  now: new Date('2026-09-13'),
+});
+assert('ruil weigert officieel rooster', lockedSwap.ok === false);
 
 assert(
   'unavailable Monday',
@@ -220,6 +375,53 @@ assert(
   'rejects morning when evening preferred',
   prefersSlot({ preferredSlots: '["EVENING"]' }, 'MORNING') === false,
 );
+
+assert('season Sep 2026 is 2026-2027', seasonLabelForDate(new Date('2026-09-13T12:00:00')) === '2026-2027');
+assert('season Jul 2026 is 2025-2026', seasonLabelForDate(new Date('2026-07-31T12:00:00')) === '2025-2026');
+assert('next season after 2026-2027', nextSeasonLabel('2026-2027') === '2027-2028');
+
+const personCsv = parsePersonCsv(
+  'naam;email;telefoon;team;rol;verplichting\nAnna de Vries;anna@vvl.demo;0612345678;JO15-1;Vrijwilliger;FULL',
+);
+assert('person csv parses naam', personCsv.rows.length === 1 && personCsv.rows[0].name === 'Anna de Vries');
+const personOk = validatePersonRows(personCsv.rows, { teams: [{ id: 1, name: 'JO15-1' }] });
+assert('person csv known team ok', personOk.ok && personOk.rows[0].teamId === 1);
+const personBad = validatePersonRows(personCsv.rows, { teams: [{ id: 2, name: 'MO17-1' }] });
+assert(
+  'person csv unknown team rejected',
+  personBad.ok === false && personBad.unknownTeams.includes('JO15-1'),
+);
+const personMail = validatePersonRows(
+  parsePersonCsv('naam;email\nPiet;niet-email').rows,
+  { teams: [] },
+);
+assert('person csv invalid email rejected', personMail.ok === false);
+
+const xlsxBuf = workbookToXlsx([
+  {
+    name: 'Diensten',
+    headers: ['Datum', 'Type', 'Namen'],
+    rows: [['2026-09-13', 'Bar', 'Lisa']],
+  },
+]);
+const xlsxRound = xlsxToObjects(xlsxBuf);
+assert(
+  'xlsx roundtrip first sheet',
+  xlsxRound.length === 1 && xlsxRound[0].Datum === '2026-09-13' && xlsxRound[0].Namen === 'Lisa',
+);
+const xlsxFormula = workbookToXlsx([
+  { name: 'Test', headers: ['Naam'], rows: [['=CMD|calc']] },
+]);
+assert('xlsx formula injection prefixed', xlsxFormula.toString('utf8').includes("'=CMD|calc"));
+
+const reminder = dutyReminderEmail({
+  name: 'Lisa',
+  dateText: 'maandag 14 september',
+  time: '09:00 - 12:00',
+  typeLabel: 'bardienst',
+  appUrl: 'https://example.test',
+});
+assert('reminder subject has date', reminder.subject.includes('14 september'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

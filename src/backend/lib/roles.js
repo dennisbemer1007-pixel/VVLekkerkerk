@@ -10,34 +10,40 @@ import {
 export const ROLE_ACCESS = {
   Vrijwilliger: {
     label: 'Vrijwilliger',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren'],
-    description: 'Zelf inschrijven op open diensten, voorkeuren instellen en de planning bekijken.',
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen'],
+    description: 'Zelf inschrijven op open diensten, ruilen, voorkeuren instellen en de planning bekijken.',
   },
   Teamcoördinator: {
     label: 'Teamcoördinator',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'teams'],
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'teams'],
     description: 'Zoals vrijwilliger, plus ouders uitnodigen en voor je team inschrijven.',
   },
-  Coördinator: {
-    label: 'Coördinator (bardienst)',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'beheer'],
-    description: 'Volledig beheer: personen uitnodigen, diensten, teams en wedstrijden.',
+  Barcommissie: {
+    label: 'Barcommissie',
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'beheer'],
+    description: 'Volledig beheer: personen uitnodigen, diensten, teams, wedstrijden en ruilverzoeken.',
   },
   Bestuur: {
     label: 'Bestuur',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'beheer'],
-    description: 'Volledig beheer, inclusief uitnodigingen en PDF-planning.',
+    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'beheer'],
+    description: 'Volledig beheer, inclusief uitnodigingen, PDF-planning en ruilverzoeken.',
   },
 };
 
-export const ADMIN_ROLES = ['Coördinator', 'Bestuur'];
+export const ADMIN_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator'];
+
+export function canonicalAccessRole(role) {
+  if (role === 'Coördinator') return 'Barcommissie';
+  if (ROLE_ACCESS[role]) return role;
+  return 'Vrijwilliger';
+}
 
 export function isAdminRole(role) {
   return ADMIN_ROLES.includes(role);
 }
 
 export function accessForRole(role) {
-  return ROLE_ACCESS[role] ?? ROLE_ACCESS.Vrijwilliger;
+  return ROLE_ACCESS[canonicalAccessRole(role)] ?? ROLE_ACCESS.Vrijwilliger;
 }
 
 export function canAccess(role, feature) {
@@ -46,7 +52,7 @@ export function canAccess(role, feature) {
 
 /**
  * Publieke weergave van een persoon.
- * E-mail en telefoon alleen voor beheerders (Coördinator / Bestuur).
+ * E-mail en telefoon alleen voor beheerders (Barcommissie / Bestuur).
  * Secrets (wachtwoord-hash, tokens) worden altijd weggelaten.
  */
 export function publicPerson(person, options = {}) {
@@ -55,39 +61,39 @@ export function publicPerson(person, options = {}) {
     options.includeContact === true ||
     (options.viewerRole && isAdminRole(options.viewerRole));
 
-  const {
-    passwordHash: _p,
-    inviteToken: _t,
-    passwordResetToken: _prt,
-    passwordResetExpiresAt: _pre,
-    email,
-    phone,
-    photoUrl: _photo,
-    unavailableWeekdays,
-    preferredSlots,
-    ...safe
-  } = person;
-
   const obligation = normalizeObligation(person.obligation);
+  const team = person.team
+    ? { id: person.team.id, name: person.team.name }
+    : person.teamId
+      ? { id: person.teamId, name: null }
+      : null;
 
   const result = {
-    ...safe,
+    id: person.id,
+    personNumber: person.personNumber ?? null,
+    name: person.name,
+    role: canonicalAccessRole(person.role),
+    active: person.active !== false,
     obligation,
+    exempted: Boolean(person.exempted),
+    makeupDue: person.makeupDue ?? 0,
+    teamId: person.teamId ?? null,
+    team,
     mandatoryBar: isMandatoryObligation(obligation),
     obligationLabel: OBLIGATION_LABELS[obligation] ?? OBLIGATION_LABELS.NONE,
-    unavailableWeekdays: parseUnavailableWeekdays(unavailableWeekdays),
-    preferredSlots: parsePreferredSlots(preferredSlots),
+    unavailableWeekdays: parseUnavailableWeekdays(person.unavailableWeekdays),
+    preferredSlots: parsePreferredSlots(person.preferredSlots),
     hasAccount: Boolean(person.passwordHash),
     invitePending: Boolean(person.inviteToken && !person.passwordHash),
     access: accessForRole(person.role),
+    createdAt: person.createdAt ?? null,
   };
 
-  // photoUrl is veilig om te tonen (bestandsnaam is random)
   if (person.photoUrl) result.photoUrl = person.photoUrl;
 
   if (includeContact) {
-    result.email = email ?? null;
-    result.phone = phone ?? null;
+    result.email = person.email ?? null;
+    result.phone = person.phone ?? null;
   }
 
   return result;
@@ -100,10 +106,12 @@ export function publicPersonBrief(person) {
   return {
     id: person.id,
     name: person.name,
-    role: person.role,
+    role: canonicalAccessRole(person.role),
     teamId: person.teamId ?? null,
     obligation,
     mandatoryBar: isMandatoryObligation(obligation),
+    exempted: person.exempted === true,
+    personNumber: person.personNumber ?? null,
     active: person.active !== false,
     photoUrl: person.photoUrl ?? null,
   };

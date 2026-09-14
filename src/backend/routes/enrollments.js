@@ -3,6 +3,11 @@ import prisma from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
 import { isAdminRole, publicPersonBrief } from '../lib/roles.js';
 import { teamIdsForActor } from '../lib/authz.js';
+import { isMandatoryObligation } from '../lib/obligation.js';
+import { blocksForPerson, overlappingMatchBlocks } from '../lib/matchBlocks.js';
+import { writeAudit } from '../lib/audit.js';
+import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
+import { pendingForEnrollment } from '../lib/swapQueries.js';
 
 const router = Router();
 
@@ -81,7 +86,7 @@ router.post(
   '/',
   requireAuth(async (req, res, next) => {
     try {
-      const { serviceId, personId } = req.body;
+      const { serviceId, personId, ignoreMatchBlock } = req.body;
       if (!serviceId || !personId) {
         return res.status(400).json({ error: 'Dienst en persoon zijn verplicht' });
       }
@@ -93,9 +98,38 @@ router.post(
         });
       }
 
-      const person = await prisma.person.findUnique({ where: { id: targetId } });
+      const person = await prisma.person.findUnique({
+        where: { id: targetId },
+        include: { team: true, teamMemberships: { where: { active: true } } },
+      });
       if (!person?.active) {
         return res.status(400).json({ error: 'Deze persoon is niet actief' });
+      }
+
+      const servicePreview = await prisma.service.findUnique({
+        where: { id: Number(serviceId) },
+      });
+      if (servicePreview) {
+        const matches = await prisma.match.findMany({
+          where: {
+            date: {
+              gte: startOfDay(addWeeks(servicePreview.date, -1)),
+              lte: endOfDay(addWeeks(servicePreview.date, 1)),
+            },
+          },
+          include: { team: true },
+        });
+        const blocks = blocksForPerson(person, matches);
+        const overlap = overlappingMatchBlocks(servicePreview, blocks);
+        if (overlap.length && !(ignoreMatchBlock && isAdminRole(req.person.role))) {
+          return res.status(409).json({
+            error: isAdminRole(req.person.role)
+              ? 'Let op: deze persoon heeft een wedstrijd en valt binnen de ingestelde blokkeertijd. Toch inplannen?'
+              : 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
+            code: 'MATCH_BLOCK',
+            canOverride: isAdminRole(req.person.role),
+          });
+        }
       }
 
       try {
@@ -113,6 +147,18 @@ router.post(
             const err = new Error(
               'Deze dienst is nog een concept en niet open voor inschrijving',
             );
+            err.status = 403;
+            throw err;
+          }
+          if (service.locked && !isAdminRole(req.person.role)) {
+            const err = new Error(
+              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+            );
+            err.status = 403;
+            throw err;
+          }
+          if (service.kind === 'TEAM' && !isAdminRole(req.person.role) && req.person.role !== 'Teamcoördinator') {
+            const err = new Error('Deze teamdienst wordt ingevuld door de teamcoördinator');
             err.status = 403;
             throw err;
           }
@@ -136,15 +182,47 @@ router.post(
             throw err;
           }
 
+          const source = enrollmentSource(req.person, targetId);
+          const kind = service.kind === 'TEAM' ? 'TEAM' : 'PERSONAL';
+          const isMakeup = kind === 'PERSONAL' && (person.makeupDue ?? 0) > 0;
+          const reason =
+            source === 'AUTO'
+              ? null
+              : source === 'ADMIN'
+                ? 'Handmatig ingepland door barcommissie'
+                : source === 'TEAM'
+                  ? 'Ingepland door teamcoördinator'
+                  : 'Zelf gekozen dienst';
+
           return tx.enrollment.create({
             data: {
               serviceId: Number(serviceId),
               personId: targetId,
-              source: enrollmentSource(req.person, targetId),
+              source,
+              kind,
+              reason,
+              makeup: isMakeup,
             },
             include: { person: true, service: true },
           });
         });
+
+        if (ignoreMatchBlock && isAdminRole(req.person.role)) {
+          await writeAudit({
+            actorId: req.person.id,
+            action: 'enrollment.match_block_override',
+            entity: 'Enrollment',
+            entityId: enrollment.id,
+            detail: `${person.name} op dienst ${serviceId}`,
+          });
+        }
+
+        if (enrollment.makeup) {
+          await prisma.person.update({
+            where: { id: targetId },
+            data: { makeupDue: { decrement: 1 } },
+          });
+        }
 
         res.status(201).json(mapEnrollment(enrollment));
       } catch (e) {
@@ -168,12 +246,23 @@ router.delete(
     try {
       const enrollment = await prisma.enrollment.findUnique({
         where: { id: Number(req.params.id) },
+        include: { service: true },
       });
       if (!enrollment) {
         return res.status(404).json({ error: 'Inschrijving niet gevonden' });
       }
       if (!(await canManageEnrollment(req.person, enrollment.personId))) {
         return res.status(403).json({ error: 'Je mag deze inschrijving niet verwijderen' });
+      }
+      if (await pendingForEnrollment(enrollment.id)) {
+        return res.status(409).json({
+          error: 'Deze dienst zit in een openstaand ruilverzoek. Trek dat eerst in.',
+        });
+      }
+      if (enrollment.service?.locked && !isAdminRole(req.person.role)) {
+        return res.status(403).json({
+          error: 'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+        });
       }
 
       // Beheer mag altijd omgooien; vrijwilligers niet na deadline / CLOSED / verplichte fase
@@ -183,7 +272,7 @@ router.delete(
         if (status === 'CLOSED' || status === 'MANDATORY_OPEN') {
           return res.status(403).json({
             error:
-              'De vrijwilligersfase is voorbij. Neem contact op met de bardienstcoördinator om te wijzigen.',
+              'De vrijwilligersfase is voorbij. Neem contact op met de barcommissie om te wijzigen.',
           });
         }
         if (
@@ -192,13 +281,120 @@ router.delete(
         ) {
           return res.status(403).json({
             error:
-              'De inschrijftermijn is verstreken. Neem contact op met de bardienstcoördinator om te wijzigen.',
+              'De inschrijftermijn is verstreken. Neem contact op met de barcommissie om te wijzigen.',
           });
         }
       }
 
+      if (enrollment.makeup && !enrollment.noShow) {
+        await prisma.person.update({
+          where: { id: enrollment.personId },
+          data: { makeupDue: { increment: 1 } },
+        });
+      }
+
       await prisma.enrollment.delete({ where: { id: enrollment.id } });
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/noshow',
+  requireAuth(async (req, res, next) => {
+    try {
+      if (!isAdminRole(req.person.role)) {
+        return res.status(403).json({ error: 'Alleen de barcommissie kan een no-show registreren' });
+      }
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { id: Number(req.params.id) },
+        include: { person: true, service: true },
+      });
+      if (!enrollment) return res.status(404).json({ error: 'Inschrijving niet gevonden' });
+      if (enrollment.noShow) {
+        return res.status(400).json({ error: 'No-show staat al geregistreerd' });
+      }
+
+      const kind = enrollment.kind === 'TEAM' ? 'TEAM' : 'PERSONAL';
+      const personalNoShow =
+        kind === 'PERSONAL' && isMandatoryObligation(enrollment.person.obligation);
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const enr = await tx.enrollment.update({
+          where: { id: enrollment.id },
+          data: { noShow: true },
+          include: { person: true, service: true },
+        });
+        if (personalNoShow) {
+          await tx.person.update({
+            where: { id: enrollment.personId },
+            data: { makeupDue: { increment: 1 } },
+          });
+        }
+        return enr;
+      });
+
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'enrollment.noshow',
+        entity: 'Enrollment',
+        entityId: enrollment.id,
+        detail: `${enrollment.person.name} · ${kind}${personalNoShow ? ' · +1 inhaaldienst' : ''}`,
+      });
+
+      res.json(mapEnrollment(updated));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/:id/noshow',
+  requireAuth(async (req, res, next) => {
+    try {
+      if (!isAdminRole(req.person.role)) {
+        return res.status(403).json({ error: 'Geen toegang' });
+      }
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { id: Number(req.params.id) },
+        include: { person: true, service: true },
+      });
+      if (!enrollment) return res.status(404).json({ error: 'Inschrijving niet gevonden' });
+      if (!enrollment.noShow) {
+        return res.status(400).json({ error: 'Er is geen no-show om te corrigeren' });
+      }
+
+      const kind = enrollment.kind === 'TEAM' ? 'TEAM' : 'PERSONAL';
+      const personalNoShow =
+        kind === 'PERSONAL' && isMandatoryObligation(enrollment.person.obligation);
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const enr = await tx.enrollment.update({
+          where: { id: enrollment.id },
+          data: { noShow: false },
+          include: { person: true, service: true },
+        });
+        if (personalNoShow && (enrollment.person.makeupDue ?? 0) > 0) {
+          await tx.person.update({
+            where: { id: enrollment.personId },
+            data: { makeupDue: { decrement: 1 } },
+          });
+        }
+        return enr;
+      });
+
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'enrollment.noshow_correct',
+        entity: 'Enrollment',
+        entityId: enrollment.id,
+        detail: enrollment.person.name,
+      });
+
+      res.json(mapEnrollment(updated));
     } catch (err) {
       next(err);
     }

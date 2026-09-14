@@ -196,4 +196,49 @@ export const api = {
     json('/settings/mail', { method: 'PUT', body: JSON.stringify(data) }),
   testMail: (to) =>
     json('/settings/mail/test', { method: 'POST', body: JSON.stringify({ to }) }),
+  getServiceRules: () => json('/service-rules'),
+  createServiceRule: (data) => json('/service-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateServiceRule: (id, data) =>
+    json(`/service-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteServiceRule: (id) => json(`/service-rules/${id}`, { method: 'DELETE' }),
+  applyServiceRules: (data) =>
+    json('/service-rules/apply', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  getActivities: () => json('/activities'),
+  createActivity: (data) => json('/activities', { method: 'POST', body: JSON.stringify(data) }),
+  updateActivity: (id, data) =>
+    json(`/activities/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteActivity: (id) => json(`/activities/${id}`, { method: 'DELETE' }),
+  getPlanningControls: () => json('/planning/controls'),
+  markNoShow: (id) => json(`/enrollments/${id}/noshow`, { method: 'POST', body: '{}' }),
+  clearNoShow: (id) => json(`/enrollments/${id}/noshow`, { method: 'DELETE' }),
+  getSwaps: () => json('/swaps'),
+  getSwapCandidates: () => json('/swaps/candidates'),
+  createSwap: (data) => json('/swaps', { method: 'POST', body: JSON.stringify(data) }),
+  acceptSwap: (id) => json(`/swaps/${id}/accept`, { method: 'POST', body: '{}' }),
+  cancelSwap: (id) => json(`/swaps/${id}/cancel`, { method: 'POST', body: '{}' }),
+  approveSwap: (id, data = {}) =>
+    json(`/swaps/${id}/approve`, { method: 'POST', body: JSON.stringify(data) }),
+  rejectSwap: (id) => json(`/swaps/${id}/reject`, { method: 'POST', body: '{}' }),
+  getTeamDashboard: () => json('/teams/dashboard'),
+  getClubSettings: () => json('/settings/club'),
+  rolloverSeason: (data) =>
+    json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),
+  importPersons: (data) => json('/persons/import', { method: 'POST', body: JSON.stringify(data) }),
+  exportMyData: () => json('/persons/me/export'),
+  erasePersonContact: (id) => json(`/persons/${id}/erase-contact`, { method: 'POST', body: '{}' }),
+  markPlanningOfficial: (data) =>
+    json('/planning/official', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  sendDutyReminders: () => json('/planning/remind', { method: 'POST', body: '{}' }),
+  downloadPlanningExcel: async (params = {}) => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/planning/export.xlsx${qs(params)}`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Excel mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
 };

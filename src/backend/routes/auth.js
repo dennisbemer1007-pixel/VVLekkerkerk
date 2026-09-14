@@ -9,7 +9,7 @@ import {
   publicPerson,
   requireAuth,
   requireRole,
-  verifyPassword,
+  passwordMatches,
 } from '../lib/auth.js';
 import { accessForRole } from '../lib/roles.js';
 import { normalizeObligation } from '../lib/obligation.js';
@@ -17,11 +17,13 @@ import { trySendInviteEmail, trySendPasswordResetEmail } from '../lib/mail.js';
 import { passwordResetLink, resetExpiry } from '../lib/passwordReset.js';
 import { resolvePublicAppUrl, normalizeRole } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
+import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
+import { publicDemoAccountList } from '../lib/demoAccounts.js';
 
 const router = Router();
 
-const ADMIN_ROLES = ['Coördinator', 'Bestuur'];
-const INVITE_ROLES = ['Coördinator', 'Bestuur', 'Teamcoördinator'];
+const ADMIN_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator'];
+const INVITE_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator', 'Teamcoördinator'];
 
 function safeAppUrl() {
   try {
@@ -45,63 +47,8 @@ router.get(
  * Runtime-endpoint: Vite-build env is niet nodig.
  */
 router.get('/demo-accounts', (_req, res) => {
-  const isDemo = process.env.SEED_DEMO === 'true';
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (!isDemo && !isDev) {
-    return res.json({ enabled: false, accounts: [] });
-  }
-
-  const adminPassword =
-    process.env.ADMIN_PASSWORD ||
-    (isDemo ? 'demo-test-2026' : 'admin123');
-
-  res.json({
-    enabled: true,
-    accounts: [
-      {
-        role: 'Bestuur',
-        name: 'Beheerder',
-        email: (process.env.ADMIN_EMAIL || 'admin@vvl.local').toLowerCase(),
-        password: adminPassword,
-        note: 'Alles beheren',
-      },
-      {
-        role: 'Coördinator',
-        name: 'Mark Jansen',
-        email: 'mark@vvl.demo',
-        password: 'demo123',
-        note: 'Clubbrede planning',
-      },
-      {
-        role: 'Teamcoördinator',
-        name: 'Sandra de Vries',
-        email: 'sandra@vvl.demo',
-        password: 'demo123',
-        note: 'Team JO15',
-      },
-      {
-        role: 'Vrijwilliger (full)',
-        name: 'Lisa Bakker',
-        email: 'lisa@vvl.demo',
-        password: 'demo123',
-        note: 'Volledige verplichting',
-      },
-      {
-        role: 'Vrijwilliger (half)',
-        name: 'Anneke Mulder',
-        email: 'anneke@vvl.demo',
-        password: 'demo123',
-        note: 'Halve verplichting',
-      },
-      {
-        role: 'Vrijwilliger',
-        name: 'Tom van Dam',
-        email: 'tom@vvl.demo',
-        password: 'demo123',
-        note: 'Geen verplichting',
-      },
-    ],
-  });
+  const accounts = publicDemoAccountList();
+  res.json({ enabled: accounts.length > 0, accounts });
 });
 
 /** Inloggen */
@@ -117,12 +64,7 @@ router.post('/login', async (req, res, next) => {
       include: { team: true },
     });
 
-    if (!person?.passwordHash || !person.active) {
-      return res.status(401).json({ error: 'Onjuiste e-mail of wachtwoord' });
-    }
-
-    const ok = await verifyPassword(password, person.passwordHash);
-    if (!ok) {
+    if (!(await passwordMatches(password, person))) {
       return res.status(401).json({ error: 'Onjuiste e-mail of wachtwoord' });
     }
 
@@ -158,7 +100,6 @@ router.post('/forgot-password', async (req, res, next) => {
           },
         });
         const link = passwordResetLink(token, safeAppUrl());
-        console.log(`[Wachtwoord-reset] link aangemaakt voor ${email}`);
         await trySendPasswordResetEmail({ email, name: person.name, link });
       } catch (dbErr) {
         console.error('[Wachtwoord-reset] database:', dbErr.message);
@@ -383,6 +324,7 @@ router.post(
         person = await prisma.person.create({
           data: {
             name: name.trim(),
+            personNumber: await nextPersonNumber(),
             email: cleanEmail,
             phone: phone?.trim() || null,
             role: chosenRole,
@@ -393,6 +335,8 @@ router.post(
           },
         });
       }
+
+      if (chosenTeamId) await syncPrimaryTeamMembership(person.id, chosenTeamId);
 
       const link = inviteLink(token, safeAppUrl());
       console.log(`[Uitnodiging] aangemaakt voor ${person.email}`);

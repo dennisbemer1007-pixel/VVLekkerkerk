@@ -16,12 +16,17 @@ function atDay(offsetDays, hour = 12) {
 }
 
 async function clearDemoData(adminId) {
+  await prisma.swapRequest.deleteMany();
   await prisma.enrollment.deleteMany();
   await prisma.session.deleteMany({ where: { personId: { not: adminId } } });
+  await prisma.auditLog.deleteMany({ where: { actorId: { not: adminId } } });
+  await prisma.personTeam.deleteMany();
+  await prisma.service.updateMany({
+    data: { assignedTeamId: null, sourceRuleId: null, matchId: null, activityId: null },
+  });
+  await prisma.serviceRule.updateMany({ data: { conditionTeamId: null } });
   await prisma.service.deleteMany();
   await prisma.match.deleteMany();
-
-  // Teams eerst ontkoppelen
   await prisma.person.updateMany({
     where: { id: { not: adminId } },
     data: { teamId: null },
@@ -60,12 +65,12 @@ async function main() {
     },
   });
 
-  const barCoord = await prisma.person.create({
+  await prisma.person.create({
     data: {
       name: 'Mark Jansen',
       email: 'mark@vvl.demo',
       phone: '06-55667788',
-      role: 'Coördinator',
+      role: 'Barcommissie',
       passwordHash: pw,
       accountCreatedAt: new Date(),
       active: true,
@@ -77,7 +82,7 @@ async function main() {
     { name: 'Tom van Dam', email: 'tom@vvl.demo', phone: '06-20202020', teamId: teamJO15.id },
     { name: 'Fatima El Amrani', email: 'fatima@vvl.demo', phone: '06-30303030', teamId: teamJO13.id },
     { name: 'Peter Smit', email: 'peter@vvl.demo', phone: '06-40404040', teamId: teamJO13.id, obligation: 'FULL' },
-    { name: 'Anneke Mulder', email: 'anneke@vvl.demo', phone: '06-50505050', teamId: teamJO11.id, obligation: 'HALF' },
+    { name: 'Anneke Mulder', email: 'anneke@vvl.demo', phone: '06-50505050', teamId: teamJO11.id, obligation: 'FULL' },
     { name: 'Kevin de Boer', email: 'kevin@vvl.demo', phone: '06-60606060', teamId: teamJO11.id },
     { name: 'Noa Visser', email: 'noa@vvl.demo', phone: '06-70707070', teamId: teamSenior.id },
     { name: 'Erik Hofman', email: 'erik@vvl.demo', phone: '06-80808080', teamId: null },
@@ -210,7 +215,7 @@ async function main() {
   console.log(counts);
   console.log('\nInloggen (wachtwoord voor demo-accounts: demo123)');
   console.log('  Bestuur:          admin@vvl.local / admin123');
-  console.log('  Coördinator:      mark@vvl.demo / demo123');
+  console.log('  Barcommissie:     mark@vvl.demo / demo123');
   console.log('  Teamcoördinator:  sandra@vvl.demo / demo123');
   console.log('  Vrijwilliger:     lisa@vvl.demo / demo123');
 }

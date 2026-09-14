@@ -5,12 +5,6 @@ export function serviceLocation(type) {
   return type === 'KITCHEN' ? 'Keuken' : 'Bar';
 }
 
-export function occupancyLabel(status) {
-  if (status === 'full') return 'Vol';
-  if (status === 'almost') return 'Nog 1 nodig';
-  return 'Open';
-}
-
 export { occupancyStatus };
 
 export function mapService(service) {

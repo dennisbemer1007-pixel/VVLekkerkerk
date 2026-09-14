@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
@@ -7,20 +7,26 @@ import { api } from '../hooks/useApi.js';
 import { SERVICE_TYPE_LABEL, todayInputValue, toDateInputValue } from '../utils/formatDate.js';
 import { helpForBeheerTab } from '../utils/pageHelp.js';
 
+import DienstregelsBeheer from './DienstregelsBeheer.jsx';
+import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
+
 const TABS = [
   { id: 'personen', label: 'Personen' },
   { id: 'diensten', label: 'Diensten' },
   { id: 'planning', label: 'Planning' },
+  { id: 'regels', label: 'Dienstregels' },
+  { id: 'activiteiten', label: 'Jaarplanning' },
   { id: 'teams', label: 'Teams' },
   { id: 'mail', label: 'E-mail' },
+  { id: 'club', label: 'Club' },
 ];
 
-const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Coördinator', 'Bestuur'];
+const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Bestuur'];
 
 const OBLIGATIONS = [
   { value: 'NONE', label: 'Geen (vrijwilliger)' },
   { value: 'FULL', label: 'Verplicht (min. 1× / 6 weken)' },
-  { value: 'HALF', label: 'Half verplicht (min. 3× / jaar)' },
+  { value: 'VR18', label: 'VR18+ (min. 1× / 12 weken)' },
 ];
 
 const WEEKDAYS = [
@@ -92,8 +98,11 @@ export default function Beheer({ mode = 'full' }) {
       {tab === 'personen' ? <PersonenBeheer /> : null}
       {tab === 'diensten' ? <DienstenBeheer /> : null}
       {tab === 'planning' ? <PlanningBeheer /> : null}
+      {tab === 'regels' ? <DienstregelsBeheer /> : null}
+      {tab === 'activiteiten' ? <ActiviteitenBeheer /> : null}
       {tab === 'teams' ? <TeamsBeheer /> : null}
       {tab === 'mail' ? <MailBeheer /> : null}
+      {tab === 'club' ? <ClubBeheer /> : null}
     </div>
   );
 }
@@ -108,6 +117,7 @@ function PersonenBeheer() {
     role: 'Vrijwilliger',
     obligation: 'NONE',
     teamId: '',
+    exempted: false,
     unavailableWeekdays: [],
     preferredSlots: [],
   });
@@ -148,6 +158,7 @@ function PersonenBeheer() {
       role: 'Vrijwilliger',
       obligation: 'NONE',
       teamId: '',
+      exempted: false,
       unavailableWeekdays: [],
       preferredSlots: [],
     });
@@ -186,6 +197,7 @@ function PersonenBeheer() {
       role: p.role,
       obligation: p.obligation || (p.mandatoryBar ? 'FULL' : 'NONE'),
       teamId: p.teamId ? String(p.teamId) : '',
+      exempted: Boolean(p.exempted),
       unavailableWeekdays: p.unavailableWeekdays || [],
       preferredSlots: p.preferredSlots || [],
     });
@@ -233,7 +245,7 @@ function PersonenBeheer() {
           {editId ? 'Persoon bewerken' : 'Uitnodigen per e-mail'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Coördinator / Bestuur).
+          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Bestuur).
         </p>
 
         <div>
@@ -307,6 +319,14 @@ function PersonenBeheer() {
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={form.exempted}
+            onChange={(e) => setForm({ ...form, exempted: e.target.checked })}
+          />
+          Vrijgesteld (niet automatisch inplannen)
+        </label>
         <div className="sm:col-span-2 lg:col-span-3">
           <p className="vvl-label mb-2">Niet beschikbaar (vaste dagen)</p>
           <div className="flex flex-wrap gap-3">
@@ -458,7 +478,11 @@ function PersonenBeheer() {
               <tr key={p.id} className="border-t border-vvl-border">
                 <td className="p-3 font-semibold">
                   {p.name}
-                  {p.obligation === 'FULL' ? ' *' : p.obligation === 'HALF' ? ' ½' : ''}
+                  {p.obligation === 'FULL' ? ' *' : p.obligation === 'VR18' ? ' VR18+' : ''}
+                  {p.exempted ? ' (vrijgesteld)' : ''}
+                  {p.personNumber ? (
+                    <span className="block text-xs font-normal text-gray-500">{p.personNumber}</span>
+                  ) : null}
                 </td>
                 <td className="p-3">{p.email || '—'}</td>
                 <td className="p-3">{p.phone || '—'}</td>
@@ -500,6 +524,25 @@ function PersonenBeheer() {
                   <button type="button" className="text-xs font-bold uppercase" onClick={() => toggleActive(p)}>
                     {p.active ? 'Deactiveer' : 'Activeer'}
                   </button>
+                  {!p.active && (p.email || p.phone) ? (
+                    <button
+                      type="button"
+                      className="text-xs font-bold uppercase text-red-800"
+                      onClick={async () => {
+                        if (!window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)) {
+                          return;
+                        }
+                        try {
+                          await api.erasePersonContact(p.id);
+                          await load();
+                        } catch (e) {
+                          setError(e.message);
+                        }
+                      }}
+                    >
+                      Wis contact
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -509,6 +552,161 @@ function PersonenBeheer() {
       <p className="text-xs text-gray-600">
         * = verplichte bardienst. Contactgegevens alleen hier (beheer) zichtbaar.
       </p>
+      <PersonImport onDone={load} />
+    </section>
+  );
+}
+
+function PersonImport({ onDone }) {
+  const [csv, setCsv] = useState('');
+  const [sendInvites, setSendInvites] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg('');
+    setError('');
+    try {
+      const result = await api.importPersons({ csv, sendInvites });
+      setMsg(`${result.created} nieuw, ${result.updated} bijgewerkt.`);
+      setCsv('');
+      await onDone?.();
+    } catch (err) {
+      const extra = err.details?.unknownTeams?.length
+        ? ` Onbekende teams: ${err.details.unknownTeams.join(', ')}.`
+        : '';
+      setError(`${err.message}${extra}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="vvl-card space-y-3">
+      <h2 className="font-heading text-lg font-black uppercase">Personen importeren</h2>
+      <p className="text-sm text-gray-700">
+        CSV met kolommen <code>naam;email;telefoon;team;rol;verplichting</code>. Onbekende teams
+        worden niet aangemaakt.
+      </p>
+      <textarea
+        className="vvl-input min-h-[120px] font-mono text-xs"
+        value={csv}
+        onChange={(e) => setCsv(e.target.value)}
+        placeholder="naam;email;telefoon;team;rol;verplichting"
+        required
+      />
+      <label className="flex items-center gap-2 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={sendInvites}
+          onChange={(e) => setSendInvites(e.target.checked)}
+        />
+        Uitnodigingsmail sturen als SMTP aanstaat
+      </label>
+      <button type="submit" className="vvl-btn-outline w-fit" disabled={busy}>
+        {busy ? 'Importeren…' : 'CSV importeren'}
+      </button>
+      {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+    </form>
+  );
+}
+
+function ClubBeheer() {
+  const [club, setClub] = useState(null);
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    api
+      .getClubSettings()
+      .then(setClub)
+      .catch((e) => setError(e.message));
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const run = async (fn, ok) => {
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const res = await fn();
+      setMsg(ok(res));
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="vvl-card space-y-3">
+        <h2 className="font-heading text-lg font-black uppercase">Seizoen</h2>
+        <p className="text-sm text-gray-700">
+          Huidig seizoen: <strong>{club?.seasonLabel || '—'}</strong> (1 augustus t/m 31 juli).
+          Rollover archiveert teamkoppelingen en start {club?.nextSeasonLabel || 'het volgende seizoen'}.
+          Diensten en inhaaldiensten blijven staan.
+        </p>
+        <button
+          type="button"
+          className="vvl-btn-primary w-fit"
+          disabled={busy}
+          onClick={() => {
+            if (
+              !window.confirm(
+                `Nieuw seizoen ${club?.nextSeasonLabel} starten? Teamkoppelingen van ${club?.seasonLabel} worden gearchiveerd.`,
+              )
+            ) {
+              return;
+            }
+            run(
+              () => api.rolloverSeason({ seasonLabel: club?.nextSeasonLabel }),
+              (r) => `Seizoen ${r.oldLabel} → ${r.seasonLabel}.`,
+            );
+          }}
+        >
+          Nieuw seizoen starten
+        </button>
+      </div>
+      <div className="vvl-card space-y-3">
+        <h2 className="font-heading text-lg font-black uppercase">AVG</h2>
+        <p className="text-sm text-gray-700">
+          Auditlogs ouder dan {club?.auditRetainMonths || 24} maanden worden gewist. Contactgegevens
+          van gedeactiveerde accounts na {club?.inactiveRetainMonths || 24} maanden. Roosterhistorie
+          blijft.
+        </p>
+        <button
+          type="button"
+          className="vvl-btn-outline w-fit"
+          disabled={busy}
+          onClick={() =>
+            run(
+              () => api.privacyCleanup(),
+              (r) => `${r.auditDeleted} auditregels, ${r.contactsCleared} contact(en) gewist.`,
+            )
+          }
+        >
+          Nu opschonen
+        </button>
+      </div>
+      <div className="vvl-card space-y-2 text-sm text-gray-700">
+        <h2 className="font-heading text-lg font-black uppercase">Hosting</h2>
+        <p>
+          Productie: Render Starter (of gelijkwaardig) met persistente schijf via <code>DATA_DIR</code>.
+          Render Free is alleen demo — data verdwijnt bij slaapstand. Push en VoetbalAssist blijven
+          geparkeerd.
+        </p>
+      </div>
+      {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
     </section>
   );
 }
@@ -565,7 +763,7 @@ function DienstenBeheer() {
     setError('');
     setMsg('');
     try {
-      const location = 'Bar';
+      const location = form.type === 'KITCHEN' ? 'Keuken' : 'Bar';
       const payload = { ...form, required: Number(form.required), location };
       if (editId) await api.updateService(editId, payload);
       else await api.createService(payload);
@@ -580,7 +778,7 @@ function DienstenBeheer() {
   const startEdit = (s) => {
     setEditId(s.id);
     setForm({
-      type: 'BAR',
+      type: s.type || 'BAR',
       date: toDateInputValue(s.date),
       time: s.time,
       required: s.required,
@@ -596,14 +794,28 @@ function DienstenBeheer() {
     if (!personId) return;
     setError('');
     setMsg('');
-    try {
-      await api.createEnrollment({ serviceId, personId });
-      setEnrollPick({ ...enrollPick, [serviceId]: '' });
-      setMsg('Persoon toegevoegd aan dienst.');
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
+      try {
+        await api.createEnrollment({ serviceId, personId });
+        setEnrollPick({ ...enrollPick, [serviceId]: '' });
+        setMsg('Persoon toegevoegd aan dienst.');
+        await load();
+      } catch (err) {
+        if (err.details?.code === 'MATCH_BLOCK' && err.details?.canOverride) {
+          if (window.confirm(err.message)) {
+            try {
+              await api.createEnrollment({ serviceId, personId, ignoreMatchBlock: true });
+              setEnrollPick({ ...enrollPick, [serviceId]: '' });
+              setMsg('Persoon toegevoegd (wedstrijdblokkade genegeerd, vastgelegd in audit).');
+              await load();
+              return;
+            } catch (e2) {
+              setError(e2.message);
+              return;
+            }
+          }
+        }
+        setError(err.message);
+      }
   };
 
   const removeEnrollment = async (enrollmentId) => {
@@ -625,9 +837,21 @@ function DienstenBeheer() {
           {editId ? 'Dienst bewerken' : 'Dienst toevoegen'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          Extra bardiensten, handmatige wijzigingen, of <strong>historische planning</strong> (datum
-          in het verleden) zodat eerdere diensten meetellen in het overzicht.
+          Extra bar- of keukendiensten, handmatige wijzigingen, of <strong>historische planning</strong> (datum
+          in het verleden) zodat eerdere diensten meetellen. Handmatige diensten worden niet
+          overschreven door automatische regels.
         </p>
+        <div>
+          <label className="vvl-label">Type</label>
+          <select
+            className="vvl-input"
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+          >
+            <option value="BAR">Bar</option>
+            <option value="KITCHEN">Keuken</option>
+          </select>
+        </div>
         <div>
           <label className="vvl-label">Datum</label>
           <input
@@ -705,6 +929,22 @@ function DienstenBeheer() {
                 dienst={s}
                 adminMode
                 onAdminRemoveEnrollment={removeEnrollment}
+                onNoShow={async (id) => {
+                  try {
+                    await api.markNoShow(id);
+                    await load();
+                  } catch (err) {
+                    setError(err.message);
+                  }
+                }}
+                onClearNoShow={async (id) => {
+                  try {
+                    await api.clearNoShow(id);
+                    await load();
+                  } catch (err) {
+                    setError(err.message);
+                  }
+                }}
                 headerActions={
                   <button
                     type="button"
@@ -757,7 +997,14 @@ function TeamsBeheer() {
   const [teams, setTeams] = useState([]);
   const [persons, setPersons] = useState([]);
   const [services, setServices] = useState([]);
-  const [teamForm, setTeamForm] = useState({ name: '', coordinatorId: '', matchDurationMinutes: 90 });
+  const [teamForm, setTeamForm] = useState({
+    name: '',
+    coordinatorId: '',
+    matchDurationMinutes: 90,
+    availabilityUse: true,
+    teamDutyUse: false,
+    teamDutySlots: [],
+  });
   const [assign, setAssign] = useState({ serviceId: '', personId: '' });
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -786,8 +1033,18 @@ function TeamsBeheer() {
         name: teamForm.name,
         coordinatorId: teamForm.coordinatorId || null,
         matchDurationMinutes: Number(teamForm.matchDurationMinutes) || 90,
+        availabilityUse: teamForm.availabilityUse,
+        teamDutyUse: teamForm.teamDutyUse,
+        teamDutySlots: teamForm.teamDutySlots,
       });
-      setTeamForm({ name: '', coordinatorId: '', matchDurationMinutes: 90 });
+      setTeamForm({
+        name: '',
+        coordinatorId: '',
+        matchDurationMinutes: 90,
+        availabilityUse: true,
+        teamDutyUse: false,
+        teamDutySlots: [],
+      });
       await load();
     } catch (err) {
       setError(err.message);
@@ -864,6 +1121,44 @@ function TeamsBeheer() {
             }
           />
         </div>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={teamForm.availabilityUse}
+            onChange={(e) => setTeamForm({ ...teamForm, availabilityUse: e.target.checked })}
+          />
+          Persoonlijke beschikbaarheid (wedstrijdblokkade)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={teamForm.teamDutyUse}
+            onChange={(e) => setTeamForm({ ...teamForm, teamDutyUse: e.target.checked })}
+          />
+          Teamdienst bij thuiswedstrijd
+        </label>
+        {teamForm.teamDutyUse ? (
+          <div className="sm:col-span-2 flex flex-wrap gap-3">
+            {['MORNING', 'SECOND', 'LAST'].map((slot) => (
+              <label key={slot} className="flex items-center gap-1 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={teamForm.teamDutySlots.includes(slot)}
+                  onChange={() => {
+                    const has = teamForm.teamDutySlots.includes(slot);
+                    setTeamForm({
+                      ...teamForm,
+                      teamDutySlots: has
+                        ? teamForm.teamDutySlots.filter((x) => x !== slot)
+                        : [...teamForm.teamDutySlots, slot],
+                    });
+                  }}
+                />
+                {slot === 'MORNING' ? 'Ochtend' : slot === 'SECOND' ? 'Tweede shift' : 'Laatste shift'}
+              </label>
+            ))}
+          </div>
+        ) : null}
         <button type="submit" className="vvl-btn-primary sm:col-span-2 sm:w-fit">
           Team opslaan
         </button>
@@ -875,6 +1170,13 @@ function TeamsBeheer() {
             <h3 className="font-heading text-lg font-black uppercase">{t.name}</h3>
             <p className="text-sm text-gray-700">
               Coördinator: {t.coordinator?.name ?? '—'} · {t.members?.length ?? 0} leden
+              {t.active === false ? ' · inactief' : ''}
+            </p>
+            <p className="text-xs text-gray-600">
+              {t.availabilityUse !== false ? 'Beschikbaarheid' : 'Geen blokkade'}
+              {t.teamDutyUse
+                ? ` · teamdienst (${(t.teamDutySlots || []).join(', ') || 'geen shift'})`
+                : ' · geen teamdienst'}
             </p>
             <div className="flex flex-wrap items-end gap-2">
               <div>
@@ -897,8 +1199,30 @@ function TeamsBeheer() {
                 Duur opslaan
               </button>
               <p className="text-xs text-gray-600 self-center">
-                + 2 uur buffer na wedstrijd (geen KNVB-eindtijd)
+                Blokkade: thuis 1 uur voor/na, uit 2 uur voor/na (FO).
               </p>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm font-semibold">
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={t.availabilityUse !== false}
+                  onChange={(e) =>
+                    api.updateTeam(t.id, { availabilityUse: e.target.checked }).then(load)
+                  }
+                />
+                Beschikbaarheid
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(t.teamDutyUse)}
+                  onChange={(e) =>
+                    api.updateTeam(t.id, { teamDutyUse: e.target.checked }).then(load)
+                  }
+                />
+                Teamdienst
+              </label>
             </div>
             {t.members?.length ? (
               <ul className="mt-3 space-y-2">
@@ -1015,16 +1339,11 @@ function PlanningBeheer() {
   return (
     <section className="space-y-4">
       <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-lg font-black uppercase">Planning vanuit wedstrijden</h2>
+        <h2 className="font-heading text-lg font-black uppercase">Planning uit dienstregels</h2>
         <p className="text-sm text-gray-700">
-          Na het inladen van{' '}
-          <Link to="/wedstrijden" className="font-semibold underline">
-            KNVB-wedstrijden
-          </Link>{' '}
-          maakt de app automatisch bardiensten bij <strong>thuiswedstrijden</strong>: ochtend
-          09:00–12:00, middag 12:00–16:00 en late middag/avond 16:00–20:30 (elk 2 personen).
-          Meerdere wedstrijden in hetzelfde dagdeel delen één dienst. Diensten zonder
-          thuiswedstrijd worden verwijderd. Op Planning kun je ook op Update drukken.
+          Diensten ontstaan uit <strong>configureerbare regels</strong> (Beheer → Dienstregels),
+          plus wedstrijden en activiteiten in de jaarplanning. Vastgezette en handmatige diensten
+          blijven staan. Keukendiensten worden niet meer verwijderd.
         </p>
         <p className="text-sm">
           Status:{' '}
@@ -1126,13 +1445,52 @@ function PlanningBeheer() {
               run(
                 () => api.fillMandatory(),
                 (r) =>
-                  `${r.filled} plek(ken) gevuld met verplichte van (bij voorkeur) hun team.`,
+                  `${r.filled} persoonlijke plek(ken) gevuld. ${r.unfilled?.length ?? 0} verplichting(en) nog open.`,
               )
             }
           >
             Vul open plekken (verplicht)
           </button>
+          <button
+            type="button"
+            className="vvl-btn-primary"
+            disabled={busy}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  'Officieel maken vergrendelt de komende 6 weken. Alleen de barcommissie kan daarna nog wijzigen. Doorgaan?',
+                )
+              ) {
+                return;
+              }
+              run(
+                () => api.markPlanningOfficial(),
+                (r) => `Officieel: ${r.locked} dienst(en) vergrendeld.`,
+              );
+            }}
+          >
+            Maak officieel
+          </button>
+          <button
+            type="button"
+            className="vvl-btn-outline"
+            disabled={busy}
+            onClick={() =>
+              run(
+                () => api.sendDutyReminders(),
+                (r) =>
+                  r.reason === 'not_configured'
+                    ? 'Mail niet ingesteld — stel SMTP in bij E-mail.'
+                    : `Herinneringen: ${r.sent ?? 0} verstuurd.`,
+              )
+            }
+          >
+            Herinneringen morgen
+          </button>
         </div>
+        {round?.official ? (
+          <p className="text-sm font-semibold text-emerald-900">Dit rooster is officieel.</p>
+        ) : null}
       </div>
 
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}

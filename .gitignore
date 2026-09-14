@@ -4,4 +4,6 @@ dist/
 *.db
 *.db-journal
 uploads/
+backups/
 .tunnel-log.txt
+docs/demo-frames/

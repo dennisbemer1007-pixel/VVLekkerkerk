@@ -17,8 +17,15 @@ import { ensureAdmin } from './lib/seed.js';
 import { trySyncPlanningFromMatches } from './lib/proposePlanning.js';
 import prisma from './lib/prisma.js';
 import { UPLOADS_DIR, ensureUploadDirs } from './lib/uploads.js';
+import { ensureClubDefaults } from './lib/clubDefaults.js';
+import { maybeRunDutyReminders } from './lib/reminders.js';
+import serviceRulesRouter from './routes/serviceRules.js';
+import activitiesRouter from './routes/activities.js';
+import swapsRouter from './routes/swaps.js';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 const isProd = process.env.NODE_ENV === 'production';
@@ -32,8 +39,28 @@ if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
 app.disable('x-powered-by');
 app.use(
   helmet({
-    contentSecurityPolicy: isProd ? undefined : false,
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: isProd
+      ? {
+          useDefaults: true,
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'blob:'],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            frameAncestors: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            upgradeInsecureRequests: [],
+          },
+        }
+      : false,
+    crossOriginResourcePolicy: { policy: isProd ? 'same-origin' : 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    referrerPolicy: { policy: 'no-referrer' },
+    hsts: isProd ? { maxAge: 15552000, includeSubDomains: true } : false,
   }),
 );
 
@@ -53,6 +80,11 @@ app.use(
 );
 
 app.use(express.json({ limit: '2mb' }));
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  next();
+});
 
 // Foto's: onvoorspelbare bestandsnamen; geen directory listing
 app.use(
@@ -64,6 +96,7 @@ app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true, name: 'VVL Planning App', db: true });
+    maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));
   } catch (err) {
     console.error('[Health] Database niet bereikbaar:', err.message);
     res.status(503).json({
@@ -110,6 +143,9 @@ app.use('/api/matches', matchesRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/planning', planningRouter);
+app.use('/api/service-rules', serviceRulesRouter);
+app.use('/api/activities', activitiesRouter);
+app.use('/api/swaps', swapsRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 
@@ -130,6 +166,7 @@ app.use((err, _req, res, _next) => {
 });
 
 ensureAdmin()
+  .then(() => ensureClubDefaults())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`VVL Planning API op http://localhost:${PORT}`);
@@ -143,12 +180,15 @@ ensureAdmin()
           console.error('[planning] startup sync failed:', result.error);
           return;
         }
-        if (result?.created || result?.removed) {
+        if (result?.created || result?.removed || result?.updated) {
           console.log(
-            `[planning] startup sync: +${result.created} −${result.removed} (${result.slots} thuis-tijdsblokken)`,
+            `[planning] startup sync: +${result.created} ~${result.updated} −${result.removed} (${result.slots} diensten uit regels)`,
           );
         }
       });
+      setInterval(() => {
+        maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));
+      }, 60 * 60 * 1000);
     });
   })
   .catch((err) => {

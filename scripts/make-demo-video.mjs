@@ -56,8 +56,9 @@ async function main() {
 
   const token = await loginToken();
 
-  // Download rooster PDF for preview frame
-  const pdfRes = await fetch(`${API}/pdf/planning?token=${token}`);
+  const pdfRes = await fetch(`${API}/pdf/planning`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!pdfRes.ok) throw new Error('PDF download failed ' + pdfRes.status);
   fs.writeFileSync(pdfPath, Buffer.from(await pdfRes.arrayBuffer()));
   console.log('pdf saved', pdfPath);
@@ -67,8 +68,8 @@ async function main() {
 
   // 01 Login
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-  await page.fill('input[type="email"], input[name="email"]', 'admin@vvl.local');
-  await page.fill('input[type="password"]', 'admin123');
+  await page.fill('#email', 'admin@vvl.local');
+  await page.fill('#password, input[type="password"]', 'admin123');
   await shot(page, '01-inloggen');
 
   await page.click('button[type="submit"]');
@@ -82,7 +83,12 @@ async function main() {
   await page.goto(`${BASE}/planning`, { waitUntil: 'networkidle' });
   await shot(page, '04-planning');
 
-  // Beheer tabs via hash/query? App uses state tabs - navigate and click
+  await page.goto(`${BASE}/ruilen`, { waitUntil: 'networkidle' });
+  await shot(page, '04b-ruilen');
+
+  await page.goto(`${BASE}/wedstrijden`, { waitUntil: 'networkidle' });
+  await shot(page, '04c-wedstrijden');
+
   await page.goto(`${BASE}/beheer`, { waitUntil: 'networkidle' });
   await shot(page, '05-beheer-personen');
 
@@ -92,14 +98,17 @@ async function main() {
   await clickTab(page, 'Planning');
   await shot(page, '07-beheer-planning');
 
-  await clickTab(page, 'Wedstrijden');
-  await shot(page, '08-beheer-wedstrijden');
+  await clickTab(page, 'Dienstregels');
+  await shot(page, '07b-beheer-regels');
 
   await clickTab(page, 'Teams');
   await shot(page, '09-beheer-teams');
 
   await clickTab(page, 'E-mail');
   await shot(page, '10-beheer-email');
+
+  await clickTab(page, 'Club');
+  await shot(page, '10b-beheer-club');
 
   // PDF-preview: HTML-viewer (Chromium downloadt file:// PDF)
   const b64 = fs.readFileSync(pdfPath).toString('base64');
@@ -151,12 +160,15 @@ async function main() {
     '02-dashboard',
     '03-inschrijven',
     '04-planning',
+    '04b-ruilen',
+    '04c-wedstrijden',
     '05-beheer-personen',
     '06-beheer-diensten',
     '07-beheer-planning',
-    '08-beheer-wedstrijden',
+    '07b-beheer-regels',
     '09-beheer-teams',
     '10-beheer-email',
+    '10b-beheer-club',
     '11-pdf-rooster',
   ];
 

@@ -20,10 +20,6 @@ export function isOldYouthTeam(teamName) {
   return parseJoAge(teamName)?.group === 'old';
 }
 
-export function isYouthTeam(teamName) {
-  return Boolean(parseJoAge(teamName));
-}
-
 /** Standaardtijden bardienst (bezetting 2) */
 export const SLOT_TIMES = {
   MORNING: {

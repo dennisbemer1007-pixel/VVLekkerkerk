@@ -7,6 +7,9 @@ import Dashboard from './pages/Dashboard.jsx';
 import Inschrijven from './pages/Inschrijven.jsx';
 import Login from './pages/Login.jsx';
 import Planning from './pages/Planning.jsx';
+import Ruilen from './pages/Ruilen.jsx';
+import TeamDashboard from './pages/TeamDashboard.jsx';
+import Privacy from './pages/Privacy.jsx';
 import Uitnodiging from './pages/Uitnodiging.jsx';
 import Voorkeuren from './pages/Voorkeuren.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
@@ -39,6 +42,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/wachtwoord-vergeten" element={<WachtwoordVergeten />} />
       <Route path="/wachtwoord/:token" element={<WachtwoordReset />} />
       <Route path="/uitnodiging/:token" element={<Uitnodiging />} />
@@ -81,6 +85,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/ruilen"
+                element={
+                  <Protected feature="ruilen">
+                    <Ruilen />
+                  </Protected>
+                }
+              />
+              <Route
                 path="/voorkeuren"
                 element={
                   <Protected feature="voorkeuren">
@@ -96,11 +108,11 @@ export default function App() {
                   </Protected>
                 }
               />
-  <Route
+              <Route
                 path="/teams"
                 element={
                   <Protected feature="teams">
-                    <Beheer mode="teams" />
+                    <TeamDashboard />
                   </Protected>
                 }
               />

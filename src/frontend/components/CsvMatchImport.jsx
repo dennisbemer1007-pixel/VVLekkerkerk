@@ -168,9 +168,12 @@ export default function CsvMatchImport({ onImported }) {
         `${res.created} wedstrijd(en) geïmporteerd` +
           (dupes ? ` · ${dupes} bestonden al (overgeslagen)` : '') +
           (skipped ? ` · ${skipped} ongeldige rij(en) overgeslagen` : '') +
-          (res.planningCreated
-            ? ` · ${res.planningCreated} bardienst(en) ingepland`
-            : ''),
+          (res.teamsRecognized != null ? ` · ${res.teamsRecognized} team(s) herkend` : '') +
+          (res.unknownTeamCount
+            ? ` · ${res.unknownTeamCount} team(s) niet herkend: ${(res.unknownTeams || []).join(', ')}`
+            : '') +
+          (res.planningCreated ? ` · ${res.planningCreated} dienst(en) aangemaakt` : '') +
+          (res.teamDutiesCreated ? ` · ${res.teamDutiesCreated} teamdienst(en)` : ''),
       );
       setValidPreview([]);
       setValidCount(0);

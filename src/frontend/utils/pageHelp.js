@@ -3,11 +3,11 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Je ziet in één oogopslag hoe vol de bardiensten zijn, en je gaat snel naar inschrijven of planning.',
+      'Dit is je startscherm. Voor de barcommissie staan hier vier controles: open diensten, niet-ingevulde verplichtingen, inhaaldiensten en waarom iemand niet is ingepland.',
     actions: [
-      'Bekijk bezetting van bardiensten (groen = vol, geel = nog 1 nodig, rood = open)',
-      'Open snelle knoppen naar Inschrijven, Planning of Beheer',
-      'Als beheerder: zie wie vaak heeft gestaan en wie zich niet zelf inschrijft',
+      'Klik op een controlekaart om de concrete lijst te zien',
+      'Open diensten en verplichtingen blijven aparte overzichten',
+      'Ga via de knoppen naar inschrijven, planning of beheer',
     ],
   },
   inschrijven: {
@@ -16,7 +16,7 @@ export const PAGE_HELP = {
     actions: [
       'Filter op open diensten, deze week, vandaag of jouw diensten',
       'Schrijf je in op een dienst met nog plek',
-      'Schrijf je uit zolang de vrijwilligersfase open is',
+      'Schrijf je uit zolang de vrijwilligersfase open is (niet na officieel maken)',
     ],
   },
   planning: {
@@ -26,7 +26,7 @@ export const PAGE_HELP = {
       'Bekijk alle diensten in de periode (ongeveer 6 weken)',
       'Filter op open of jouw diensten',
       'Als beheerder: Update om de planning gelijk te trekken met thuiswedstrijden',
-      'Download het PDF-rooster (zelfde tijdsblokken ma–zo) voor in de kantine',
+      'Download Excel, clubhuis-PDF (deze week) of het 6-weken-PDF',
     ],
   },
   voorkeuren: {
@@ -36,16 +36,27 @@ export const PAGE_HELP = {
       'Vink vaste weekdagen af waarop je niet beschikbaar bent',
       'Kies optioneel voorkeur voor ochtend, middag of avond',
       'Sla op zodat beheer en auto-invulling hiermee rekening houden',
+      'Download een kopie van je eigen gegevens (AVG)',
+    ],
+  },
+  ruilen: {
+    purpose:
+      'Ruil twee bestaande persoonlijke diensten. Beide personen moeten akkoord zijn, daarna keurt de barcommissie goed. Er ontstaat geen open plek.',
+    actions: [
+      'Kies jouw komende dienst en de dienst van iemand anders',
+      'Wacht tot de andere persoon akkoord geeft',
+      'De barcommissie keurt daarna goed of af',
     ],
   },
   beheer: {
     purpose:
-      'Volledig beheer van vrijwilligers, diensten, teams, wedstrijden en de planningsronde. Alleen voor coördinator en bestuur.',
+      'Volledig beheer van vrijwilligers, diensten, teams, wedstrijden en de planningsronde. Alleen voor barcommissie en bestuur.',
     actions: [
       'Personen uitnodigen en rollen/verplichtingen instellen',
       'Diensten toevoegen of historiek nabouwen',
       'Concept-planning maken, publiceren en open plekken vullen',
       'Wedstrijden bekijken en importeren, e-mailserver instellen',
+      'Club: seizoenswisseling, AVG-opschonen en hostingnotitie',
     ],
   },
   beheerPersonen: {
@@ -53,9 +64,10 @@ export const PAGE_HELP = {
       'Beheer wie meedoet: uitnodigen, rol, team en bardienst-verplichting. Zo weet de app wie vrijwillig meedoet en wie verplicht is.',
     actions: [
       'Nieuwe mensen uitnodigen per e-mail',
-      'Rol en verplichting (geen / half / volledig) instellen',
+      'Rol en verplichting (geen / verplicht / VR18+) instellen',
       'Team, beschikbaarheid en voorkeuren beheren',
       'Account activeren of deactiveren',
+      'CSV importeren (naam;email;telefoon;team;rol;verplichting) — teams moeten al bestaan',
     ],
   },
   beheerDiensten: {
@@ -69,11 +81,30 @@ export const PAGE_HELP = {
   },
   beheerPlanning: {
     purpose:
-      'De planningsronde: voorstel uit wedstrijden, publiceren voor vrijwilligers, mailen, en daarna open plekken vullen met verplichte bardienst.',
+      'De planningsronde: diensten uit regels + wedstrijden + activiteiten, publiceren, mailen, en open plekken vullen met verplichte leden en VR18+.',
     actions: [
-      'Planning bijwerken: ochtend/middag/avond uit thuiswedstrijden, overige diensten verwijderen',
+      'Planning bijwerken vanuit dienstregels (handmatige diensten blijven staan)',
       'Publiceren en vrijwilligersfase openen',
-      'Mails sturen en open plekken automatisch vullen',
+      'Open plekken automatisch vullen; vrijgestelden en vrijwilligers worden overgeslagen',
+      'Officieel maken vergrendelt 6 weken; herinneringen morgen (e-mail) versturen',
+    ],
+  },
+  beheerRegels: {
+    purpose:
+      'Dagen, tijden, aantallen en voorwaarden van diensten zijn configureerbaar. De barcommissie past regels aan zonder ontwikkelaar.',
+    actions: [
+      'Regel toevoegen: altijd, bij thuiswedstrijd, bij team, bij activiteit, of handmatig',
+      'Toepassen op de komende 6 weken',
+      'Vrijdag-klaverjas en late keuken Lekkerkerk 1 zitten in de standaardregels',
+    ],
+  },
+  beheerActiviteiten: {
+    purpose:
+      'Jaarplanning: klaverjasavonden, toernooien en andere activiteiten die diensten kunnen activeren.',
+    actions: [
+      'Activiteit met datum en type vastleggen',
+      'Optioneel vastzetten zodat automatische planning niets overschrijft',
+      'Valt de activiteit in de 6-wekenplanning, dan ontstaan bijbehorende diensten',
     ],
   },
   beheerTeams: {
@@ -105,10 +136,28 @@ export const PAGE_HELP = {
   },
   teams: {
     purpose:
-      'Jouw team: schrijf ouders of teamleden in op open bardiensten namens je team.',
+      'Jouw team(s): leden, resterende verplichting, komende wedstrijden en teamdiensten. Schrijf een lid in op een open persoonlijke plek.',
     actions: [
-      'Open diensten bekijken',
-      'Een teamlid of ouder op een dienst inschrijven',
+      'Bekijk wie nog een persoonlijke dienst open heeft',
+      'Zie teamdiensten en komende wedstrijden',
+      'Schrijf een teamlid of ouder in op een open dienst',
+    ],
+  },
+  beheerClub: {
+    purpose:
+      'Seizoen, AVG-bewaartermijnen en hosting. Rollover archiveert teamkoppelingen; roosterhistorie blijft.',
+    actions: [
+      'Huidig seizoen (1 augustus t/m 31 juli) controleren',
+      'Nieuw seizoen starten (teamkoppelingen archiveren)',
+      'AVG-opschonen: oude auditlogs en contact van gedeactiveerde accounts',
+    ],
+  },
+  privacy: {
+    purpose:
+      'Wat we bewaren en hoe lang: planning uitvoeren, geen push of WhatsApp. Contact van inactieve accounts na 24 maanden weg.',
+    actions: [
+      'Lees de bewaartermijnen',
+      'Download je gegevens via Voorkeuren als je bent ingelogd',
     ],
   },
   uitnodigen: {
@@ -163,8 +212,11 @@ export function helpForBeheerTab(tab, mode = 'full') {
     personen: PAGE_HELP.beheerPersonen,
     diensten: PAGE_HELP.beheerDiensten,
     planning: PAGE_HELP.beheerPlanning,
+    regels: PAGE_HELP.beheerRegels,
+    activiteiten: PAGE_HELP.beheerActiviteiten,
     teams: PAGE_HELP.beheerTeams,
     mail: PAGE_HELP.beheerMail,
+    club: PAGE_HELP.beheerClub,
   };
   return map[tab] || PAGE_HELP.beheer;
 }

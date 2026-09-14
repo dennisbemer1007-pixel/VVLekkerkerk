@@ -2,6 +2,8 @@
 
 Eenvoudige planning-app voor bardiensten en keukendiensten bij **V.V. Lekkerkerk**.
 
+Handleiding: [docs/WERKBESCHRIJVING.md](docs/WERKBESCHRIJVING.md) · FO-keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md) · Demo: [docs/DEMO.md](docs/DEMO.md) · Beveiliging: [docs/SECURITY.md](docs/SECURITY.md)
+
 ## Windows: PowerShell-fout bij `npm`?
 
 Als je ziet: *running scripts is disabled*, gebruik één van deze opties:
@@ -24,18 +26,16 @@ Als dit aanstaat, gaan uitnodigingen automatisch per e-mail. Zo niet, blijft de 
 
 ## Accounts & uitnodigingen
 
-1. Log in als beheerder: `admin@vvl.local` / `admin123`
-2. Ga naar **Beheer → Personen → Uitnodigen per e-mail**
-3. Kopieer de deeplink of open je e-mailprogramma
-4. De persoon opent `/uitnodiging/...`, kiest een wachtwoord en ziet daarna alleen de menu’s bij hun rol
+1. Log in als beheerder: `admin@vvl.local` / `admin123` (alleen lokaal)
+2. Demo-rollen: zie [docs/DEMO.md](docs/DEMO.md) (`npm run demo:users`)
+3. Ga naar **Beheer → Personen** om mensen uit te nodigen
+4. De persoon opent `/uitnodiging/...`, kiest een wachtwoord
 
 ## Wat is er nieuw?
 
-- **Inschrijven**: kies je naam (geen wachtwoord) → inschrijven op open diensten
-- **Filters**: Vandaag, Deze week, Open, Mijn diensten
-- **Kleurcodes**: groen = vol, geel = nog 1, rood = open
-- **Beheer**: personen (deactiveren), diensten (bezetting, aan/uit), teams, wedstrijden → bardiensten
-- **PDF**: standaard 6 weken, blokken per dienst
+- Inloggen met e-mail en wachtwoord; ruilen; teamdashboard; keuken; VR18+/inhaal
+- Planning: Excel, clubhuis-PDF, 6-weken-PDF, officieel vastzetten
+- Beheer: dienstregels, seizoen, AVG, personen-CSV
 
 ## Database opnieuw (na update)
 
@@ -78,7 +78,9 @@ npm run dev
 | Personen | Naam, telefoon, rol |
 | Diensten | Bardienst / keukendienst, datum, tijd |
 | Inschrijvingen | Vrijwilliger koppelen aan dienst |
-| Planning | Overzicht + **PDF download** |
+| Planning | Overzicht, Excel, clubhuis-PDF en 6-weken-PDF |
+| Mijn team | Teamcoördinator: leden, verplichting, inschrijven |
+| Beheer → Club | Seizoen, AVG-opschonen, hostingnotitie |
 
 ## Productie
 
@@ -90,8 +92,14 @@ npm start
 
 De Express-server serveert dan ook de gebouwde frontend.
 
+Zet een sterke `ADMIN_PASSWORD` (niet `admin123`). Voor persistente SQLite op een volume: `DATA_DIR=/var/data`. Backup: `npm run db:backup`.
+
+Kopieer `.env.example` naar `.env`.
+
 ## Klant-demo op Render (Free)
 
 Geschikt om de app te laten uitproberen. Data blijft niet bewaard na idle sleep.
 
 Zie **[docs/RENDER-DEMO.md](docs/RENDER-DEMO.md)** — kort: push naar Git, Render → Blueprint (`render.yaml`), inloggen met `admin@vvl.local` / `demo-test-2026`.
+
+Productie: Starter + persistente schijf (`DATA_DIR`). Keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md).

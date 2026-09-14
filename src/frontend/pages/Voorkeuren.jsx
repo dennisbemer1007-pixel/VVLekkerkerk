@@ -128,6 +128,35 @@ export default function Voorkeuren() {
         </button>
       </form>
 
+      <section className="vvl-card space-y-2">
+        <h2 className="font-heading text-lg font-black uppercase">Jouw gegevens</h2>
+        <p className="text-sm text-gray-700">
+          Download een kopie van je account, inschrijvingen en teamkoppelingen (AVG).
+        </p>
+        <button
+          type="button"
+          className="vvl-btn-outline text-xs"
+          onClick={async () => {
+            setError('');
+            try {
+              const data = await api.exportMyData();
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'vvl-mijn-gegevens.json';
+              a.click();
+              URL.revokeObjectURL(url);
+              setMsg('Export gedownload.');
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        >
+          Gegevens downloaden
+        </button>
+      </section>
+
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
           {msg}

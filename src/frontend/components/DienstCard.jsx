@@ -8,7 +8,7 @@ import {
 function obligationMark(person) {
   if (!person) return '';
   if (person.obligation === 'FULL' || person.mandatoryBar) return ' *';
-  if (person.obligation === 'HALF') return ' ½';
+  if (person.obligation === 'VR18') return ' VR18+';
   return '';
 }
 
@@ -21,6 +21,8 @@ export default function DienstCard({
   headerActions = null,
   adminMode = false,
   onAdminRemoveEnrollment,
+  onNoShow,
+  onClearNoShow,
 }) {
   const enrolled = dienst.enrolled ?? dienst.enrollments?.length ?? 0;
   const required = dienst.required ?? 2;
@@ -31,6 +33,7 @@ export default function DienstCard({
     : null;
   const inactive = dienst.active === false;
   const isDraft = Boolean(dienst.draft);
+  const isLocked = Boolean(dienst.locked);
 
   return (
     <article
@@ -50,6 +53,7 @@ export default function DienstCard({
             {type} · {dienst.location}
             {dienst.slot && dienst.slot !== 'EXTRA' ? ` · ${slotLabel(dienst.slot)}` : ''}
             {dienst.slot === 'EXTRA' ? ' · extra' : ''}
+            {dienst.kind === 'TEAM' ? ' · teamdienst' : ''}
           </p>
           <h3 className="font-heading text-lg font-black uppercase">{formatServiceDate(dienst.date)}</h3>
           <p className="text-sm font-semibold">{dienst.time}</p>
@@ -63,6 +67,11 @@ export default function DienstCard({
           ) : (
             <StatusBadge status={status} />
           )}
+          {isLocked ? (
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold uppercase text-emerald-900">
+              Officieel
+            </span>
+          ) : null}
           {headerActions}
         </div>
       </div>
@@ -70,6 +79,7 @@ export default function DienstCard({
       <p className="text-sm">
         Bezetting: <strong>{enrolled}</strong> van <strong>{required}</strong>
         {inactive ? ' · uitgeschakeld' : ''}
+        {isLocked ? ' · officieel' : ''}
       </p>
 
       {dienst.note ? <p className="text-sm text-gray-600">{dienst.note}</p> : null}
@@ -81,15 +91,38 @@ export default function DienstCard({
               <span>
                 {e.person?.name ?? 'Onbekend'}
                 {obligationMark(e.person)}
+                {e.noShow ? ' · no-show' : ''}
+                {e.reason ? (
+                  <span className="block text-xs font-normal text-gray-600">{e.reason}</span>
+                ) : null}
               </span>
               {adminMode && onAdminRemoveEnrollment ? (
-                <button
-                  type="button"
-                  className="text-xs font-bold uppercase text-red-700 hover:underline"
-                  onClick={() => onAdminRemoveEnrollment(e.id)}
-                >
-                  Verwijder
-                </button>
+                <span className="flex gap-2">
+                  {e.noShow ? (
+                    <button
+                      type="button"
+                      className="text-xs font-bold uppercase text-amber-800 hover:underline"
+                      onClick={() => onClearNoShow?.(e.id)}
+                    >
+                      No-show corrigeren
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-xs font-bold uppercase text-amber-800 hover:underline"
+                      onClick={() => onNoShow?.(e.id)}
+                    >
+                      No-show
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs font-bold uppercase text-red-700 hover:underline"
+                    onClick={() => onAdminRemoveEnrollment(e.id)}
+                  >
+                    Verwijder
+                  </button>
+                </span>
               ) : null}
             </li>
           ))}
@@ -98,7 +131,7 @@ export default function DienstCard({
         <p className="text-sm text-gray-500">Nog niemand ingeschreven.</p>
       )}
 
-      {showActions && !inactive && !isDraft ? (
+      {showActions && !inactive && !isDraft && !(isLocked && !adminMode) ? (
         <div className="pt-1">
           {!myPersonId ? (
             <p className="text-sm text-gray-600">Je moet ingelogd zijn om in te schrijven.</p>
@@ -122,6 +155,12 @@ export default function DienstCard({
             </button>
           )}
         </div>
+      ) : null}
+
+      {isLocked && showActions && !adminMode ? (
+        <p className="text-xs text-gray-600">
+          Officieel rooster — alleen de barcommissie kan nog wijzigen.
+        </p>
       ) : null}
 
       {isDraft && showActions ? (

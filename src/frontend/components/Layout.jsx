@@ -9,6 +9,7 @@ export default function Layout({ children }) {
   const navItems = [
     { to: '/', label: 'Dashboard', end: true, show: true },
     { to: '/inschrijven', label: 'Inschrijven', show: can('inschrijven') },
+    { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
     { to: '/planning', label: 'Planning', show: can('planning') },
     { to: '/wedstrijden', label: 'Wedstrijden', show: can('wedstrijden') },
     { to: '/voorkeuren', label: 'Voorkeuren', show: can('voorkeuren') },
@@ -103,7 +104,10 @@ export default function Layout({ children }) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:py-8">{children}</main>
 
       <footer className="border-t border-vvl-border bg-vvl-primary py-4 text-center text-xs font-bold uppercase tracking-wide text-white">
-        V.V. Lekkerkerk — vrijwilligersplanning
+        V.V. Lekkerkerk — vrijwilligersplanning ·{' '}
+        <Link to="/privacy" className="underline hover:text-vvl-secondary">
+          Privacy
+        </Link>
       </footer>
     </div>
   );
