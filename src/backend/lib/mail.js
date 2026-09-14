@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import prisma from './prisma.js';
+import { canonicalAccessRole } from './roles.js';
 import { sealSecret, unsealSecret } from './secrets.js';
 
 const DEFAULT_ID = 1;
@@ -318,6 +319,68 @@ export async function notifyVolunteers({ deadline, appUrl }) {
   });
   return sendBulk(people, (p) =>
     volunteerOpenEmail({ name: p.name, deadline, appUrl }),
+  );
+}
+
+export function swapCommitteeEmailContent({
+  name,
+  requesterName,
+  counterpartyName,
+  fromLabel,
+  toLabel,
+  appUrl,
+}) {
+  const base = String(appUrl || '').replace(/\/$/, '');
+  const link = base ? `${base}/beheer?tab=ruilen` : '';
+  const subject = 'Ruilverzoek ter goedkeuring — VVL Planning App';
+  const text = `Hoi ${name},
+
+${requesterName} en ${counterpartyName} zijn allebei akkoord met een ruil. Die wacht nu op de barcommissie.
+
+${requesterName}: ${fromLabel}
+${counterpartyName}: ${toLabel}
+
+Keur goed of wijs af via Beheer → Ruilen${link ? `:\n${link}` : '.'}
+
+Groet,
+V.V. Lekkerkerk`;
+  const html = `
+    <p>Hoi ${escapeHtml(name)},</p>
+    <p><strong>${escapeHtml(requesterName)}</strong> en <strong>${escapeHtml(counterpartyName)}</strong> zijn allebei akkoord met een ruil. Die wacht nu op de barcommissie.</p>
+    <p>${escapeHtml(requesterName)}: ${escapeHtml(fromLabel)}<br>${escapeHtml(counterpartyName)}: ${escapeHtml(toLabel)}</p>
+    ${
+      link
+        ? `<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;font-weight:bold;border-radius:999px;">Open ter goedkeuring</a></p>`
+        : '<p>Keur goed of wijs af via Beheer → Ruilen.</p>'
+    }
+    <p>Groet,<br>V.V. Lekkerkerk</p>
+  `;
+  return { subject, text, html };
+}
+
+export async function notifyBarcommissieOfPendingSwap({
+  requesterName,
+  counterpartyName,
+  fromLabel,
+  toLabel,
+  appUrl,
+}) {
+  const people = await prisma.person.findMany({
+    where: { active: true, email: { not: null } },
+  });
+  let recipients = people.filter((p) => canonicalAccessRole(p.role) === 'Barcommissie');
+  if (!recipients.length) {
+    recipients = people.filter((p) => canonicalAccessRole(p.role) === 'Admin');
+  }
+  return sendBulk(recipients, (p) =>
+    swapCommitteeEmailContent({
+      name: p.name,
+      requesterName,
+      counterpartyName,
+      fromLabel,
+      toLabel,
+      appUrl,
+    }),
   );
 }
 

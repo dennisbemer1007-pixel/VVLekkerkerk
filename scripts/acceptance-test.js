@@ -99,6 +99,40 @@ async function main() {
   const admin = tokens['admin@vvl.local'];
   const lisa = tokens['lisa@vvl.demo'];
   const sandra = tokens['sandra@vvl.demo'];
+  const markTok = tokens['mark@vvl.demo'];
+
+  const lisaMe = await req('/api/auth/me', { token: lisa });
+  mark(
+    record(
+      'lisa tabs alleen vrijwilliger',
+      lisaMe.json?.access?.can?.includes('inschrijven') === true &&
+        lisaMe.json?.access?.can?.includes('dashboard') === false &&
+        lisaMe.json?.access?.can?.includes('planning') === false,
+    ),
+  );
+
+  const adminMe = await req('/api/auth/me', { token: admin });
+  mark(record('admin rol', adminMe.json?.role === 'Admin', String(adminMe.json?.role)));
+  mark(
+    record(
+      'admin geen vrijwilliger-tabs',
+      adminMe.json?.access?.can?.includes('beheer') === true &&
+        adminMe.json?.access?.can?.includes('inschrijven') === false &&
+        adminMe.json?.access?.can?.includes('ruilen') === false &&
+        adminMe.json?.access?.can?.includes('voorkeuren') === false,
+    ),
+  );
+
+  const markMe = await req('/api/auth/me', { token: markTok });
+  mark(
+    record(
+      'barcommissie geen vrijwilliger-tabs',
+      markMe.json?.access?.can?.includes('beheer') === true &&
+        markMe.json?.access?.can?.includes('inschrijven') === false &&
+        markMe.json?.access?.can?.includes('ruilen') === false &&
+        markMe.json?.access?.can?.includes('voorkeuren') === false,
+    ),
+  );
 
   mark(record('unauth enroll 401', (await req('/api/enrollments', { method: 'POST', body: { serviceId: 1, personId: 1 } })).status === 401));
   mark(record('unauth PDF 401', (await req('/api/pdf/planning')).status === 401));

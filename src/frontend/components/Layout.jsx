@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user, logout, can, isLoggedIn } = useAuth();
+  const { user, logout, can, isLoggedIn, homePath } = useAuth();
 
   const navItems = [
-    { to: '/', label: 'Dashboard', end: true, show: true },
+    { to: '/', label: 'Dashboard', end: true, show: can('dashboard') },
     { to: '/inschrijven', label: 'Inschrijven', show: can('inschrijven') },
     { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
     { to: '/planning', label: 'Planning', show: can('planning') },
@@ -47,7 +47,7 @@ export default function Layout({ children }) {
 
         <div className="bg-vvl-secondary">
           <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 md:gap-6 md:py-4">
-            <Link to="/" className="shrink-0">
+            <Link to={homePath} className="shrink-0">
               <img
                 src="/logo.png"
                 alt="V.V. Lekkerkerk"

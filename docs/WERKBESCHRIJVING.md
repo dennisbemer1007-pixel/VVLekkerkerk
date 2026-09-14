@@ -7,7 +7,7 @@
 **Beveiliging / AVG:** [SECURITY.md](SECURITY.md)  
 **Demo:** [DEMO.md](DEMO.md)
 
-Dit is de werkbeschrijving voor bestuur, barcommissie en testers. Technische keuzes en wat bewust níét is gebouwd staan in FO-KEUZES. Als het FO en de app verschillen, geldt FO-KEUZES.
+Dit is de werkbeschrijving voor admin, barcommissie en testers. Technische keuzes en wat bewust níét is gebouwd staan in FO-KEUZES. Als het FO en de app verschillen, geldt FO-KEUZES.
 
 ---
 
@@ -31,7 +31,7 @@ Onderstaande tabel dekt de FO-onderwerpen. Geparkeerde punten verwijzen naar FO-
 |--------------|-----------|-------------------|
 | Doel: bar- en keukenplanning kantine | Ja | Hele app |
 | Huisstijl club | Ja | Logo, kleuren, `/logo.png` |
-| Rollen vrijwilliger / teamco / barcommissie / bestuur | Ja | §3; oude naam “Coördinator” → Barcommissie |
+| Rollen vrijwilliger / teamco / barcommissie / admin | Ja | §3; oude naam “Coördinator” → Barcommissie, “Bestuur” → Admin |
 | Half-verplicht (3×/jaar) | Nee, bewust | Vervangen door volledig verplicht. [FO-KEUZES](FO-KEUZES.md) |
 | Verplicht 1× / 6 weken (`FULL`) | Ja | Personen + automatische vulling |
 | VR18+ 1× / 12 weken | Ja | Zelfde |
@@ -75,14 +75,14 @@ Access-rol is iets anders dan bardienst-verplichting.
 
 | Rol | Mag je |
 |-----|--------|
-| **Vrijwilliger** | Dashboard, inschrijven, ruilen, planning, wedstrijden, voorkeuren |
-| **Teamcoördinator** | Zelfde + Mijn team + ouders uitnodigen |
-| **Barcommissie** | Alles, inclusief Beheer |
-| **Bestuur** | Zelfde als barcommissie |
+| **Vrijwilliger** | Alleen Inschrijven, Ruilen, Voorkeuren |
+| **Teamcoördinator** | Dashboard, inschrijven, ruilen, planning, wedstrijden, voorkeuren, plus Mijn team + ouders uitnodigen |
+| **Barcommissie** | Dashboard, planning, wedstrijden, Beheer — géén inschrijven, ruilen, voorkeuren (ruilgoedkeuring via Beheer → Ruilen) |
+| **Admin** | Zelfde als barcommissie |
 
 **Verplichting** (los van rol): geen / verplicht (min. 1× per 6 weken) / VR18+ (min. 1× per 12 weken). Vrijstelling telt niet mee. Inhaal komt bovenop.
 
-Na inloggen zie je onder je rechten wat bij jouw rol hoort.
+Na inloggen zie je onder je rechten wat bij jouw rol hoort. Vrijwilligers landen op Inschrijven; barcommissie en admin op het dashboard.
 
 ---
 
@@ -94,7 +94,7 @@ Na inloggen zie je onder je rechten wat bij jouw rol hoort.
 4. `npm.cmd run dev` of `start-dev.cmd`
 5. Browser: http://localhost:5173
 
-**Bestuur (lokaal):** `admin@vvl.local` / `admin123`  
+**Admin (lokaal):** `admin@vvl.local` / `admin123`  
 **Overige demo’s:** wachtwoord `demo123` — zie [DEMO.md](DEMO.md).
 
 ---
@@ -106,7 +106,7 @@ Na inloggen zie je onder je rechten wat bij jouw rol hoort.
 3. **Publiceren** — vrijwilligers mogen inschrijven tot de deadline.
 4. **Verplicht vullen** — open persoonlijke plekken volgens de eerlijke volgorde (FO §34).
 5. **Teamdiensten** — teamco’s vullen hun teamshifts **vóór** officieel.
-6. **Maak officieel** — gepubliceerde diensten in het venster gaan op slot. Alleen barcommissie/bestuur wijzigt daarna nog in- of uitschrijvingen.
+6. **Maak officieel** — gepubliceerde diensten in het venster gaan op slot. Alleen barcommissie/admin wijzigt daarna nog in- of uitschrijvingen.
 7. **Print / Excel** — clubhuis-PDF (deze week) en/of 6-weken-PDF en Excel.
 8. **Herinneringen** — 1 dag van tevoren per e-mail als SMTP aanstaat; handmatig “Herinneringen morgen” kan forceren.
 
@@ -156,7 +156,7 @@ Een vrijwilliger mag niet iemand anders inschrijven (IDOR-blokkade). Teamco mag 
 Wedstrijdblokkade: rond de eigen wedstrijd (incl. marge) kun je niet op een overlappende dienst. Beheer kan bewust overrulen.
 
 ### Ruilen (FO §53–56)
-Kies jouw komende **persoonlijke** dienst en die van iemand anders. Die persoon gaat akkoord; daarna keurt de barcommissie goed. Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator. Details: [FO-KEUZES](FO-KEUZES.md).
+Kies jouw komende **persoonlijke** dienst en die van iemand anders. Die persoon gaat akkoord; daarna gaat het verzoek naar de **barcommissie** (e-mail als SMTP aanstaat, plus Dashboard en Beheer → Ruilen). Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator. Details: [FO-KEUZES](FO-KEUZES.md).
 
 ---
 
@@ -186,13 +186,14 @@ Weekdagen afvinken waarop je niet kunt. Voorkeur ochtend/middag/avond. **Gegeven
 ### 8.8 Mijn team (teamcoördinator)
 Leden en resterende verplichting, komende wedstrijden, teamdiensten, lid inschrijven op een open persoonlijke plek.
 
-### 8.9 Beheer (barcommissie / bestuur)
+### 8.9 Beheer (barcommissie / admin)
 
 | Tab | Functie |
 |-----|---------|
 | Personen | Uitnodigen, rol, verplichting, team, deactiveren, CSV-import, wis contact (AVG) |
 | Diensten | Handmatig / historisch invoeren, no-show |
 | Planning | Voorstel, publiceren, mailen, verplicht vullen, officieel, herinneringen |
+| Ruilen | Ruilverzoeken goedkeuren of afwijzen |
 | Dienstregels | Dagen, tijden, aantallen, voorwaarden |
 | Jaarplanning | Klaverjas, toernooi, enz. |
 | Teams | Coördinator, wedstrijdduur, teamdienst-functies |

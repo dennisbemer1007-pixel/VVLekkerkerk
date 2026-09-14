@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireRole } from '../lib/auth.js';
+import { ADMIN_ROLES } from '../lib/roles.js';
 import {
   getMailSettings,
   publicMailSettings,
@@ -12,7 +13,7 @@ import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
 
 const router = Router();
-const ADMIN = ['Barcommissie', 'Bestuur', 'Coördinator'];
+const ADMIN = ADMIN_ROLES;
 
 /** Status voor iedereen die mag uitnodigen (zodat UI weet of mail aanstaat) */
 router.get(

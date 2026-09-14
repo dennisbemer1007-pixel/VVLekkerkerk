@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
-import { useAuth } from '../context/AuthContext.jsx';
+import { homePathForUser, useAuth } from '../context/AuthContext.jsx';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Uitnodiging() {
@@ -42,7 +42,7 @@ export default function Uitnodiging() {
     try {
       const person = await acceptInvite(token, { password, name });
       setDone(true);
-      setTimeout(() => navigate('/', { replace: true }), 1500);
+      setTimeout(() => navigate(homePathForUser(person), { replace: true }), 1500);
       return person;
     } catch (err) {
       setError(err.message);
@@ -74,7 +74,7 @@ export default function Uitnodiging() {
       <div className="mx-auto max-w-md space-y-4 text-center">
         <h1 className="page-title">Welkom!</h1>
         <p className="vvl-card text-sm">
-          Je account is aangemaakt. Je wordt doorgestuurd naar het dashboard…
+          Je account is aangemaakt. Je wordt doorgestuurd…
         </p>
       </div>
     );

@@ -51,15 +51,22 @@ export async function ensureTeamFunctions() {
 }
 
 export async function migrateLegacyFoChoices() {
-  const roles = await prisma.person.updateMany({
+  const coordinators = await prisma.person.updateMany({
     where: { role: 'Coördinator' },
     data: { role: 'Barcommissie' },
+  });
+  const bestuur = await prisma.person.updateMany({
+    where: { role: 'Bestuur' },
+    data: { role: 'Admin' },
   });
   const obligations = await prisma.person.updateMany({
     where: { obligation: 'HALF' },
     data: { obligation: 'FULL' },
   });
-  return { roles: roles.count, obligations: obligations.count };
+  return {
+    roles: coordinators.count + bestuur.count,
+    obligations: obligations.count,
+  };
 }
 
 export async function purgeExpiredSessions() {

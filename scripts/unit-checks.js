@@ -9,6 +9,7 @@ import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
 import { seasonLabelForDate, nextSeasonLabel } from '../src/backend/lib/season.js';
 import { parsePersonCsv, validatePersonRows } from '../src/backend/lib/csvPersons.js';
 import { dutyReminderEmail } from '../src/backend/lib/reminders.js';
+import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam } from '../src/backend/lib/youthTeams.js';
 import {
   underQuota,
@@ -21,6 +22,7 @@ import { isCanonicalPersonNumber } from '../src/backend/lib/personNumber.js';
 import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
 import { swapBlockers } from '../src/backend/lib/swapRules.js';
 import { normalizeRole } from '../src/backend/lib/appUrl.js';
+import { canAccess, canonicalAccessRole } from '../src/backend/lib/roles.js';
 import { evaluateRule } from '../src/backend/lib/serviceRuleLogic.js';
 import { matchBlockRange, serviceOutsideMatchBlocks } from '../src/backend/lib/matchBlocks.js';
 import { defaultTeamFunctions, isO13FirstTeam } from '../src/backend/lib/teamFunctions.js';
@@ -290,6 +292,18 @@ assert('Lekkerkerk 3 alleen beschikbaarheid', defaultTeamFunctions('Lekkerkerk 3
 assert('person number 7 digits', isCanonicalPersonNumber('4829103') === true);
 assert('person number rejects VVL prefix', isCanonicalPersonNumber('VVL-00001') === false);
 assert('role Coördinator becomes Barcommissie', normalizeRole('Coördinator') === 'Barcommissie');
+assert('role Bestuur becomes Admin', normalizeRole('Bestuur') === 'Admin');
+assert('canonical Bestuur is Admin', canonicalAccessRole('Bestuur') === 'Admin');
+assert('vrijwilliger geen dashboard', canAccess('Vrijwilliger', 'dashboard') === false);
+assert('vrijwilliger wel inschrijven', canAccess('Vrijwilliger', 'inschrijven') === true);
+assert('vrijwilliger geen planning', canAccess('Vrijwilliger', 'planning') === false);
+assert('barcommissie geen inschrijven', canAccess('Barcommissie', 'inschrijven') === false);
+assert('barcommissie geen ruilen-tab', canAccess('Barcommissie', 'ruilen') === false);
+assert('barcommissie geen voorkeuren', canAccess('Barcommissie', 'voorkeuren') === false);
+assert('barcommissie wel beheer', canAccess('Barcommissie', 'beheer') === true);
+assert('admin geen inschrijven', canAccess('Admin', 'inschrijven') === false);
+assert('admin wel beheer', canAccess('Admin', 'beheer') === true);
+assert('teamco wel inschrijven', canAccess('Teamcoördinator', 'inschrijven') === true);
 
 const makeupFirst = compareFillCandidates(
   { person: { makeupDue: 1, obligation: 'FULL', personNumber: '2000000' }, counts: { countYear: 4 }, lastPersonalAt: new Date('2026-06-01') },
@@ -422,6 +436,17 @@ const reminder = dutyReminderEmail({
   appUrl: 'https://example.test',
 });
 assert('reminder subject has date', reminder.subject.includes('14 september'));
+
+const swapMail = swapCommitteeEmailContent({
+  name: 'Mark',
+  requesterName: 'Lisa',
+  counterpartyName: 'Tom',
+  fromLabel: 'za 19 sep · 12:00 - 16:30 · bar',
+  toLabel: 'zo 20 sep · 12:00 - 15:00 · keuken',
+  appUrl: 'https://example.test',
+});
+assert('ruilmail naar barcommissie', swapMail.subject.includes('goedkeuring') && swapMail.text.includes('barcommissie'));
+assert('ruilmail link naar beheer', swapMail.text.includes('/beheer?tab=ruilen'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

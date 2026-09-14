@@ -121,13 +121,13 @@ doc.y = 118;
 p('Applicatie: VVL Planning App');
 p('Organisatie: V.V. Lekkerkerk');
 p(
-  'Doel: Digitaal plannen van bardiensten en keukendiensten voor vrijwilligers, teamcoördinatoren en bestuur.',
+  'Doel: Digitaal plannen van bardiensten en keukendiensten voor vrijwilligers, teamcoördinatoren, barcommissie en admin.',
 );
 
 h1('1. Wat doet de app?');
 p('De app vervangt een papieren of ad-hoc planning door een overzichtelijke tool waarin:');
 bullet([
-  'bestuur / coordinatoren diensten plannen en mensen uitnodigen;',
+  'barcommissie / admin diensten plannen en mensen uitnodigen;',
   'vrijwilligers zichzelf inschrijven op open diensten;',
   'teamcoordinatoren ouders/leden uitnodigen en namens hun team inschrijven;',
   'iedereen een planning van 6 weken kan bekijken en als PDF kan printen voor in de kantine.',
@@ -140,9 +140,9 @@ h1('2. Voor wie? (rollen)');
 table(
   ['Rol', 'Wat mag je?'],
   [
-    ['Vrijwilliger', 'Dashboard, inschrijven, planning & PDF'],
-    ['Teamcoordinator', 'Zelfde + teamleden inschrijven + ouders uitnodigen'],
-    ['Coordinator / Bestuur', 'Alles, inclusief Beheer'],
+    ['Vrijwilliger', 'Inschrijven, ruilen, voorkeuren'],
+    ['Teamcoordinator', 'Dashboard + inschrijven + teamleden + ouders uitnodigen'],
+    ['Barcommissie / Admin', 'Dashboard, planning, wedstrijden, Beheer'],
   ],
 );
 p(
@@ -179,7 +179,7 @@ bullet([
   'Zelfde filters als bij Inschrijven.',
   'Knop PDF (6 weken) voor printbare kantineversie.',
 ]);
-h2('4.5 Beheer (coordinator / bestuur)');
+h2('4.5 Beheer (barcommissie / admin)');
 table(
   ['Tab', 'Functie'],
   [
@@ -240,7 +240,7 @@ table(
 
 h1('9. Typische werkdag');
 numbered([
-  'Bestuur plant diensten (handmatig of via thuiswedstrijden).',
+  'Admin / barcommissie plant diensten (handmatig of via thuiswedstrijden).',
   'Nodigt nieuwe vrijwilligers uit (mail of WhatsApp-link).',
   'Vrijwilligers loggen in en schrijven zich in.',
   'Teamcoordinator vult open plekken namens ouders.',

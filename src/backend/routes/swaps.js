@@ -5,6 +5,8 @@ import { isAdminRole, publicPersonBrief } from '../lib/roles.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { blocksForPerson } from '../lib/matchBlocks.js';
 import { writeAudit } from '../lib/audit.js';
+import { notifyBarcommissieOfPendingSwap } from '../lib/mail.js';
+import { resolvePublicAppUrl } from '../lib/appUrl.js';
 import { PENDING_SWAP_STATUSES, swapBlockers } from '../lib/swapRules.js';
 import { pendingForEnrollment, pendingForPerson } from '../lib/swapQueries.js';
 
@@ -41,6 +43,18 @@ function mapEnrollment(enrollment) {
         }
       : undefined,
   };
+}
+
+function serviceText(enrollment) {
+  const service = enrollment?.service;
+  if (!service) return 'onbekende dienst';
+  const date = new Date(service.date).toLocaleDateString('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  const type = service.type === 'KITCHEN' ? 'keuken' : 'bar';
+  return `${date} · ${service.time} · ${type}`;
 }
 
 function mapSwap(swap) {
@@ -255,6 +269,22 @@ router.post(
         entity: 'SwapRequest',
         entityId: swap.id,
         detail: swap.counterparty.name,
+      });
+
+      let appUrl = '';
+      try {
+        appUrl = resolvePublicAppUrl();
+      } catch {
+        appUrl = '';
+      }
+      notifyBarcommissieOfPendingSwap({
+        requesterName: updated.requester?.name || 'Onbekend',
+        counterpartyName: updated.counterparty?.name || 'Onbekend',
+        fromLabel: serviceText(updated.fromEnrollment),
+        toLabel: serviceText(updated.toEnrollment),
+        appUrl,
+      }).catch((err) => {
+        console.error('[Mail] Ruil-notificatie barcommissie mislukt:', err.message);
       });
 
       res.json(mapSwap(updated));

@@ -5,7 +5,7 @@ import { defaultTeamFunctions } from './teamFunctions.js';
 
 export const DEMO_PASSWORD = 'demo123';
 
-/** Alle inlogbare demo-vrijwilligers / commissie (niet de bestuur-admin). */
+/** Alle inlogbare demo-vrijwilligers / commissie (niet de admin). */
 export const DEMO_PEOPLE = [
   {
     email: 'mark@vvl.demo',
@@ -108,7 +108,7 @@ export function publicDemoAccountList() {
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@vvl.local').toLowerCase();
   return [
     {
-      role: 'Bestuur',
+      role: 'Admin',
       name: 'Beheerder',
       email: adminEmail,
       password: adminDemoPassword(),

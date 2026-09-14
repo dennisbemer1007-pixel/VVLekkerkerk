@@ -24,8 +24,7 @@ function personName(enrollment) {
 }
 
 export default function Ruilen() {
-  const { user, can } = useAuth();
-  const isAdmin = can('beheer');
+  const { user } = useAuth();
   const [mine, setMine] = useState([]);
   const [others, setOthers] = useState([]);
   const [swaps, setSwaps] = useState([]);
@@ -49,10 +48,6 @@ export default function Ruilen() {
   const pendingMine = useMemo(
     () => swaps.filter((s) => ['PENDING_PEER', 'PENDING_COMMITTEE'].includes(s.status)),
     [swaps],
-  );
-  const committeeQueue = useMemo(
-    () => (isAdmin ? swaps.filter((s) => s.status === 'PENDING_COMMITTEE') : []),
-    [swaps, isAdmin],
   );
 
   const run = async (fn, success) => {
@@ -139,48 +134,6 @@ export default function Ruilen() {
           <p className="text-sm text-gray-600">Je hebt geen komende persoonlijke dienst om te ruilen.</p>
         ) : null}
       </form>
-
-      {isAdmin && committeeQueue.length ? (
-        <section className="space-y-3">
-          <h2 className="font-heading text-lg font-black uppercase">Ter goedkeuring</h2>
-          {committeeQueue.map((swap) => (
-            <article key={swap.id} className="vvl-card space-y-2">
-              <p className="text-sm font-semibold">
-                {swap.requester?.name} ↔ {swap.counterparty?.name}
-              </p>
-              <p className="text-sm text-gray-700">
-                {swap.requester?.name}: {serviceLabel(swap.fromEnrollment)}
-              </p>
-              <p className="text-sm text-gray-700">
-                {swap.counterparty?.name}: {serviceLabel(swap.toEnrollment)}
-              </p>
-              {swap.matchBlockWarning ? (
-                <p className="text-sm text-amber-800">Let op: deze ruil raakt een wedstrijdblokkade.</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="vvl-btn text-xs"
-                  disabled={busy}
-                  onClick={() =>
-                    run((ignoreMatchBlock) => api.approveSwap(swap.id, { ignoreMatchBlock }), 'Ruil goedgekeurd.')
-                  }
-                >
-                  Goedkeuren
-                </button>
-                <button
-                  type="button"
-                  className="vvl-btn-outline text-xs"
-                  disabled={busy}
-                  onClick={() => run(() => api.rejectSwap(swap.id), 'Ruil afgewezen.')}
-                >
-                  Afwijzen
-                </button>
-              </div>
-            </article>
-          ))}
-        </section>
-      ) : null}
 
       <section className="space-y-3">
         <h2 className="font-heading text-lg font-black uppercase">Jouw verzoeken</h2>

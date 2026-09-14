@@ -10,36 +10,42 @@ import {
 export const ROLE_ACCESS = {
   Vrijwilliger: {
     label: 'Vrijwilliger',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen'],
-    description: 'Zelf inschrijven op open diensten, ruilen, voorkeuren instellen en de planning bekijken.',
+    can: ['inschrijven', 'ruilen', 'voorkeuren'],
+    description: 'Zelf inschrijven op open diensten, ruilen en voorkeuren instellen.',
   },
   Teamcoördinator: {
     label: 'Teamcoördinator',
     can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'teams'],
-    description: 'Zoals vrijwilliger, plus ouders uitnodigen en voor je team inschrijven.',
+    description:
+      'Inschrijven, ruilen en voorkeuren, plus dashboard, planning, ouders uitnodigen en voor je team inschrijven.',
   },
   Barcommissie: {
     label: 'Barcommissie',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'beheer'],
-    description: 'Volledig beheer: personen uitnodigen, diensten, teams, wedstrijden en ruilverzoeken.',
+    can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
+    description:
+      'Clubplanning en beheer. Ruilverzoeken keur je goed via Beheer. Zelf inschrijven, ruilen en voorkeuren doen vrijwilligers.',
   },
-  Bestuur: {
-    label: 'Bestuur',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'beheer'],
-    description: 'Volledig beheer, inclusief uitnodigingen, PDF-planning en ruilverzoeken.',
+  Admin: {
+    label: 'Admin',
+    can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
+    description:
+      'Volledig beheer, inclusief uitnodigingen, PDF-planning en ruilverzoeken via Beheer.',
   },
 };
 
-export const ADMIN_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator'];
+/** Rollen met beheer-rechten, inclusief legacy-aliassen tot migratie klaar is. */
+export const ADMIN_ROLES = ['Barcommissie', 'Admin', 'Bestuur', 'Coördinator'];
 
 export function canonicalAccessRole(role) {
   if (role === 'Coördinator') return 'Barcommissie';
+  if (role === 'Bestuur') return 'Admin';
   if (ROLE_ACCESS[role]) return role;
   return 'Vrijwilliger';
 }
 
 export function isAdminRole(role) {
-  return ADMIN_ROLES.includes(role);
+  const r = canonicalAccessRole(role);
+  return r === 'Barcommissie' || r === 'Admin';
 }
 
 export function accessForRole(role) {
@@ -52,7 +58,7 @@ export function canAccess(role, feature) {
 
 /**
  * Publieke weergave van een persoon.
- * E-mail en telefoon alleen voor beheerders (Barcommissie / Bestuur).
+ * E-mail en telefoon alleen voor beheerders (Barcommissie / Admin).
  * Secrets (wachtwoord-hash, tokens) worden altijd weggelaten.
  */
 export function publicPerson(person, options = {}) {

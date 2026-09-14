@@ -4,7 +4,7 @@
  */
 import prisma from '../src/backend/lib/prisma.js';
 
-const VALID_ROLES = new Set(['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Bestuur']);
+const VALID_ROLES = new Set(['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin']);
 
 async function main() {
   const report = { fixed: [], warnings: [], counts: {} };
@@ -149,6 +149,14 @@ async function main() {
         data: { role: 'Barcommissie' },
       });
       report.fixed.push(`Persoon #${p.id}: rol Coördinator → Barcommissie`);
+      continue;
+    }
+    if (p.role === 'Bestuur') {
+      await prisma.person.update({
+        where: { id: p.id },
+        data: { role: 'Admin' },
+      });
+      report.fixed.push(`Persoon #${p.id}: rol Bestuur → Admin`);
       continue;
     }
     if (!VALID_ROLES.has(p.role)) {

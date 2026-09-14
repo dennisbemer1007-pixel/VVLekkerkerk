@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma from './prisma.js';
-import { publicPerson } from './roles.js';
+import { canonicalAccessRole, publicPerson } from './roles.js';
 
 const SESSION_DAYS = 30;
 const INVITE_DAYS = 14;
@@ -102,7 +102,9 @@ export function requireAuth(handler) {
 export function requireRole(...roles) {
   return (handler) =>
     requireAuth(async (req, res, next) => {
-      if (!roles.includes(req.person.role)) {
+      const personRole = canonicalAccessRole(req.person.role);
+      const allowed = new Set(roles.map(canonicalAccessRole));
+      if (!allowed.has(personRole)) {
         return res.status(403).json({ error: 'Je hebt hier geen toegang toe' });
       }
       return handler(req, res, next);

@@ -25,13 +25,21 @@ export async function ensureAdmin() {
   }
 
   const existing = await prisma.person.findUnique({ where: { email } });
-  if (existing?.passwordHash) return existing;
+  if (existing?.passwordHash) {
+    if (existing.role === 'Bestuur') {
+      return prisma.person.update({
+        where: { id: existing.id },
+        data: { role: 'Admin' },
+      });
+    }
+    return existing;
+  }
 
   if (existing) {
     return prisma.person.update({
       where: { id: existing.id },
       data: {
-        role: 'Bestuur',
+        role: 'Admin',
         passwordHash: await hashPassword(password),
         accountCreatedAt: new Date(),
         inviteToken: null,
@@ -45,7 +53,7 @@ export async function ensureAdmin() {
     data: {
       name: 'Beheerder',
       email,
-      role: 'Bestuur',
+      role: 'Admin',
       passwordHash: await hashPassword(password),
       accountCreatedAt: new Date(),
       active: true,

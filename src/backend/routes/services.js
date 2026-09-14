@@ -38,7 +38,7 @@ router.get(
     try {
       const { where, filter, personId } = buildServiceWhere(req.query);
       // Alleen beheerders mogen concepten zien
-      if (req.query.includeDraft === 'true' && !ADMIN_ROLES.includes(req.person.role)) {
+      if (req.query.includeDraft === 'true' && !isAdminRole(req.person.role)) {
         where.draft = false;
       }
 

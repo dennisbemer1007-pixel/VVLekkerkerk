@@ -78,6 +78,24 @@ export default function Dashboard() {
       {can('beheer') && summary ? (
         <section className="space-y-3">
           <h2 className="font-heading text-xl font-black uppercase">Wat is nog niet geregeld?</h2>
+          <Link
+            to="/beheer?tab=ruilen"
+            className={`vvl-card flex items-center justify-between border-l-4 transition hover:shadow-md ${
+              stats?.pendingSwapCount
+                ? 'border-l-vvl-accent'
+                : 'border-l-gray-400'
+            }`}
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase text-vvl-accent">
+                Ruilverzoeken voor de barcommissie
+              </span>
+              <span className="text-sm text-gray-600">
+                Na akkoord van beide personen keur je goed via Beheer → Ruilen
+              </span>
+            </span>
+            <span className="font-heading text-3xl font-black">{stats?.pendingSwapCount ?? 0}</span>
+          </Link>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
@@ -205,7 +223,11 @@ export default function Dashboard() {
       ) : null}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Actieve personen" value={stats?.personCount ?? '—'} to="/beheer?tab=personen" />
+        <StatCard
+          title="Actieve personen"
+          value={stats?.personCount ?? '—'}
+          to={can('beheer') ? '/beheer?tab=personen' : '/planning'}
+        />
         <StatCard title="Actieve diensten" value={stats?.serviceCount ?? '—'} to="/planning" />
         <StatCard
           title="Bezettingsgraad"
@@ -213,7 +235,11 @@ export default function Dashboard() {
           subtitle="Van benodigde plekken ingevuld"
           to="/planning"
         />
-        <StatCard title="Inschrijvingen" value={stats?.enrollmentCount ?? '—'} to="/inschrijven" />
+        <StatCard
+          title="Inschrijvingen"
+          value={stats?.enrollmentCount ?? '—'}
+          to={can('inschrijven') ? '/inschrijven' : '/planning'}
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -225,14 +251,14 @@ export default function Dashboard() {
           <span className="text-2xl font-black">{stats?.full ?? '—'}</span>
         </Link>
         <Link
-          to="/inschrijven?filter=open"
+          to={can('inschrijven') ? '/inschrijven?filter=open' : '/planning'}
           className="vvl-card flex items-center justify-between border-l-4 border-l-amber-500 transition hover:shadow-md"
         >
           <span className="font-bold">Nog 1 nodig</span>
           <span className="text-2xl font-black">{stats?.almost ?? '—'}</span>
         </Link>
         <Link
-          to="/inschrijven?filter=open"
+          to={can('inschrijven') ? '/inschrijven?filter=open' : '/planning'}
           className="vvl-card flex items-center justify-between border-l-4 border-l-red-500 transition hover:shadow-md"
         >
           <span className="font-bold">Open</span>

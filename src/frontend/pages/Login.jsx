@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageTitle } from '../components/PageHelp.jsx';
-import { useAuth } from '../context/AuthContext.jsx';
+import { homePathForUser, useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Login() {
-  const { login, isLoggedIn, loading: authLoading } = useAuth();
+  const { login, isLoggedIn, loading: authLoading, homePath } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,8 +15,8 @@ export default function Login() {
   const [demoAccounts, setDemoAccounts] = useState([]);
 
   useEffect(() => {
-    if (!authLoading && isLoggedIn) navigate('/', { replace: true });
-  }, [authLoading, isLoggedIn, navigate]);
+    if (!authLoading && isLoggedIn) navigate(homePath, { replace: true });
+  }, [authLoading, isLoggedIn, navigate, homePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,8 +39,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(nextEmail, nextPassword);
-      navigate('/', { replace: true });
+      const person = await login(nextEmail, nextPassword);
+      navigate(homePathForUser(person), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -7,7 +7,7 @@ export const PAGE_HELP = {
     actions: [
       'Klik op een controlekaart om de concrete lijst te zien',
       'Open diensten en verplichtingen blijven aparte overzichten',
-      'Ga via de knoppen naar inschrijven, planning of beheer',
+      'Ruilverzoeken na wederzijds akkoord keur je goed via Beheer → Ruilen',
     ],
   },
   inschrijven: {
@@ -50,13 +50,22 @@ export const PAGE_HELP = {
   },
   beheer: {
     purpose:
-      'Volledig beheer van vrijwilligers, diensten, teams, wedstrijden en de planningsronde. Alleen voor barcommissie en bestuur.',
+      'Volledig beheer van vrijwilligers, diensten, teams, wedstrijden en de planningsronde. Alleen voor barcommissie en admin.',
     actions: [
       'Personen uitnodigen en rollen/verplichtingen instellen',
       'Diensten toevoegen of historiek nabouwen',
       'Concept-planning maken, publiceren en open plekken vullen',
       'Wedstrijden bekijken en importeren, e-mailserver instellen',
       'Club: seizoenswisseling, AVG-opschonen en hostingnotitie',
+    ],
+  },
+  beheerRuilen: {
+    purpose:
+      'Goedkeuren of afwijzen van ruilverzoeken nadat beide personen akkoord zijn. Vrijwilligers sturen verzoeken via hun eigen Ruilen-tabblad.',
+    actions: [
+      'Bekijk openstaande verzoeken ter goedkeuring',
+      'Keur goed of wijs af',
+      'Let op een eventuele wedstrijdblokkade (bewust overrulen mag)',
     ],
   },
   beheerPersonen: {
@@ -212,6 +221,7 @@ export function helpForBeheerTab(tab, mode = 'full') {
     personen: PAGE_HELP.beheerPersonen,
     diensten: PAGE_HELP.beheerDiensten,
     planning: PAGE_HELP.beheerPlanning,
+    ruilen: PAGE_HELP.beheerRuilen,
     regels: PAGE_HELP.beheerRegels,
     activiteiten: PAGE_HELP.beheerActiviteiten,
     teams: PAGE_HELP.beheerTeams,

@@ -49,7 +49,7 @@ router.get(
       else open += 1;
     }
 
-    const [personCount, serviceCount, enrollmentCount, teamCount, matchCount, draftCount] =
+    const [personCount, serviceCount, enrollmentCount, teamCount, matchCount, draftCount, pendingSwapCount] =
       await Promise.all([
         prisma.person.count({ where: { active: true } }),
         prisma.service.count({ where: { active: true, draft: false } }),
@@ -57,6 +57,7 @@ router.get(
         prisma.team.count(),
         prisma.match.count(),
         prisma.service.count({ where: { active: true, draft: true } }),
+        prisma.swapRequest.count({ where: { status: 'PENDING_COMMITTEE' } }),
       ]);
 
     const occupancyRate =
@@ -152,6 +153,7 @@ router.get(
             notSelfEnrolled,
             planningRound: round,
             controls,
+            pendingSwapCount,
           }
         : {}),
     });

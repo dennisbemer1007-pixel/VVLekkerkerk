@@ -9,11 +9,13 @@ import { helpForBeheerTab } from '../utils/pageHelp.js';
 
 import DienstregelsBeheer from './DienstregelsBeheer.jsx';
 import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
+import RuilBeheer from './RuilBeheer.jsx';
 
 const TABS = [
   { id: 'personen', label: 'Personen' },
   { id: 'diensten', label: 'Diensten' },
   { id: 'planning', label: 'Planning' },
+  { id: 'ruilen', label: 'Ruilen' },
   { id: 'regels', label: 'Dienstregels' },
   { id: 'activiteiten', label: 'Jaarplanning' },
   { id: 'teams', label: 'Teams' },
@@ -21,7 +23,7 @@ const TABS = [
   { id: 'club', label: 'Club' },
 ];
 
-const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Bestuur'];
+const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
 
 const OBLIGATIONS = [
   { value: 'NONE', label: 'Geen (vrijwilliger)' },
@@ -74,7 +76,7 @@ export default function Beheer({ mode = 'full' }) {
             ? 'Schrijf ouders of teamleden in voor een bardienst.'
             : mode === 'invite'
               ? 'Nodig ouders uit per e-mail. Zij maken zelf een account via de link.'
-              : 'Nodig mensen uit, maak een concept-planning uit wedstrijden, beheer diensten en teams.'}
+              : 'Nodig mensen uit, maak een concept-planning uit wedstrijden, beheer diensten en keur ruilverzoeken goed.'}
         </p>
       </header>
 
@@ -98,6 +100,7 @@ export default function Beheer({ mode = 'full' }) {
       {tab === 'personen' ? <PersonenBeheer /> : null}
       {tab === 'diensten' ? <DienstenBeheer /> : null}
       {tab === 'planning' ? <PlanningBeheer /> : null}
+      {tab === 'ruilen' ? <RuilBeheer /> : null}
       {tab === 'regels' ? <DienstregelsBeheer /> : null}
       {tab === 'activiteiten' ? <ActiviteitenBeheer /> : null}
       {tab === 'teams' ? <TeamsBeheer /> : null}
@@ -245,7 +248,7 @@ function PersonenBeheer() {
           {editId ? 'Persoon bewerken' : 'Uitnodigen per e-mail'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Bestuur).
+          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin).
         </p>
 
         <div>

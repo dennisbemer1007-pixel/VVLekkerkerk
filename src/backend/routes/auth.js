@@ -11,7 +11,7 @@ import {
   requireRole,
   passwordMatches,
 } from '../lib/auth.js';
-import { accessForRole } from '../lib/roles.js';
+import { accessForRole, ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
 import { normalizeObligation } from '../lib/obligation.js';
 import { trySendInviteEmail, trySendPasswordResetEmail } from '../lib/mail.js';
 import { passwordResetLink, resetExpiry } from '../lib/passwordReset.js';
@@ -22,8 +22,7 @@ import { publicDemoAccountList } from '../lib/demoAccounts.js';
 
 const router = Router();
 
-const ADMIN_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator'];
-const INVITE_ROLES = ['Barcommissie', 'Bestuur', 'Coördinator', 'Teamcoördinator'];
+const INVITE_ROLES = [...ADMIN_ROLES, 'Teamcoördinator'];
 
 function safeAppUrl() {
   try {
@@ -291,7 +290,7 @@ router.post(
           return res.status(403).json({ error: 'Je mag alleen voor je eigen team uitnodigen' });
         }
         chosenTeamId = req.person.teamId;
-      } else if (!ADMIN_ROLES.includes(req.person.role)) {
+      } else if (!isAdminRole(req.person.role)) {
         return res.status(403).json({ error: 'Geen toegang' });
       }
 

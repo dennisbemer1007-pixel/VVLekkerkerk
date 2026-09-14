@@ -15,7 +15,7 @@ async function main() {
   await ensureDemoAccounts();
 
   console.log('Accounts per rol:\n');
-  console.log(`  Bestuur:          ${admin.email} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
+  console.log(`  Admin:            ${admin.email} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
 
   for (const account of DEMO_PEOPLE) {
     const person = await prisma.person.update({

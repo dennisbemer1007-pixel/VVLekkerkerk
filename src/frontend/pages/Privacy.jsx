@@ -34,7 +34,7 @@ export default function Privacy() {
           </p>
           <p>
             <strong>Wie ziet wat:</strong> de clubbrede personenlijst (inclusief contact) is alleen
-            voor barcommissie en bestuur. Teamcoördinatoren zien namen van hun teams. Vrijwilligers
+            voor barcommissie en admin. Teamcoördinatoren zien namen van hun teams. Vrijwilligers
             zien namen op het rooster van diensten waarop ze kijken, niet iemands e-mail of
             telefoon.
           </p>

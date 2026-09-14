@@ -214,7 +214,7 @@ async function main() {
   console.log('\nMockdata klaar:');
   console.log(counts);
   console.log('\nInloggen (wachtwoord voor demo-accounts: demo123)');
-  console.log('  Bestuur:          admin@vvl.local / admin123');
+  console.log('  Admin:            admin@vvl.local / admin123');
   console.log('  Barcommissie:     mark@vvl.demo / demo123');
   console.log('  Teamcoördinator:  sandra@vvl.demo / demo123');
   console.log('  Vrijwilliger:     lisa@vvl.demo / demo123');

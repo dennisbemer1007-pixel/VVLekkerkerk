@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import ApiStatusBanner from './components/ApiStatusBanner.jsx';
 import Layout from './components/Layout.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -17,7 +17,7 @@ import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
 import Wedstrijden from './pages/Wedstrijden.jsx';
 
 function Protected({ children, feature }) {
-  const { isLoggedIn, loading, can } = useAuth();
+  const { isLoggedIn, loading, can, homePath } = useAuth();
   if (loading) {
     return <p className="text-center text-sm text-gray-600">Laden…</p>;
   }
@@ -26,16 +26,27 @@ function Protected({ children, feature }) {
     return (
       <div className="vvl-card space-y-2">
         <h1 className="font-heading text-xl font-black uppercase">Geen toegang</h1>
-        <p className="text-sm text-gray-700">
-          Met jouw rol heb je hier geen recht op. Ga terug naar het dashboard.
-        </p>
-        <a href="/" className="vvl-btn-outline inline-flex text-xs">
-          Naar dashboard
-        </a>
+        <p className="text-sm text-gray-700">Met jouw rol heb je hier geen recht op.</p>
+        <Link to={homePath} className="vvl-btn-outline inline-flex text-xs">
+          Terug
+        </Link>
       </div>
     );
   }
   return children;
+}
+
+function RoleHome() {
+  const { isLoggedIn, loading, can } = useAuth();
+  if (loading) {
+    return <p className="text-center text-sm text-gray-600">Laden…</p>;
+  }
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (can('dashboard')) return <Dashboard />;
+  if (can('inschrijven')) return <Navigate to="/inschrijven" replace />;
+  if (can('beheer')) return <Navigate to="/beheer" replace />;
+  if (can('voorkeuren')) return <Navigate to="/voorkeuren" replace />;
+  return <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -56,7 +67,7 @@ export default function App() {
                 path="/"
                 element={
                   <Protected>
-                    <Dashboard />
+                    <RoleHome />
                   </Protected>
                 }
               />

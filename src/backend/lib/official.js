@@ -2,7 +2,7 @@ import prisma from './prisma.js';
 import { addWeeks, endOfDay, startOfDay } from './dates.js';
 
 export const OFFICIAL_DECISION =
-  'Na “officieel maken” is de 6-wekenplanning vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/bestuur mag daarna nog inschrijven of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.';
+  'Na “officieel maken” is de 6-wekenplanning vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.';
 
 export async function markPlanningOfficial({ weeks = 6 } = {}) {
   const from = startOfDay(new Date());

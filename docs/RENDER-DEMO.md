@@ -31,7 +31,7 @@ Klikbare accounts staan op het loginscherm (`SEED_DEMO=true`).
 
 | Rol | E-mail | Wachtwoord |
 |-----|--------|------------|
-| Bestuur | `admin@vvl.local` | `demo-test-2026` |
+| Admin | `admin@vvl.local` | `demo-test-2026` |
 | Barcommissie | `mark@vvl.demo` | `demo123` |
 | Teamcoördinator | `sandra@vvl.demo` | `demo123` |
 | Vrijwilliger | `lisa@vvl.demo` (en tom, fatima, peter, anneke, kevin, noa, erik) | `demo123` |

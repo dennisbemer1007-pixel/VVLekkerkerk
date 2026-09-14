@@ -4,8 +4,13 @@ Keuzes bij Functioneel Ontwerp Planning Bar- en Keukendiensten 4.0. Wat hier **g
 
 ## Vastgelegd en gebouwd
 
-### Rolnaam: Barcommissie
-De access-rol heet **Barcommissie** (niet Coördinator). Bestuur blijft naast deze rol bestaan. Teamcoördinator is ongewijzigd (teamrol). Bestaande accounts met rol `Coördinator` worden bij opstarten gemigreerd.
+### Rolnaam: Barcommissie en Admin
+De access-rol heet **Barcommissie** (niet Coördinator). De voormalige rol **Bestuur** heet **Admin**. Teamcoördinator is ongewijzigd (teamrol). Bestaande accounts met rol `Coördinator` of `Bestuur` worden bij opstarten gemigreerd.
+
+### Tabbladen per rol
+- **Vrijwilliger:** Inschrijven, Ruilen, Voorkeuren (geen Dashboard, Planning, Wedstrijden).
+- **Teamcoördinator:** Dashboard, Inschrijven, Ruilen, Planning, Wedstrijden, Voorkeuren, Mijn team / Uitnodigen.
+- **Barcommissie** en **Admin:** Dashboard, Planning, Wedstrijden, Beheer. Geen Inschrijven, Ruilen of Voorkeuren. Ruilverzoeken keuren ze goed via **Beheer → Ruilen**. Anderen inschrijven en voorkeuren van personen blijven via Beheer.
 
 ### Half-verplicht eruit
 Verplichting `HALF` (3×/jaar) bestaat niet meer. Bestaande `HALF` wordt `FULL` (1×/6 weken). Geldige waarden: `NONE`, `FULL`, `VR18`.
@@ -21,7 +26,7 @@ Bron: FO §53–56 / §89; details later aanscherpen.
 
 - Alleen twee bestaande **persoonlijke** inschrijvingen; er ontstaat nooit een open plek.
 - Teamdiensten vallen buiten deze flow (dat gaat via de teamcoördinator).
-- Beide personen moeten akkoord geven; daarna keurt de **barcommissie** goed.
+- Beide personen moeten akkoord geven; daarna keurt de **barcommissie** goed (e-mail naar barcommissie als SMTP aanstaat; anders Admin als fallback). Goedkeuren in **Beheer → Ruilen**, zichtbaar op het dashboard.
 - Alleen toekomstige, gepubliceerde diensten. No-show kan niet. Niemand mag dubbel op dezelfde dienst komen.
 - Maximaal één openstaand ruilverzoek per persoon.
 - Wedstrijdblokkade blokkeert goedkeuring tot de barcommissie bewust overrulet (`ignoreMatchBlock`), zelfde patroon als inschrijven.
@@ -47,7 +52,7 @@ Teamdiensten en no-shows tellen niet mee. Geen extra straf op oude historie buit
 E-mail **1 dag voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen push, geen WhatsApp. `Enrollment.remindedAt` voorkomt dubbele mails. De server draait dit elk uur en bij `/api/health` (max. eens per 50 minuten). Barcommissie kan **Herinneringen morgen** forceren. Productie mag niet “in slaap” vallen, anders mist de cron.
 
 ### Publiceren als officieel
-Na **Maak officieel** worden gepubliceerde diensten in het 6-wekenvenster vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/bestuur mag daarna in- of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.
+Na **Maak officieel** worden gepubliceerde diensten in het 6-wekenvenster vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.
 
 ### Seizoen
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.
@@ -56,7 +61,7 @@ Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert
 CSV `naam;email;telefoon;team;rol;verplichting`. **Maakt geen teams aan**; onbekend team → hele import geweigerd. Bestaand e-mailadres → bijwerken. Optioneel uitnodigingsmail als SMTP aanstaat.
 
 ### Excel-export
-`/api/planning/export.xlsx`: bladen Diensten en Inschrijvingen. Blad Personen alleen voor barcommissie/bestuur.
+`/api/planning/export.xlsx`: bladen Diensten en Inschrijvingen. Blad Personen alleen voor barcommissie/admin.
 
 ### Clubhuisprint
 PDF van de **huidige week**, bar én keuken. Titel “officieel” als de ronde vergrendeld is. De 6-weken-PDF toont eveneens keukenrijen.

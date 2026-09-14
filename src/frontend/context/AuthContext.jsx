@@ -3,6 +3,15 @@ import { api, getToken, setToken } from '../hooks/useApi.js';
 
 const AuthContext = createContext(null);
 
+export function homePathForUser(user) {
+  const features = user?.access?.can || [];
+  if (features.includes('dashboard')) return '/';
+  if (features.includes('inschrijven')) return '/inschrijven';
+  if (features.includes('beheer')) return '/beheer';
+  if (features.includes('voorkeuren')) return '/voorkeuren';
+  return '/';
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +68,8 @@ export function AuthProvider({ children }) {
     return res.person;
   };
 
-  const can = (feature) => Boolean(user?.access?.can?.includes(feature));
+  const can = useCallback((feature) => Boolean(user?.access?.can?.includes(feature)), [user]);
+  const homePath = homePathForUser(user);
 
   const value = useMemo(
     () => ({
@@ -70,10 +80,11 @@ export function AuthProvider({ children }) {
       acceptInvite,
       refresh,
       can,
+      homePath,
       personId: user?.id ?? null,
       isLoggedIn: Boolean(user),
     }),
-    [user, loading, refresh],
+    [user, loading, refresh, can, homePath],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
