@@ -190,7 +190,7 @@ Leden en resterende verplichting, komende wedstrijden, teamdiensten, lid inschri
 |-----|---------|
 | Personen | Uitnodigen, rol, verplichting, team, deactiveren, CSV-import, wis contact (AVG) |
 | Diensten | Handmatig / historisch invoeren, no-show |
-| Planning | Voorstel, publiceren, mailen, verplicht vullen, officieel, herinneringen |
+| Planning | 4 stappen: diensten aanmaken, publiceren, verplicht vullen, officieel + herinneringen |
 | Ruilen | Ruilverzoeken goedkeuren of afwijzen |
 | Dienstregels | Dagen, tijden, aantallen, voorwaarden |
 | Jaarplanning | Klaverjas, toernooi, enz. |
