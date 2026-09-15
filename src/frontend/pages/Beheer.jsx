@@ -1370,16 +1370,18 @@ function PlanningBeheer() {
     DRAFT: 'Concept — nog niet gepubliceerd',
     VOLUNTEER_OPEN: 'Vrijwilligers kunnen inschrijven',
     MANDATORY_OPEN: 'Verplichte fase — automatisch vullen',
-    CLOSED: 'Afgerond',
+    CLOSED: 'Verplicht gevuld — maak nog officieel (stap 4)',
   };
 
-  const isOfficial = Boolean(round?.official);
+  const isOfficial = Boolean(round?.official) || round?.status === 'OFFICIAL';
   const isPublished =
     isOfficial ||
     round?.status === 'VOLUNTEER_OPEN' ||
-    round?.status === 'MANDATORY_OPEN';
+    round?.status === 'MANDATORY_OPEN' ||
+    round?.status === 'CLOSED';
   const hasServices = drafts.length > 0 || isPublished || isOfficial;
-  const step3Done = isOfficial || (isPublished && publishedOpen === 0);
+  const step3Done =
+    isOfficial || round?.status === 'CLOSED' || (isPublished && publishedOpen === 0);
 
   return (
     <section className="space-y-4">
@@ -1464,13 +1466,20 @@ function PlanningBeheer() {
             type="button"
             className="vvl-btn-primary"
             disabled={busy}
-            onClick={() =>
+            onClick={() => {
+              if (deadline) {
+                const parsed = new Date(`${deadline}T12:00:00`);
+                if (Number.isNaN(parsed.getTime())) {
+                  setError('Kies een geldige deadline-datum (of laat het veld leeg).');
+                  return;
+                }
+              }
               run(
                 () => api.publishPlanning({ volunteerDeadline: deadline || undefined }),
                 (r) =>
                   `Stap 2 klaar: ${r.published} concept-dienst(en) gepubliceerd. Vrijwilligers kunnen nu inschrijven.`,
-              )
-            }
+              );
+            }}
           >
             2. Concept publiceren
           </button>

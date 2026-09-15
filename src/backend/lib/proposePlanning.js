@@ -48,6 +48,12 @@ export async function publishDraftServices({ volunteerDeadline, weeks = 6 } = {}
     ? endOfDay(new Date(volunteerDeadline))
     : endOfDay(addWeeks(from, 1));
 
+  if (Number.isNaN(deadline.getTime())) {
+    const err = new Error('Ongeldige deadline-datum. Kies een geldige datum of laat het veld leeg.');
+    err.status = 400;
+    throw err;
+  }
+
   await prisma.planningRound.upsert({
     where: { id: 1 },
     create: {
