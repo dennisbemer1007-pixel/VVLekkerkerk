@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import FilterChips from '../components/FilterChips.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
@@ -128,8 +129,13 @@ export default function Planning() {
               disabled={updateBusy}
               onClick={updateFromMatches}
             >
-              {updateBusy ? 'Bijwerken…' : 'Update'}
+              {updateBusy ? 'Bijwerken…' : 'Diensten bijwerken'}
             </button>
+          ) : null}
+          {can('beheer') ? (
+            <Link to="/beheer?tab=planning" className="vvl-btn-primary text-center">
+              Planning in 4 stappen
+            </Link>
           ) : null}
           <button
             type="button"

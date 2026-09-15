@@ -79,6 +79,21 @@ export default function Dashboard() {
         <section className="space-y-3">
           <h2 className="font-heading text-xl font-black uppercase">Wat is nog niet geregeld?</h2>
           <Link
+            to="/beheer?tab=planning"
+            className="vvl-card flex items-center justify-between border-l-4 border-l-vvl-primary transition hover:shadow-md"
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase text-vvl-accent">
+                Barplanning maken
+              </span>
+              <span className="text-sm text-gray-600">
+                4 stappen: diensten aanmaken → publiceren → verplichte mensen automatisch
+                inschrijven → officieel
+              </span>
+            </span>
+            <span className="text-sm font-bold uppercase text-vvl-primary">Naar Planning →</span>
+          </Link>
+          <Link
             to="/beheer?tab=ruilen"
             className={`vvl-card flex items-center justify-between border-l-4 transition hover:shadow-md ${
               stats?.pendingSwapCount

@@ -46,7 +46,7 @@ Openstaand (nog geen wachtwoord, alleen na volledige seed): uitnodiging `nieuw@v
 - **Planning:** Excel-export en **Clubhuis-PDF** (deze week, bar + keuken).
 - **Beheer → Dienstregels:** laat zien dat tijden configureerbaar zijn (FO §7), o.a. zondag keuken 12:00–15:00.
 - **Beheer → Jaarplanning:** klaverjas → vrijdagbar.
-- **Beheer → Planning:** voorstel / verplicht vullen. **Niet** “Maak officieel” tijdens een losse demo, tenzij je het rooster wilt vastzetten.
+- **Beheer → Planning:** 4 stappen (diensten aanmaken → publiceren → verplicht vullen → officieel). **Niet** “Maak officieel” tijdens een losse demo, tenzij je het rooster wilt vastzetten.
 - **Beheer → Ruilen:** goedkeuren van ruilverzoeken. Op het dashboard staat hoeveel verzoeken wachten (na akkoord van beide personen gaat er ook mail naar de barcommissie als SMTP aanstaat).
 - Geen tabbladen Inschrijven, Ruilen of Voorkeuren.
 

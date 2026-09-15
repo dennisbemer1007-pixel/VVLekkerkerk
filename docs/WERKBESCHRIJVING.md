@@ -101,16 +101,14 @@ Na inloggen zie je onder je rechten wat bij jouw rol hoort. Vrijwilligers landen
 
 ## 5. De 6-wekenronde (zo werkt de barcommissie)
 
-1. **Dienstregels + wedstrijden kloppen** — Beheer → Dienstregels; Wedstrijden → KNVB-/CSV-import.
-2. **Update vanuit regels** — Beheer → Planning (of Planning-pagina): diensten worden (opnieuw) afgeleid uit regels, thuiswedstrijden en activiteiten.
-3. **Publiceren** — vrijwilligers mogen inschrijven tot de deadline.
-4. **Verplicht vullen** — open persoonlijke plekken volgens de eerlijke volgorde (FO §34).
-5. **Teamdiensten** — teamco’s vullen hun teamshifts **vóór** officieel.
-6. **Maak officieel** — gepubliceerde diensten in het venster gaan op slot. Alleen barcommissie/admin wijzigt daarna nog in- of uitschrijvingen.
-7. **Print / Excel** — clubhuis-PDF (deze week) en/of 6-weken-PDF en Excel.
-8. **Herinneringen** — 1 dag van tevoren per e-mail als SMTP aanstaat; handmatig “Herinneringen morgen” kan forceren.
+Ga naar **Beheer → Planning**. Daar staan **4 genummerde stappen**:
 
-Concept-/conceptstatus van de ronde (`DRAFT` / gepubliceerd / `OFFICIAL`) staat onder Beheer → Planning.
+1. **Diensten aanmaken / bijwerken** — diensten uit regels, thuiswedstrijden en activiteiten (handmatige/vastgezette blijven staan). Zorg dat Wedstrijden en Dienstregels kloppen.
+2. **Concept publiceren** — vrijwilligers mogen inschrijven tot de deadline (optioneel: mail vrijwilligers).
+3. **Vul open plekken (verplicht)** — schrijft verplichte leden, VR18+ en inhaal **automatisch** in op open persoonlijke plekken (eerlijke volgorde FO §34). Teamdiensten vult de teamco via **Mijn team** vóór stap 4.
+4. **Maak officieel** — rooster op slot; alleen barcommissie/admin wijzigt daarna nog. Daarna print/Excel; herinneringen 1 dag van tevoren als SMTP aanstaat.
+
+Status van de ronde staat bovenaan Beheer → Planning. Korte mailtekst voor testers: [MAIL-TOELICHTING-PLANNING.md](MAIL-TOELICHTING-PLANNING.md).
 
 ---
 

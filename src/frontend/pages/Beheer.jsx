@@ -76,7 +76,7 @@ export default function Beheer({ mode = 'full' }) {
             ? 'Schrijf ouders of teamleden in voor een bardienst.'
             : mode === 'invite'
               ? 'Nodig ouders uit per e-mail. Zij maken zelf een account via de link.'
-              : 'Nodig mensen uit, maak een concept-planning uit wedstrijden, beheer diensten en keur ruilverzoeken goed.'}
+              : 'Personen beheren, de 6-wekenplanning in stappen maken (Beheer → Planning), en ruilverzoeken goedkeuren.'}
         </p>
       </header>
 
@@ -1291,9 +1291,38 @@ function TeamsBeheer() {
   );
 }
 
+function PlanningStep({ number, title, children, done = false }) {
+  return (
+    <div
+      className={`vvl-card space-y-3 border-l-4 ${
+        done ? 'border-l-emerald-600' : 'border-l-vvl-primary'
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+            done
+              ? 'bg-emerald-600 text-white'
+              : 'bg-vvl-primary text-white'
+          }`}
+          aria-hidden="true"
+        >
+          {number}
+        </span>
+        <h3 className="font-heading text-lg font-black uppercase">{title}</h3>
+        {done ? (
+          <span className="text-xs font-bold uppercase text-emerald-800">Klaar</span>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function PlanningBeheer() {
   const [round, setRound] = useState(null);
   const [drafts, setDrafts] = useState([]);
+  const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
@@ -1303,10 +1332,15 @@ function PlanningBeheer() {
     Promise.all([
       api.getPlanningRound(),
       api.getPlanning({ includeDraft: 'true' }),
+      api.getPlanning({}),
     ])
-      .then(([r, planning]) => {
+      .then(([r, withDrafts, published]) => {
         setRound(r);
-        setDrafts((planning.services || []).filter((s) => s.draft));
+        setDrafts((withDrafts.services || []).filter((s) => s.draft));
+        const open = (published.services || []).filter(
+          (s) => !s.draft && (s.enrolled ?? s.enrollments?.length ?? 0) < (s.required ?? 0),
+        );
+        setPublishedOpen(open.length);
         if (r?.volunteerDeadline) {
           setDeadline(toDateInputValue(r.volunteerDeadline));
         }
@@ -1333,58 +1367,89 @@ function PlanningBeheer() {
   };
 
   const statusLabel = {
-    DRAFT: 'Concept',
+    DRAFT: 'Concept — nog niet gepubliceerd',
     VOLUNTEER_OPEN: 'Vrijwilligers kunnen inschrijven',
-    MANDATORY_OPEN: 'Verplichte fase',
+    MANDATORY_OPEN: 'Verplichte fase — automatisch vullen',
     CLOSED: 'Afgerond',
   };
 
+  const isOfficial = Boolean(round?.official);
+  const isPublished =
+    isOfficial ||
+    round?.status === 'VOLUNTEER_OPEN' ||
+    round?.status === 'MANDATORY_OPEN';
+  const hasServices = drafts.length > 0 || isPublished || isOfficial;
+  const step3Done = isOfficial || (isPublished && publishedOpen === 0);
+
   return (
     <section className="space-y-4">
-      <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-lg font-black uppercase">Planning uit dienstregels</h2>
-        <p className="text-sm text-gray-700">
-          Diensten ontstaan uit <strong>configureerbare regels</strong> (Beheer → Dienstregels),
-          plus wedstrijden en activiteiten in de jaarplanning. Vastgezette en handmatige diensten
-          blijven staan. Keukendiensten worden niet meer verwijderd.
+      <div className="vvl-card space-y-3 bg-vvl-secondary/40">
+        <h2 className="font-heading text-lg font-black uppercase">
+          Zo maak je de barplanning
+        </h2>
+        <p className="text-sm text-gray-800">
+          Volg de stappen hieronder van boven naar beneden. Eerst maakt de app de diensten
+          aan, daarna kunnen vrijwilligers zich inschrijven, en tot slot schrijf je de
+          <strong> verplichte mensen automatisch</strong> in op open plekken.
         </p>
+        <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-800">
+          <li>Diensten aanmaken uit regels + thuiswedstrijden</li>
+          <li>Publiceren zodat mensen zich mogen inschrijven</li>
+          <li>Open plekken automatisch vullen met verplichte leden</li>
+          <li>Rooster officieel vastzetten</li>
+        </ol>
         <p className="text-sm">
-          Status:{' '}
-          <strong>{statusLabel[round?.status] || round?.status || '—'}</strong>
+          Status nu:{' '}
+          <strong>{statusLabel[round?.status] || round?.status || 'Nog geen ronde'}</strong>
           {round?.volunteerDeadline
             ? ` · deadline vrijwilligers: ${new Date(round.volunteerDeadline).toLocaleDateString('nl-NL')}`
             : ''}
         </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="vvl-btn-primary"
-            disabled={busy}
-            onClick={() =>
-              run(
-                () => api.syncPlanningFromMatches({ required: 2 }),
-                (r) => {
-                  const parts = [];
-                  if (r.created) parts.push(`${r.created} bardienst(en) toegevoegd`);
-                  if (r.removed) {
-                    parts.push(
-                      `${r.removed} dienst(en) verwijderd die niet bij een thuiswedstrijd hoorden`,
-                    );
-                  }
-                  return parts.length
-                    ? `Planning bijgewerkt: ${parts.join(', ')}.`
-                    : 'Planning is al actueel — alleen bardiensten bij thuiswedstrijden blijven staan.';
-                },
-              )
-            }
-          >
-            Planning bijwerken
-          </button>
-        </div>
       </div>
 
-      <div className="vvl-card space-y-3">
-        <h3 className="font-heading font-black uppercase">Publiceren & berichten</h3>
+      <PlanningStep number={1} title="Diensten aanmaken" done={hasServices}>
+        <p className="text-sm text-gray-700">
+          De app maakt bar- en keukendiensten voor de komende ±6 weken uit de
+          <strong> dienstregels</strong> (Beheer → Dienstregels), plus{' '}
+          <strong>thuiswedstrijden</strong> en activiteiten. Handmatige of vastgezette
+          diensten blijven staan.
+        </p>
+        <p className="text-xs text-gray-600">
+          Tip: importeer eerst wedstrijden via Wedstrijden, en controleer of personen
+          de juiste verplichting hebben (Beheer → Personen).
+        </p>
+        <button
+          type="button"
+          className="vvl-btn-primary"
+          disabled={busy}
+          onClick={() =>
+            run(
+              () => api.syncPlanningFromMatches({ required: 2 }),
+              (r) => {
+                const parts = [];
+                if (r.created) parts.push(`${r.created} dienst(en) aangemaakt`);
+                if (r.updated) parts.push(`${r.updated} bijgewerkt`);
+                if (r.removed) {
+                  parts.push(
+                    `${r.removed} dienst(en) verwijderd die niet meer bij de regels passen`,
+                  );
+                }
+                return parts.length
+                  ? `Stap 1 klaar: ${parts.join(', ')}. Ga door naar publiceren.`
+                  : 'Stap 1: planning is al actueel volgens de dienstregels.';
+              },
+            )
+          }
+        >
+          1. Diensten aanmaken / bijwerken
+        </button>
+      </PlanningStep>
+
+      <PlanningStep number={2} title="Publiceren voor vrijwilligers" done={isPublished}>
+        <p className="text-sm text-gray-700">
+          Concept-diensten worden zichtbaar en vrijwilligers mogen zich inschrijven tot
+          de deadline. Daarna vult de app (stap 3) de rest.
+        </p>
         <div>
           <label className="vvl-label">Inschrijven tot (vrijwilligers)</label>
           <input
@@ -1402,11 +1467,12 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.publishPlanning({ volunteerDeadline: deadline || undefined }),
-                (r) => `${r.published} concept-dienst(en) gepubliceerd.`,
+                (r) =>
+                  `Stap 2 klaar: ${r.published} concept-dienst(en) gepubliceerd. Vrijwilligers kunnen nu inschrijven.`,
               )
             }
           >
-            Concept publiceren
+            2. Concept publiceren
           </button>
           <button
             type="button"
@@ -1422,12 +1488,49 @@ function PlanningBeheer() {
               )
             }
           >
-            Mail vrijwilligers
+            Optioneel: mail vrijwilligers
+          </button>
+        </div>
+      </PlanningStep>
+
+      <PlanningStep
+        number={3}
+        title="Verplichte mensen automatisch inschrijven"
+        done={step3Done}
+      >
+        <p className="text-sm text-gray-700">
+          Klik hieronder om open <strong>persoonlijke</strong> plekken te vullen met leden
+          die verplicht zijn (1× / 6 weken), VR18+ of een inhaaldienst hebben. De app
+          kiest eerlijk: eerst inhaal, dan verplicht, dan wie het minst/langst geleden
+          heeft gestaan, rekening houdend met voorkeuren.
+        </p>
+        <p className="text-xs text-gray-600">
+          Teamdiensten vult de teamcoördinator via <strong>Mijn team</strong> — die
+          worden hier niet automatisch gevuld.
+          {isPublished && publishedOpen > 0
+            ? ` Er zijn nu ${publishedOpen} open dienst(en) met nog plek.`
+            : null}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="vvl-btn-primary"
+            disabled={busy || !isPublished}
+            title={!isPublished ? 'Publiceer eerst de planning (stap 2)' : undefined}
+            onClick={() =>
+              run(
+                () => api.fillMandatory(),
+                (r) =>
+                  `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${r.unfilled?.length ?? 0} verplichting(en) nog open.`,
+              )
+            }
+          >
+            3. Vul open plekken (verplicht)
           </button>
           <button
             type="button"
             className="vvl-btn-outline"
-            disabled={busy}
+            disabled={busy || !isPublished}
             onClick={() =>
               run(
                 () => api.notifyMandatory(),
@@ -1438,26 +1541,27 @@ function PlanningBeheer() {
               )
             }
           >
-            Mail verplichte
+            Optioneel: mail verplichte
           </button>
-          <button
-            type="button"
-            className="vvl-btn-outline"
-            disabled={busy}
-            onClick={() =>
-              run(
-                () => api.fillMandatory(),
-                (r) =>
-                  `${r.filled} persoonlijke plek(ken) gevuld. ${r.unfilled?.length ?? 0} verplichting(en) nog open.`,
-              )
-            }
-          >
-            Vul open plekken (verplicht)
-          </button>
+        </div>
+        {!isPublished ? (
+          <p className="text-xs font-semibold text-amber-800">
+            Eerst stap 2 afronden — anders is er nog niets om te vullen.
+          </p>
+        ) : null}
+      </PlanningStep>
+
+      <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
+        <p className="text-sm text-gray-700">
+          Vergrendelt de komende 6 weken. Alleen de barcommissie kan daarna nog
+          in- of uitschrijven. Teamco’s moeten teamdiensten <strong>vóór</strong> deze
+          stap hebben gevuld.
+        </p>
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className="vvl-btn-primary"
-            disabled={busy}
+            disabled={busy || !isPublished || isOfficial}
             onClick={() => {
               if (
                 !window.confirm(
@@ -1468,11 +1572,11 @@ function PlanningBeheer() {
               }
               run(
                 () => api.markPlanningOfficial(),
-                (r) => `Officieel: ${r.locked} dienst(en) vergrendeld.`,
+                (r) => `Stap 4 klaar: officieel — ${r.locked} dienst(en) vergrendeld.`,
               );
             }}
           >
-            Maak officieel
+            4. Maak officieel
           </button>
           <button
             type="button"
@@ -1491,20 +1595,31 @@ function PlanningBeheer() {
             Herinneringen morgen
           </button>
         </div>
-        {round?.official ? (
+        {isOfficial ? (
           <p className="text-sm font-semibold text-emerald-900">Dit rooster is officieel.</p>
         ) : null}
-      </div>
+      </PlanningStep>
 
-      {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {msg ? (
+        <p className="rounded-sm border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          {msg}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </p>
+      ) : null}
 
       <div>
         <h3 className="mb-2 font-heading font-black uppercase">
           Concept-diensten ({drafts.length})
         </h3>
         {drafts.length === 0 ? (
-          <p className="text-sm text-gray-600">Nog geen concept. Maak eerst een voorstel.</p>
+          <p className="text-sm text-gray-600">
+            Nog geen concept-diensten. Klik op <strong>1. Diensten aanmaken / bijwerken</strong>{' '}
+            hierboven. (Na publiceren verdwijnen concepten hier — je ziet ze dan op Planning.)
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {drafts.map((s) => (

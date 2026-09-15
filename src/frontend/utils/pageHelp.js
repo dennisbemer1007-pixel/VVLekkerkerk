@@ -3,10 +3,10 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Voor de barcommissie staan hier vier controles: open diensten, niet-ingevulde verplichtingen, inhaaldiensten en waarom iemand niet is ingepland.',
+      'Dit is je startscherm. Voor de barcommissie staan hier een snelle link naar de 4-stappenplanning, plus vier controles: open diensten, niet-ingevulde verplichtingen, inhaaldiensten en waarom iemand niet is ingepland.',
     actions: [
+      'Barplanning maken: open Beheer → Planning (4 stappen)',
       'Klik op een controlekaart om de concrete lijst te zien',
-      'Open diensten en verplichtingen blijven aparte overzichten',
       'Ruilverzoeken na wederzijds akkoord keur je goed via Beheer → Ruilen',
     ],
   },
@@ -90,12 +90,12 @@ export const PAGE_HELP = {
   },
   beheerPlanning: {
     purpose:
-      'De planningsronde: diensten uit regels + wedstrijden + activiteiten, publiceren, mailen, en open plekken vullen met verplichte leden en VR18+.',
+      'Hier maak je de barplanning in 4 stappen: diensten aanmaken → publiceren → verplichte mensen automatisch inschrijven → officieel vastzetten.',
     actions: [
-      'Planning bijwerken vanuit dienstregels (handmatige diensten blijven staan)',
-      'Publiceren en vrijwilligersfase openen',
-      'Open plekken automatisch vullen; vrijgestelden en vrijwilligers worden overgeslagen',
-      'Officieel maken vergrendelt 6 weken; herinneringen morgen (e-mail) versturen',
+      'Stap 1: Diensten aanmaken / bijwerken (uit regels + thuiswedstrijden)',
+      'Stap 2: Concept publiceren (vrijwilligers mogen inschrijven tot de deadline)',
+      'Stap 3: Vul open plekken — schrijft verplichte leden / VR18+ / inhaal automatisch in',
+      'Stap 4: Maak officieel (vergrendelt 6 weken; optioneel herinneringen mailen)',
     ],
   },
   beheerRegels: {

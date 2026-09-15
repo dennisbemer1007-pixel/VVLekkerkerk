@@ -2,7 +2,7 @@
 
 Eenvoudige planning-app voor bardiensten en keukendiensten bij **V.V. Lekkerkerk**.
 
-Handleiding: [docs/WERKBESCHRIJVING.md](docs/WERKBESCHRIJVING.md) · FO-keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md) · Demo: [docs/DEMO.md](docs/DEMO.md) · Beveiliging: [docs/SECURITY.md](docs/SECURITY.md)
+Handleiding: [docs/WERKBESCHRIJVING.md](docs/WERKBESCHRIJVING.md) · FO-keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md) · Demo: [docs/DEMO.md](docs/DEMO.md) · Beveiliging: [docs/SECURITY.md](docs/SECURITY.md) · Mail-toelichting planning: [docs/MAIL-TOELICHTING-PLANNING.md](docs/MAIL-TOELICHTING-PLANNING.md)
 
 ## Windows: PowerShell-fout bij `npm`?
 
