@@ -1557,6 +1557,11 @@ function PlanningBeheer() {
           <p className="text-xs font-semibold text-amber-800">
             Eerst stap 2 afronden — anders is er nog niets om te vullen.
           </p>
+        ) : step3Done ? (
+          <p className="text-xs font-semibold text-emerald-800">
+            Open persoonlijke plekken zijn (zo ver mogelijk) gevuld. Ga door naar stap 4 als
+            teamdiensten ook klaar zijn.
+          </p>
         ) : null}
       </PlanningStep>
 
