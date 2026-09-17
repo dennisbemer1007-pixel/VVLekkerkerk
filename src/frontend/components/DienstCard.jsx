@@ -52,6 +52,19 @@ export default function DienstCard({
   const capacity = dienst.capacity;
   const teamDuties = dienst.teamDuties || [];
   const slot = slotLabel(dienst.slot);
+  const teamNames = teamDuties
+    .map((d) => d.team?.name)
+    .filter(Boolean)
+    .join(', ');
+  const teamOnlyLeft = Boolean(capacity) && capacity.personalOpen <= 0 && capacity.teamOpen > 0;
+  const canSelfEnroll =
+    showActions &&
+    !inactive &&
+    !isDraft &&
+    !myEnrollment &&
+    status !== 'full' &&
+    !teamOnlyLeft &&
+    !(isLocked && !adminMode);
 
   if (compact) {
     return (
@@ -67,7 +80,8 @@ export default function DienstCard({
             month: 'short',
           })}{' '}
           · {dienst.time} · {dienst.location || type}
-          {teamDuties[0]?.team?.name ? ` · ${teamDuties[0].team.name}` : ''}
+          {teamNames ? ` · ${teamNames}` : ''}
+          {` · ${enrolled}/${required}`}
           {myEnrollment ? ' · jij staat hier' : ''}
         </button>
         <div className="flex items-center gap-2">
@@ -76,8 +90,13 @@ export default function DienstCard({
               Jij
             </span>
           ) : null}
+          {teamOnlyLeft ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-900">
+              Jeugdteam
+            </span>
+          ) : null}
           <StatusBadge status={status} />
-          {showActions && !inactive && !isDraft && !myEnrollment && status !== 'full' && !(isLocked && !adminMode) ? (
+          {canSelfEnroll ? (
             <button
               type="button"
               className="vvl-btn-primary text-xs"

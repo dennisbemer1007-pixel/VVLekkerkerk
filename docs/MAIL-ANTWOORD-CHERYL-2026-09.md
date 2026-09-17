@@ -21,7 +21,7 @@ De open plek kunnen vrijwilligers of verplichte zelf vullen; doet iemand dat nie
 Die ziet hetzelfde als een vrijwilliger (Inschrijven + Ruilen) plus **Mijn team**. Daar voeg je ouders alleen met naam toe (geen e-mail, geen uitnodiging) en zet je ze op de teamdienst. Je ziet per ouder hoe vaak hij/zij al heeft gestaan. Verplicht of vrijwillig blijven gewoon naast deze rol mogelijk.
 
 **Planperiode zelf kiezen**  
-Het rooster is niet meer vast 6 weken. Bij stap 1 kies je zelf van/tot, bijvoorbeeld oktober t/m december (max. 13 maanden). PDF en Excel volgen die periode.
+Het rooster is niet meer vast 6 weken. Bij stap 1 kies je zelf van/tot, bijvoorbeeld oktober t/m december (max. 13 maanden). Als je in het najaar plant, staat de einddatum standaard op 31 december; je kunt dat altijd aanpassen. PDF en Excel volgen die periode.
 
 **Vrijwilliger (tab 3)**  
 - Wachtwoord: overal minstens 8 tekens, ook in de tekst op het scherm (niet meer 6).  

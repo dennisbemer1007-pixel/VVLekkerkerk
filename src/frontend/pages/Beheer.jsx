@@ -4,7 +4,12 @@ import Avatar from '../components/Avatar.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
-import { SERVICE_TYPE_LABEL, todayInputValue, toDateInputValue } from '../utils/formatDate.js';
+import {
+  SERVICE_TYPE_LABEL,
+  defaultPlanningEndInput,
+  todayInputValue,
+  toDateInputValue,
+} from '../utils/formatDate.js';
 import { helpForBeheerTab } from '../utils/pageHelp.js';
 import { scrollToForm } from '../utils/scrollToForm.js';
 
@@ -1342,11 +1347,7 @@ function PlanningBeheer() {
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
   const [fromDate, setFromDate] = useState(todayInputValue());
-  const [toDate, setToDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 42);
-    return toDateInputValue(d);
-  });
+  const [toDate, setToDate] = useState(() => defaultPlanningEndInput());
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

@@ -10,7 +10,7 @@ export function parseTeamDutySlots(raw) {
   }
 }
 
-/** FO: alleen O13-1 / JO13-1 / O13-1JM, niet JO13-2 of andere O13-elftallen. */
+/** Eerste O13-elftal (O13-1 / JO13-1 / O13-1JM). Teamdiensten gelden voor alle O13–O17. */
 export function isO13FirstTeam(name) {
   const compact = String(name || '').replace(/\s+/g, '');
   return /(?:JO|O)13-1(?:JM)?(?!\d)/i.test(compact);

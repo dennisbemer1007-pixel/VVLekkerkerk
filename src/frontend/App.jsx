@@ -121,7 +121,7 @@ export default function App() {
               <Route
                 path="/uitnodigen"
                 element={
-                  <Protected feature="teams">
+                  <Protected feature="beheer">
                     <Beheer mode="invite" />
                   </Protected>
                 }

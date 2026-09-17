@@ -83,8 +83,12 @@ export default function Inschrijven() {
   };
 
   const grouped = useMemo(() => {
+    const list =
+      filter === 'open'
+        ? services.filter((s) => (s.capacity?.personalOpen ?? Math.max(0, (s.required ?? 0) - (s.enrolled ?? 0))) > 0)
+        : services;
     const map = new Map();
-    for (const s of services) {
+    for (const s of list) {
       const key = new Date(s.date).toLocaleDateString('nl-NL', {
         weekday: 'long',
         day: 'numeric',
@@ -94,7 +98,7 @@ export default function Inschrijven() {
       map.get(key).push(s);
     }
     return [...map.entries()];
-  }, [services]);
+  }, [services, filter]);
 
   return (
     <div className="space-y-6">
@@ -115,7 +119,7 @@ export default function Inschrijven() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      {services.length === 0 ? (
+      {grouped.length === 0 ? (
         <p className="vvl-card text-sm text-gray-600">Geen diensten gevonden voor dit filter.</p>
       ) : (
         <div className="space-y-5">

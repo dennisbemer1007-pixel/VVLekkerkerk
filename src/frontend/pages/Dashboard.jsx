@@ -13,9 +13,8 @@ const FEATURE_LABELS = {
   inschrijven: 'Inschrijven',
   planning: 'Planning & PDF',
   wedstrijden: 'Wedstrijden',
-  voorkeuren: 'Voorkeuren',
   ruilen: 'Ruilen',
-  teams: 'Teamleden inschrijven',
+  teams: 'Mijn team',
   beheer: 'Beheer & uitnodigen',
 };
 

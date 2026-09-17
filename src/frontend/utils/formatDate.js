@@ -24,6 +24,17 @@ export function todayInputValue() {
   return toDateInputValue(new Date());
 }
 
+/** Standaard einddatum planning: tot 31 december als dat minstens 6 weken is, anders +3 maanden. */
+export function defaultPlanningEndInput(now = new Date()) {
+  const minEnd = new Date(now);
+  minEnd.setDate(minEnd.getDate() + 42);
+  const yearEnd = new Date(now.getFullYear(), 11, 31);
+  if (yearEnd >= minEnd) return toDateInputValue(yearEnd);
+  const later = new Date(now);
+  later.setMonth(later.getMonth() + 3);
+  return toDateInputValue(later);
+}
+
 export function formatMatchDate(date) {
   return new Date(date).toLocaleDateString('nl-NL', {
     weekday: 'short',

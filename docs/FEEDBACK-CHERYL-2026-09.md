@@ -6,12 +6,12 @@ Bron: mail + `Testlijst_Planningsapp_Concept_4.xlsx` tab 3/4/5.
 
 1. **Jeugd-teamdiensten bij thuiswedstrijd** — `ServiceTeamDuty` reserveert plekken op de zaterdagse bardienst. Generator in `teamDutyPlanning.js` + `serviceGeneration.js`. Tijden: 07:30–12:00 (O8–O12, 2 team + 1 open), 12:00–16:30 (O13–O17, 2 team), 16:30–19:30 (O13–O17, 1 team + 1 open). Stap 3 (`autoFill.js`) vult alleen `personalOpen`.
 2. **Bardienstcoördinator vult ouders** — rol Teamcoördinator: Inschrijven + Ruilen + Mijn team. `POST /api/teams/:id/parents` (alleen naam). Dashboard toont `teamDutyCount`.
-3. **Planperiode zelf kiezen** — datums op `PlanningRound.fromDate/toDate`, UI in Beheer → Planning, max. 13 maanden (`planningPeriod.js`).
+3. **Planperiode zelf kiezen** — datums op `PlanningRound.fromDate/toDate`, UI in Beheer → Planning, max. 13 maanden (`planningPeriod.js`). Standaard tot 31 december als dat minstens 6 weken is.
 
 ## Tab vrijwilliger
 
 4. **Wachtwoord 6 vs 8** — alle labels en validatie op min. 8 tekens.
-5. **Compact inschrijven** — `DienstCard` compact: klik voor namen, knop Inschrijven; badge “Jij” als je erop staat. Standaardfilter: komende diensten.
+5. **Compact inschrijven** — `DienstCard` compact: klik voor namen, knop Inschrijven; badge “Jij” als je erop staat; teamplekken tonen “Jeugdteam” zonder inschrijfknop. Standaardfilter: komende diensten. Filter “Open diensten” toont alleen plekken waar een vrijwilliger zichzelf mag inschrijven.
 6. **Foute reden “barcommissie heeft ingepland”** — zelf inschrijven is altijd bron `SELF` → “Zelf ingeschreven”.
 7. **Tab Voorkeuren weg** — geen menu-item, `/voorkeuren` gaat naar Inschrijven. Dagdeelvoorkeur alleen nog in Beheer (auto-planning).
 8. **AVG JSON** — download is Excel (`/api/persons/me/export.xlsx`).
@@ -21,7 +21,7 @@ Bron: mail + `Testlijst_Planningsapp_Concept_4.xlsx` tab 3/4/5.
 ## Tab bardienstcoördinator
 
 11. **Zelfde schermen als vrijwilliger + team** — `roles.js`: `inschrijven`, `ruilen`, `teams`.
-12. **Geen uitnodigen, wel namen** — geen Uitnodigen-tab; ouders zonder e-mail.
+12. **Geen uitnodigen, wel namen** — geen Uitnodigen-tab (ook `/uitnodigen` is alleen voor beheer); ouders zonder e-mail.
 13. **Inzicht wie al stond** — per ouder het aantal teamdiensten.
 
 ## Tab beheer

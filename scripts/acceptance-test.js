@@ -193,15 +193,109 @@ async function main() {
   );
   const afterPropose = await req('/api/services', { token: admin });
   const morningDuty = (afterPropose.json || []).find(
-    (s) => s.slot === 'MORNING' && s.type === 'BAR' && (s.teamDuties || []).length,
+    (s) =>
+      s.slot === 'MORNING' &&
+      s.type === 'BAR' &&
+      (s.teamDuties || []).some((d) => /O11|JO11|O12|JO12/i.test(d.team?.name || '')),
   );
   mark(
     record(
       'zaterdag ochtend jeugd-teamdienst',
-      Boolean(morningDuty) && (morningDuty.capacity?.teamReserved ?? 0) >= 2,
-      morningDuty ? `reserved ${morningDuty.capacity?.teamReserved}` : 'geen teamdienst',
+      Boolean(morningDuty) &&
+        (morningDuty.capacity?.teamReserved ?? 0) >= 2 &&
+        (morningDuty.capacity?.personalCapacity ?? 0) >= 1,
+      morningDuty
+        ? `reserved ${morningDuty.capacity?.teamReserved} personal ${morningDuty.capacity?.personalCapacity}`
+        : 'geen teamdienst',
     ),
   );
+  const afternoonDuty = (afterPropose.json || []).find(
+    (s) =>
+      s.slot === 'AFTERNOON' &&
+      s.type === 'BAR' &&
+      (s.teamDuties || []).some((d) => /O15|JO15/i.test(d.team?.name || '')),
+  );
+  mark(
+    record(
+      'zaterdag middag 2 teamplekken',
+      Boolean(afternoonDuty) &&
+        (afternoonDuty.capacity?.teamReserved ?? 0) >= 2 &&
+        (afternoonDuty.capacity?.personalCapacity ?? 0) === 0,
+      afternoonDuty
+        ? `reserved ${afternoonDuty.capacity?.teamReserved} personal ${afternoonDuty.capacity?.personalCapacity}`
+        : 'geen teamdienst',
+    ),
+  );
+  const eveningDuty = (afterPropose.json || []).find(
+    (s) =>
+      s.slot === 'EVENING' &&
+      s.type === 'BAR' &&
+      (s.teamDuties || []).some((d) => /O15|JO15/i.test(d.team?.name || '')),
+  );
+  mark(
+    record(
+      'zaterdag avond 1 teamplek + 1 open',
+      Boolean(eveningDuty) &&
+        (eveningDuty.capacity?.teamReserved ?? 0) >= 1 &&
+        (eveningDuty.capacity?.personalCapacity ?? 0) >= 1,
+      eveningDuty
+        ? `reserved ${eveningDuty.capacity?.teamReserved} personal ${eveningDuty.capacity?.personalCapacity}`
+        : 'geen teamdienst',
+    ),
+  );
+
+  const lisaId = lisaMe.json?.id;
+  if (afternoonDuty && lisaId) {
+    const lisaTeamSpot = await req('/api/enrollments', {
+      method: 'POST',
+      token: lisa,
+      body: { serviceId: afternoonDuty.id, personId: lisaId },
+    });
+    mark(
+      record(
+        'vrijwilliger geen teamplek',
+        lisaTeamSpot.status === 409,
+        String(lisaTeamSpot.status),
+      ),
+    );
+  } else {
+    mark(record('vrijwilliger geen teamplek', false, 'geen middag-teamdienst of lisa-id'));
+  }
+
+  const jo15 = (dash.json?.teams || []).find((t) => /O15|JO15/i.test(t.name));
+  if (jo15 && afternoonDuty) {
+    const parent = await req(`/api/teams/${jo15.id}/parents`, {
+      method: 'POST',
+      token: sandra,
+      body: { name: 'Test Ouder Cheryl' },
+    });
+    mark(
+      record(
+        'coordinator ouder op naam',
+        parent.status === 201 && parent.json?.name === 'Test Ouder Cheryl' && parent.json?.hasAccount === false,
+        String(parent.status),
+      ),
+    );
+    if (parent.json?.id) {
+      const fill = await req('/api/enrollments', {
+        method: 'POST',
+        token: sandra,
+        body: { serviceId: afternoonDuty.id, personId: parent.json.id, forTeamId: jo15.id },
+      });
+      mark(
+        record(
+          'coordinator vult teamplek',
+          fill.status === 201 && fill.json?.kind === 'TEAM',
+          `${fill.status} ${fill.json?.kind || fill.json?.error || ''}`,
+        ),
+      );
+    } else {
+      mark(record('coordinator vult teamplek', false, 'geen ouder-id'));
+    }
+  } else {
+    mark(record('coordinator ouder op naam', false, 'geen JO15 op sandra-dashboard'));
+    mark(record('coordinator vult teamplek', false, 'geen JO15/middag'));
+  }
 
   const teamsSandra = await req('/api/teams', { token: sandra });
   const teamsAdmin = await req('/api/teams', { token: admin });
@@ -223,7 +317,9 @@ async function main() {
   mark(record('me zonder passwordHash', me.json?.passwordHash == null && me.json?.inviteToken == null));
 
   const services = await req('/api/services', { token: lisa });
-  const open = (services.json || []).find((s) => !s.draft && s.status !== 'full' && s.kind !== 'TEAM');
+  const open = (services.json || []).find(
+    (s) => !s.draft && s.status !== 'full' && (s.capacity?.personalOpen ?? 0) > 0,
+  );
   if (open) {
     const idor = await req('/api/enrollments', {
       method: 'POST',

@@ -44,6 +44,7 @@ import {
   servicesForSlotRow,
   slotCellText,
 } from '../src/backend/lib/pdfRoster.js';
+import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
 
 let pass = 0;
 let fail = 0;
@@ -510,6 +511,10 @@ const period = resolvePlanningPeriod({ from: '2026-10-01', to: '2026-12-31' });
 assert(
   'planperiode okt–dec',
   toIsoDate(period.from) === '2026-10-01' && toIsoDate(period.to) === '2026-12-31',
+);
+assert(
+  'standaard einddatum tot 31 dec in september',
+  defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2026-12-31',
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);
