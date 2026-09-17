@@ -8,9 +8,9 @@ Keuzes bij Functioneel Ontwerp Planning Bar- en Keukendiensten 4.0. Wat hier **g
 De access-rol heet **Barcommissie** (niet Coördinator). De voormalige rol **Bestuur** heet **Admin**. Teamcoördinator is ongewijzigd (teamrol). Bestaande accounts met rol `Coördinator` of `Bestuur` worden bij opstarten gemigreerd.
 
 ### Tabbladen per rol
-- **Vrijwilliger:** Inschrijven, Ruilen, Voorkeuren (geen Dashboard, Planning, Wedstrijden).
-- **Teamcoördinator:** Dashboard, Inschrijven, Ruilen, Planning, Wedstrijden, Voorkeuren, Mijn team / Uitnodigen.
-- **Barcommissie** en **Admin:** Dashboard, Planning, Wedstrijden, Beheer. Geen Inschrijven, Ruilen of Voorkeuren. Ruilverzoeken keuren ze goed via **Beheer → Ruilen**. Anderen inschrijven en voorkeuren van personen blijven via Beheer.
+- **Vrijwilliger:** Inschrijven, Ruilen (geen Dashboard, Planning, Wedstrijden, geen tab Voorkeuren).
+- **Bardienstcoördinator** (rol Teamcoördinator): zelfde als vrijwilliger, plus **Mijn team**. Geen uitnodigen; ouders vult hij/zij op naam.
+- **Barcommissie** en **Admin:** Dashboard, Planning, Wedstrijden, Beheer. Geen Inschrijven of Ruilen. Ruilverzoeken keuren ze goed via **Beheer → Ruilen**. Beschikbaarheid van personen blijft via Beheer.
 
 ### Half-verplicht eruit
 Verplichting `HALF` (3×/jaar) bestaat niet meer. Bestaande `HALF` wordt `FULL` (1×/6 weken). Geldige waarden: `NONE`, `FULL`, `VR18`.
@@ -18,8 +18,17 @@ Verplichting `HALF` (3×/jaar) bestaat niet meer. Bestaande `HALF` wordt `FULL` 
 ### Persoonsnummer
 Intern nummer is automatisch, **random, 7 cijfers** (`1000000`–`9999999`). Geen `VVL-00001`. E-mail blijft uniek voor login; dat is niet herzien.
 
-### JO13-2 geen extra teamdienst
-Tweede + laatste teamdienst alleen voor MO17, O16/JO16, MO15/JO15/O15, en **O13-1 / JO13-1 / O13-1JM**. JO13-2 en andere O13-elftallen krijgen die extra teamdienst niet. Jonge jeugd O8–O12 blijft ochtend-teamdienst.
+### Jeugd-teamdiensten (O8–O17)
+Bij stap 1 van de planning reserveert de app teamplekken voor jeugdteams die **thuis** spelen:
+
+- **O8 t/m O12**, 07:30–12:00: 2 teamplekken + 1 open plek (standaard 3).
+- **O13 t/m O17** (inclusief JO13-2), 12:00–16:30: 2 teamplekken.
+- **O13 t/m O17**, 16:30–19:30: 1 teamplek + 1 open plek.
+
+Vrijwilligers/verplichte vullen de open plek; de bardienstcoördinator vult de teamplekken met namen van ouders (geen e-mail nodig). Meerdere teams thuis: elk team krijgt de eigen teamplekken; `required` groeit mee.
+
+### Planningsperiode
+De barcommissie kiest zelf van/tot (bijvoorbeeld oktober t/m december), maximaal 13 maanden. Niet meer hardcoded 6 weken.
 
 ### Ruilen (voorlopige controleregels, wél in productie)
 Bron: FO §53–56 / §89; details later aanscherpen.
@@ -45,14 +54,14 @@ Bron: FO §34 / §89; later herzien.
 
 Teamdiensten en no-shows tellen niet mee. Geen extra straf op oude historie buiten dit jaar.
 
-### Teamcoördinator-dashboard
-`/teams` is een echt overzicht: leden + resterende persoonlijke verplichting, komende wedstrijden, teamdiensten, en inschrijven van een lid op een open persoonlijke plek. `GET /api/teams` toont voor een teamcoördinator alleen de eigen teams.
+### Bardienstcoördinator
+`/teams` (**Mijn team**): ouders/leden op naam, hoe vaak ze al hebben gestaan, komende wedstrijden, open teamplekken invullen. Ouders hebben geen account of e-mail nodig. De coordinator kan zichzelf ook inschrijven/ruilen als vrijwilliger.
 
 ### Herinneringen (1 dag van tevoren)
 E-mail **1 dag voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen push, geen WhatsApp. `Enrollment.remindedAt` voorkomt dubbele mails. De server draait dit elk uur en bij `/api/health` (max. eens per 50 minuten). Barcommissie kan **Herinneringen morgen** forceren. Productie mag niet “in slaap” vallen, anders mist de cron.
 
 ### Publiceren als officieel
-Na **Maak officieel** worden gepubliceerde diensten in het 6-wekenvenster vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.
+Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.
 
 ### Seizoen
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.
@@ -64,10 +73,10 @@ CSV `naam;email;telefoon;team;rol;verplichting`. **Maakt geen teams aan**; onbek
 `/api/planning/export.xlsx`: bladen Diensten en Inschrijvingen. Blad Personen alleen voor barcommissie/admin.
 
 ### Clubhuisprint
-PDF van de **huidige week**, bar én keuken. Titel “officieel” als de ronde vergrendeld is. De 6-weken-PDF toont eveneens keukenrijen.
+PDF van de **huidige week**, bar én keuken. Titel “officieel” als de ronde vergrendeld is. Het rooster-PDF volgt de gekozen periode (per 6 kolommen een pagina).
 
 ### AVG
-Auditlogs **24 maanden**. Contact, foto en inlog van gedeactiveerde accounts na **24 maanden** wissen. Roosterhistorie blijft. Publieke pagina `/privacy`. Eigen export via Voorkeuren (`GET /api/persons/me/export`).
+Auditlogs **24 maanden**. Contact, foto en inlog van gedeactiveerde accounts na **24 maanden** wissen. Roosterhistorie blijft. Publieke pagina `/privacy`. Eigen export als **Excel** via Inschrijven (`GET /api/persons/me/export.xlsx`).
 
 ### Hosting
 Productie: **Render Starter** (of gelijkwaardig) met persistente schijf (`DATA_DIR`). Render Free is alleen demo: data verdwijnt bij slaapstand; herinneringen lopen dan niet betrouwbaar.

@@ -18,6 +18,7 @@ import { buildPlanningControls } from '../lib/planningControls.js';
 import { writeAudit } from '../lib/audit.js';
 import { markPlanningOfficial } from '../lib/official.js';
 import { runDutyReminders } from '../lib/reminders.js';
+import { periodFromRound, periodJson, resolvePlanningPeriod } from '../lib/planningPeriod.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 
 const router = Router();
@@ -198,7 +199,8 @@ router.get(
     } else if (filter === 'week') {
       where.date = { gte: startOfWeek(now), lte: endOfWeek(now) };
     } else if (!from && !to) {
-      where.date = { gte: startOfDay(now), lte: endOfDay(addWeeks(now, 6)) };
+      const roundPeriod = await periodFromRound(prisma);
+      where.date = { gte: roundPeriod.from, lte: roundPeriod.to };
     } else {
       where.date = {};
       if (from) where.date.gte = startOfDay(new Date(from));
@@ -226,11 +228,13 @@ router.get(
       );
     }
 
+    const periodStart = where.date?.gte ?? startOfDay(now);
+    const periodEnd = where.date?.lte ?? endOfDay(addWeeks(now, 6));
     res.json({
       services,
       period: {
-        from: from || toIsoDate(where.date?.gte ?? startOfDay(now)),
-        to: to || toIsoDate(where.date?.lte ?? endOfDay(addWeeks(now, 6))),
+        from: from || toIsoDate(periodStart),
+        to: to || toIsoDate(periodEnd),
       },
     });
   } catch (err) {
@@ -377,7 +381,7 @@ router.post(
   '/fill-mandatory',
   admin(async (req, res, next) => {
     try {
-      const result = await fillMandatoryPersonal({ actorId: req.person.id });
+      const result = await fillMandatoryPersonal({ actorId: req.person.id, ...req.body });
       res.json(result);
     } catch (err) {
       next(err);
@@ -401,7 +405,7 @@ router.post(
   '/official',
   admin(async (req, res, next) => {
     try {
-      const result = await markPlanningOfficial({ weeks: Number(req.body?.weeks) || 6 });
+      const result = await markPlanningOfficial(req.body ?? {});
       await writeAudit({
         actorId: req.person.id,
         action: 'planning.official',
@@ -433,8 +437,9 @@ router.get(
   requireAuth(async (req, res, next) => {
     try {
       const now = startOfDay(new Date());
-      const from = req.query.from ? startOfDay(new Date(req.query.from)) : now;
-      const to = req.query.to ? endOfDay(new Date(req.query.to)) : endOfDay(addWeeks(now, 6));
+      const roundPeriod = await periodFromRound(prisma);
+      const from = req.query.from ? startOfDay(new Date(req.query.from)) : roundPeriod.from;
+      const to = req.query.to ? endOfDay(new Date(req.query.to)) : roundPeriod.to;
       const services = await prisma.service.findMany({
         where: { active: true, draft: false, date: { gte: from, lte: to } },
         include: {

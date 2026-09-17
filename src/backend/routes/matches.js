@@ -8,9 +8,11 @@ import { combineDateAndTime } from '../lib/time.js';
 import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
 import { trySyncPlanningFromMatches } from '../lib/proposePlanning.js';
 import {
+  addTeamToIndex,
   buildTeamIndex,
   findTeamInIndex,
 } from '../lib/knvbTeams.js';
+import { defaultTeamFunctions } from '../lib/teamFunctions.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -125,6 +127,7 @@ async function persistValidRows(validRows) {
   let skippedDuplicates = 0;
   const recognizedTeamNames = new Set();
   const unknownTeamNames = new Set();
+  const createdTeamNames = [];
 
   for (const row of validRows) {
     try {
@@ -140,13 +143,23 @@ async function persistValidRows(validRows) {
       let teamId = null;
       const teamName = (row.team || '').trim();
       if (teamName) {
-        const found = findTeamInIndex(index, teamName);
-        if (found) {
-          teamId = found.id;
-          recognizedTeamNames.add(found.name);
-        } else {
-          unknownTeamNames.add(teamName);
+        let found = findTeamInIndex(index, teamName);
+        if (!found) {
+          const fn = defaultTeamFunctions(teamName);
+          found = await prisma.team.create({
+            data: {
+              name: teamName,
+              availabilityUse: fn.availabilityUse,
+              teamDutyUse: fn.teamDutyUse,
+              teamDutySlots: JSON.stringify(fn.teamDutySlots),
+              functionsConfigured: true,
+            },
+          });
+          addTeamToIndex(index, found);
+          createdTeamNames.push(found.name);
         }
+        teamId = found.id;
+        recognizedTeamNames.add(found.name);
       }
 
       const match = await prisma.match.create({
@@ -179,6 +192,7 @@ async function persistValidRows(validRows) {
     skippedDuplicates,
     teamsRecognized: [...recognizedTeamNames],
     unknownTeams: [...unknownTeamNames],
+    createdTeams: createdTeamNames,
   };
 }
 
@@ -239,7 +253,7 @@ router.post(
         });
       }
 
-      const { created, persistErrors, skippedDuplicates, teamsRecognized, unknownTeams } =
+      const { created, persistErrors, skippedDuplicates, teamsRecognized, unknownTeams, createdTeams } =
         await persistValidRows(result.rows);
       const planning = await trySyncPlanningFromMatches();
 
@@ -265,6 +279,8 @@ router.post(
         teamsRecognizedNames: teamsRecognized,
         unknownTeams,
         unknownTeamCount: unknownTeams.length,
+        createdTeams,
+        createdTeamCount: createdTeams.length,
         planningCreated: planning.created ?? 0,
         planningRemoved: planning.removed ?? 0,
         teamDutiesCreated: planning.teamDuties ?? 0,

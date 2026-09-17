@@ -1,5 +1,5 @@
 import prisma from './prisma.js';
-import { addWeeks, endOfDay, startOfDay } from './dates.js';
+import { addWeeks, startOfDay } from './dates.js';
 import {
   executedCountForObligation,
   isUnavailableOn,
@@ -10,6 +10,9 @@ import {
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
 import { writeAudit } from './audit.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
+import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import { friendlyEnrollmentReason, serviceCapacity } from './teamDutyPlanning.js';
+import { serviceInclude } from './serviceHelpers.js';
 
 function countsForPerson(person, windows) {
   return {
@@ -32,19 +35,18 @@ export function skipReasonForPerson(person, remaining, { hadOverlap, hadEligible
 }
 
 export function autoReason(person, isMakeup) {
-  if (isMakeup) {
-    const n = person.makeupDue ?? 0;
-    return `Automatisch ingepland voor inhaaldienst: ${n} openstaande inhaaldienst${n === 1 ? '' : 'en'}.`;
-  }
-  if (person.obligation === OBLIGATIONS.VR18) {
-    return 'Automatisch ingepland: VR18+, persoonlijke verplichting nog niet voldaan.';
-  }
-  return 'Automatisch ingepland: verplicht lid, persoonlijke verplichting nog niet voldaan.';
+  return friendlyEnrollmentReason('AUTO', {
+    makeup: isMakeup,
+    obligation: person.obligation,
+  });
 }
 
-export async function fillMandatoryPersonal({ actorId = null } = {}) {
-  const from = startOfDay(new Date());
-  const to = endOfDay(addWeeks(from, 6));
+export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } = {}) {
+  const period = from || to
+    ? resolvePlanningPeriod({ from, to, weeks })
+    : await periodFromRound(prisma);
+  from = period.from;
+  to = period.to;
   const windows = {
     from,
     to,
@@ -57,10 +59,9 @@ export async function fillMandatoryPersonal({ actorId = null } = {}) {
     where: {
       active: true,
       draft: false,
-      kind: 'PERSONAL',
       date: { gte: from, lte: to },
     },
-    include: { enrollments: true },
+    include: serviceInclude,
     orderBy: [{ date: 'asc' }, { time: 'asc' }],
   });
 
@@ -100,7 +101,7 @@ export async function fillMandatoryPersonal({ actorId = null } = {}) {
   const details = [];
 
   for (const service of services) {
-    let open = service.required - service.enrollments.length;
+    let open = serviceCapacity(service).personalOpen;
     if (open <= 0) continue;
     const already = new Set(service.enrollments.map((e) => e.personId));
     const dayIso = startOfDay(service.date).toISOString();
@@ -141,6 +142,7 @@ export async function fillMandatoryPersonal({ actorId = null } = {}) {
           makeup: isMakeup,
         },
       });
+      service.enrollments.push({ personId: row.person.id, kind: 'PERSONAL', noShow: false });
       if (isMakeup) {
         row.person.makeupDue = Math.max(0, (row.person.makeupDue ?? 0) - 1);
         await prisma.person.update({
@@ -200,5 +202,5 @@ export async function fillMandatoryPersonal({ actorId = null } = {}) {
     detail: `${filled} automatisch ingepland, ${unfilled.length} verplichting(en) open`,
   });
 
-  return { filled, details, unfilled };
+  return { filled, details, unfilled, period: { from, to } };
 }

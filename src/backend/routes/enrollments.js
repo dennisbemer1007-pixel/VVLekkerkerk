@@ -8,6 +8,9 @@ import { blocksForPerson, overlappingMatchBlocks } from '../lib/matchBlocks.js';
 import { writeAudit } from '../lib/audit.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { pendingForEnrollment } from '../lib/swapQueries.js';
+import { friendlyEnrollmentReason, serviceCapacity, teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
+import { personTeamIds } from '../lib/teamFunctions.js';
+import { serviceInclude } from '../lib/serviceHelpers.js';
 
 const router = Router();
 
@@ -36,18 +39,23 @@ async function canManageEnrollment(actor, targetPersonId) {
   if (actor.role === 'Teamcoördinator') {
     const target = await prisma.person.findUnique({
       where: { id: Number(targetPersonId) },
-      select: { teamId: true, team: { select: { coordinatorId: true } } },
+      include: { team: true, teamMemberships: { where: { active: true } } },
     });
     if (!target) return false;
-    if (actor.teamId && target.teamId === actor.teamId) return true;
+    const allowed = await teamIdsForActor(actor);
+    if (target.teamId && allowed.has(target.teamId)) return true;
     if (target.team?.coordinatorId === actor.id) return true;
+    for (const m of target.teamMemberships || []) {
+      if (allowed.has(m.teamId)) return true;
+    }
   }
   return false;
 }
 
 function enrollmentSource(actor, targetPersonId) {
-  if (isAdminRole(actor.role) && actor.id !== Number(targetPersonId)) return 'ADMIN';
-  if (actor.role === 'Teamcoördinator' && actor.id !== Number(targetPersonId)) return 'TEAM';
+  if (Number(actor.id) === Number(targetPersonId)) return 'SELF';
+  if (isAdminRole(actor.role)) return 'ADMIN';
+  if (actor.role === 'Teamcoördinator') return 'TEAM';
   return 'SELF';
 }
 
@@ -108,6 +116,7 @@ router.post(
 
       const servicePreview = await prisma.service.findUnique({
         where: { id: Number(serviceId) },
+        include: serviceInclude,
       });
       if (servicePreview) {
         const matches = await prisma.match.findMany({
@@ -136,7 +145,7 @@ router.post(
         const enrollment = await prisma.$transaction(async (tx) => {
           const service = await tx.service.findUnique({
             where: { id: Number(serviceId) },
-            include: { enrollments: true },
+            include: serviceInclude,
           });
           if (!service || !service.active) {
             const err = new Error('Dienst niet gevonden of uitgeschakeld');
@@ -154,11 +163,6 @@ router.post(
             const err = new Error(
               'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
             );
-            err.status = 403;
-            throw err;
-          }
-          if (service.kind === 'TEAM' && !isAdminRole(req.person.role) && req.person.role !== 'Teamcoördinator') {
-            const err = new Error('Deze teamdienst wordt ingevuld door de teamcoördinator');
             err.status = 403;
             throw err;
           }
@@ -183,16 +187,63 @@ router.post(
           }
 
           const source = enrollmentSource(req.person, targetId);
-          const kind = service.kind === 'TEAM' ? 'TEAM' : 'PERSONAL';
+          const capacity = serviceCapacity(service);
+          const actorTeamIds = source === 'TEAM' ? await teamIdsForActor(req.person) : new Set();
+          const personTeams = new Set(personTeamIds(person));
+          const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
+          const dutyTeams = (service.teamDuties || []).map((d) => d.teamId);
+          let forTeamId = null;
+          let kind = 'PERSONAL';
+
+          const pickTeamDuty = () => {
+            if (requestedTeamId && dutyTeams.includes(requestedTeamId) && teamDutyOpenForTeam(service, requestedTeamId) > 0) {
+              return requestedTeamId;
+            }
+            for (const teamId of dutyTeams) {
+              if (!personTeams.has(teamId) && source !== 'ADMIN') continue;
+              if (source === 'TEAM' && !actorTeamIds.has(teamId) && !isAdminRole(req.person.role)) continue;
+              if (teamDutyOpenForTeam(service, teamId) > 0) return teamId;
+            }
+            return null;
+          };
+
+          const fillingForSomeoneElse = Number(req.person.id) !== targetId;
+          if ((fillingForSomeoneElse && (source === 'TEAM' || source === 'ADMIN')) || requestedTeamId) {
+            const dutyTeam = pickTeamDuty();
+            if (dutyTeam) {
+              kind = 'TEAM';
+              forTeamId = dutyTeam;
+            }
+          }
+
+          if (kind === 'TEAM') {
+            if (!isAdminRole(req.person.role) && teamDutyOpenForTeam(service, forTeamId) <= 0) {
+              const err = new Error('Alle teamdienst-plekken van dit team zijn al ingevuld');
+              err.status = 409;
+              throw err;
+            }
+            if (source === 'TEAM' && !actorTeamIds.has(forTeamId) && !isAdminRole(req.person.role)) {
+              const err = new Error('Je mag alleen ouders van je eigen team op de teamdienst zetten');
+              err.status = 403;
+              throw err;
+            }
+          } else {
+            if (capacity.personalOpen <= 0) {
+              const err = new Error(
+                capacity.teamOpen > 0
+                  ? 'De open plekken op deze dienst zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.'
+                  : 'Deze dienst is al vol',
+              );
+              err.status = 409;
+              throw err;
+            }
+          }
+
           const isMakeup = kind === 'PERSONAL' && (person.makeupDue ?? 0) > 0;
-          const reason =
-            source === 'AUTO'
-              ? null
-              : source === 'ADMIN'
-                ? 'Handmatig ingepland door barcommissie'
-                : source === 'TEAM'
-                  ? 'Ingepland door teamcoördinator'
-                  : 'Zelf gekozen dienst';
+          const reason = friendlyEnrollmentReason(source, {
+            makeup: isMakeup,
+            obligation: person.obligation,
+          });
 
           return tx.enrollment.create({
             data: {
@@ -200,10 +251,11 @@ router.post(
               personId: targetId,
               source,
               kind,
+              forTeamId,
               reason,
               makeup: isMakeup,
             },
-            include: { person: true, service: true },
+            include: { person: true, service: true, forTeam: true },
           });
         });
 

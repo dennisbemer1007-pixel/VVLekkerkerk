@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi.js';
 import { WEEKDAY_OPTIONS, CONDITION_OPTIONS, ACTIVITY_TYPE_OPTIONS } from './planningLabels.js';
+import { scrollToForm } from '../utils/scrollToForm.js';
 
 const emptyRule = {
   name: '',
@@ -22,6 +23,7 @@ const emptyRule = {
 };
 
 export default function DienstregelsBeheer() {
+  const formRef = useRef(null);
   const [rules, setRules] = useState([]);
   const [teams, setTeams] = useState([]);
   const [form, setForm] = useState(emptyRule);
@@ -76,7 +78,7 @@ export default function DienstregelsBeheer() {
     try {
       const res = await api.applyServiceRules();
       setMsg(
-        `Regels toegepast: +${res.created} nieuw, ${res.updated} bijgewerkt, ${res.removed} verwijderd (alleen lege auto-diensten).`,
+        `Standaardregels toegepast op de planningsperiode: +${res.created} nieuw, ${res.updated} bijgewerkt, ${res.removed} verwijderd (alleen lege auto-diensten).`,
       );
     } catch (err) {
       setError(err.message);
@@ -88,18 +90,24 @@ export default function DienstregelsBeheer() {
   return (
     <section className="space-y-4">
       <div className="vvl-card space-y-2">
-        <h2 className="font-heading text-lg font-black uppercase">Configureerbare dienstregels</h2>
+        <h2 className="font-heading text-lg font-black uppercase">Standaard dienstregels</h2>
         <p className="text-sm text-gray-700">
-          Niet “vrijdag is altijd bardienst”, maar: onder welke voorwaarden ontstaat een dienst?
-          Wijzigingen gelden voor nieuwe/toekomstige diensten. Vastgezette en handmatige diensten
-          blijven staan.
+          Dit zijn de <strong>standaardregels van de club</strong>. Elke nieuwe planning (stap 1)
+          gebruikt ze automatisch: doordeweekse bar, zaterdag ochtend/middag/avond met
+          jeugd-teamdiensten, keuken, vrijdag-klaverjas en late keuken bij Lekkerkerk 1 thuis.
+          Je hoeft ze niet opnieuw in te voeren. Alleen aanpassen als de club de tijden of
+          aantallen wijzigt.
         </p>
         <button type="button" className="vvl-btn-primary w-fit" disabled={busy} onClick={apply}>
-          {busy ? 'Bezig…' : 'Regels toepassen op komende 6 weken'}
+          {busy ? 'Bezig…' : 'Standaardregels opnieuw toepassen op de planningsperiode'}
         </button>
       </div>
 
-      <form onSubmit={submit} className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <form
+        ref={formRef}
+        onSubmit={submit}
+        className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
         <h3 className="sm:col-span-2 lg:col-span-3 font-heading font-black uppercase">
           {editId ? 'Regel bewerken' : 'Nieuwe regel'}
         </h3>
@@ -317,6 +325,7 @@ export default function DienstregelsBeheer() {
                         teamDutySlotRole: r.teamDutySlotRole || '',
                         slot: r.slot || '',
                       });
+                      scrollToForm(formRef);
                     }}
                   >
                     Bewerk

@@ -87,6 +87,8 @@ model Team {
   memberships          PersonTeam[]
   matches              Match[]
   assignedServices     Service[] @relation("AssignedTeam")
+  teamDuties           ServiceTeamDuty[]
+  dutyEnrollments      Enrollment[] @relation("EnrollmentForTeam")
   conditionRules       ServiceRule[] @relation("RuleConditionTeam")
 }
 
@@ -159,7 +161,7 @@ model Service {
   active         Boolean      @default(true)
   draft          Boolean      @default(false)
   locked         Boolean      @default(false)
-  /** PERSONAL | TEAM */
+  /** PERSONAL | TEAM | MIXED */
   kind           String       @default("PERSONAL")
   /** AUTO | MANUAL | YEAR */
   origin         String       @default("AUTO")
@@ -169,6 +171,7 @@ model Service {
   match          Match?       @relation(fields: [matchId], references: [id])
   assignedTeamId Int?
   assignedTeam   Team?        @relation("AssignedTeam", fields: [assignedTeamId], references: [id])
+  teamDuties     ServiceTeamDuty[]
   sourceRuleId   Int?
   sourceRule     ServiceRule? @relation(fields: [sourceRuleId], references: [id])
   activityId     Int?
@@ -188,6 +191,9 @@ model Enrollment {
   source    String   @default("SELF")
   /** PERSONAL | TEAM */
   kind      String   @default("PERSONAL")
+  /** Team waarvan deze inschrijving een gereserveerde teamdienst-plek vult */
+  forTeamId Int?
+  forTeam   Team?    @relation("EnrollmentForTeam", fields: [forTeamId], references: [id])
   reason    String?
   makeup    Boolean  @default(false)
   noShow    Boolean  @default(false)
@@ -197,6 +203,18 @@ model Enrollment {
   swapsTo   SwapRequest[] @relation("SwapTo")
 
   @@unique([serviceId, personId])
+}
+
+/** Gereserveerde teamdienst-plekken op een bardienst (bijv. 2 voor O12-1). */
+model ServiceTeamDuty {
+  id        Int     @id @default(autoincrement())
+  serviceId Int
+  teamId    Int
+  reserved  Int     @default(2)
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, teamId])
 }
 
 /** Twee bestaande persoonlijke diensten ruilen. */

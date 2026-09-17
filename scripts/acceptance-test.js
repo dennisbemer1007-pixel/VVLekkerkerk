@@ -106,8 +106,10 @@ async function main() {
     record(
       'lisa tabs alleen vrijwilliger',
       lisaMe.json?.access?.can?.includes('inschrijven') === true &&
+        lisaMe.json?.access?.can?.includes('ruilen') === true &&
         lisaMe.json?.access?.can?.includes('dashboard') === false &&
-        lisaMe.json?.access?.can?.includes('planning') === false,
+        lisaMe.json?.access?.can?.includes('planning') === false &&
+        lisaMe.json?.access?.can?.includes('voorkeuren') === false,
     ),
   );
 
@@ -155,6 +157,51 @@ async function main() {
 
   const dash = await req('/api/teams/dashboard', { token: sandra });
   mark(record('sandra teamdashboard', Array.isArray(dash.json?.teams) && dash.json.teams.length >= 1));
+  const sandraMe = await req('/api/auth/me', { token: sandra });
+  mark(
+    record(
+      'bardienstcoordinator zelfde als vrijwilliger plus team',
+      sandraMe.json?.access?.can?.includes('inschrijven') === true &&
+        sandraMe.json?.access?.can?.includes('ruilen') === true &&
+        sandraMe.json?.access?.can?.includes('teams') === true &&
+        sandraMe.json?.access?.can?.includes('beheer') === false,
+    ),
+  );
+
+  const xlsxMe = await req('/api/persons/me/export.xlsx', { token: lisa, raw: true });
+  mark(
+    record(
+      'lisa AVG excel',
+      xlsxMe.status === 200 && xlsxMe.buf.slice(0, 2).toString() === 'PK',
+    ),
+  );
+
+  const from = new Date();
+  const to = new Date();
+  to.setMonth(to.getMonth() + 3);
+  const propose = await req('/api/planning/propose', {
+    method: 'POST',
+    token: admin,
+    body: { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) },
+  });
+  mark(
+    record(
+      'planperiode zelf kiezen',
+      propose.status === 201 && Number(propose.json?.slots ?? 0) >= 0,
+      String(propose.status),
+    ),
+  );
+  const afterPropose = await req('/api/services', { token: admin });
+  const morningDuty = (afterPropose.json || []).find(
+    (s) => s.slot === 'MORNING' && s.type === 'BAR' && (s.teamDuties || []).length,
+  );
+  mark(
+    record(
+      'zaterdag ochtend jeugd-teamdienst',
+      Boolean(morningDuty) && (morningDuty.capacity?.teamReserved ?? 0) >= 2,
+      morningDuty ? `reserved ${morningDuty.capacity?.teamReserved}` : 'geen teamdienst',
+    ),
+  );
 
   const teamsSandra = await req('/api/teams', { token: sandra });
   const teamsAdmin = await req('/api/teams', { token: admin });

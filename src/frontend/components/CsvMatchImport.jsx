@@ -172,6 +172,9 @@ export default function CsvMatchImport({ onImported }) {
           (res.unknownTeamCount
             ? ` · ${res.unknownTeamCount} team(s) niet herkend: ${(res.unknownTeams || []).join(', ')}`
             : '') +
+          (res.createdTeams?.length
+            ? ` · nieuwe teams: ${res.createdTeams.join(', ')}`
+            : '') +
           (res.planningCreated ? ` · ${res.planningCreated} dienst(en) aangemaakt` : '') +
           (res.teamDutiesCreated ? ` · ${res.teamDutiesCreated} teamdienst(en)` : ''),
       );
@@ -291,6 +294,7 @@ export default function CsvMatchImport({ onImported }) {
         Sleep het KNVB-bestand hierheen (<code>.xlsx</code> of <code>.csv</code>). Kolommen:{' '}
         <code>Datum; Tijd; Thuis; Uit; Wedstrijdnr.; Type; Spelniveau; Opmerkingen</code>.
         Spelniveau en opmerkingen zijn optioneel. Thuis/uit volgt uit welke ploeg Lekkerkerk is.
+        Ontbrekende jeugdteams worden automatisch aangemaakt (met de juiste teamdienst-shifts).
       </p>
 
       <div

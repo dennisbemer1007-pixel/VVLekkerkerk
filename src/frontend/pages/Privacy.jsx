@@ -23,7 +23,7 @@ export default function Privacy() {
           </p>
           <p>
             <strong>Welke gegevens:</strong> naam, persoonsnummer, optioneel e-mail en telefoon,
-            foto, team, rol, verplichting, voorkeuren, inschrijvingen, ruilverzoeken, no-shows en
+            foto, team, rol, verplichting, beschikbaarheid (beheer), inschrijvingen, ruilverzoeken, no-shows en
             auditlogs. Inloggen gaat via e-mail en wachtwoord (sessietoken in je browser, geen
             trackingcookies).
           </p>
@@ -39,9 +39,9 @@ export default function Privacy() {
             telefoon.
           </p>
           <p>
-            <strong>Jouw rechten:</strong> inzage en kopie via Voorkeuren → Gegevens downloaden.
-            Rectificatie via de barcommissie. Wissen van contact: barcommissie deactiveert het
-            account en kan contact meteen wissen; namen in oude roosters blijven. Bezwaar of
+            <strong>Jouw rechten:</strong> inzage en kopie via Inschrijven → Gegevens downloaden
+            (Excel). Rectificatie via de barcommissie. Wissen van contact: barcommissie deactiveert
+            het account en kan contact meteen wissen; namen in oude roosters blijven. Bezwaar of
             klacht: bestuur V.V. Lekkerkerk of de Autoriteit Persoonsgegevens.
           </p>
           <p>

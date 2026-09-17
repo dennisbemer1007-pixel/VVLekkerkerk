@@ -20,15 +20,15 @@ export function isOldYouthTeam(teamName) {
   return parseJoAge(teamName)?.group === 'old';
 }
 
-/** Standaardtijden bardienst (bezetting 2) */
+/** Standaardtijden zaterdagse bardienst */
 export const SLOT_TIMES = {
   MORNING: {
-    BAR: '09:00 - 12:00',
+    BAR: '07:30 - 12:00',
   },
   AFTERNOON: {
-    BAR: '12:00 - 16:00',
+    BAR: '12:00 - 16:30',
   },
   EVENING: {
-    BAR: '16:00 - 20:30',
+    BAR: '16:30 - 19:30',
   },
 };

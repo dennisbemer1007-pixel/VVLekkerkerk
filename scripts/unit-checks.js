@@ -32,6 +32,12 @@ import {
   serviceWindowForKickoff,
 } from '../src/backend/lib/matchPlanning.js';
 import {
+  requiredForTeamDuties,
+  teamDutyAssignments,
+} from '../src/backend/lib/teamDutyPlanning.js';
+import { resolvePlanningPeriod } from '../src/backend/lib/planningPeriod.js';
+import { toIsoDate } from '../src/backend/lib/dates.js';
+import {
   SLOT_ROWS,
   inferSlot,
   rosterDaySections,
@@ -108,10 +114,11 @@ assert('JO15-1 is old youth', isOldYouthTeam('JO15-1') === true);
 assert('O16-1 is old youth', isOldYouthTeam('O16-1') === true);
 
 const win9 = serviceWindowForKickoff('09:00');
-assert('kickoff 09:00 → 09:00 - 12:00', win9.time === '09:00 - 12:00' && win9.slot === 'MORNING');
-assert('kickoff 08:30 → ochtend 09:00 - 12:00', serviceWindowForKickoff('08:30').time === '09:00 - 12:00');
-assert('kickoff 15:00 → middag 12:00 - 16:00', serviceWindowForKickoff('15:00').time === '12:00 - 16:00');
-assert('kickoff 16:00 → avond 16:00 - 20:30', serviceWindowForKickoff('16:00').time === '16:00 - 20:30');
+assert('kickoff 09:00 → 07:30 - 12:00', win9.time === '07:30 - 12:00' && win9.slot === 'MORNING');
+assert('kickoff 08:30 → ochtend 07:30 - 12:00', serviceWindowForKickoff('08:30').time === '07:30 - 12:00');
+assert('kickoff 15:00 → middag 12:00 - 16:30', serviceWindowForKickoff('15:00').time === '12:00 - 16:30');
+assert('kickoff 16:00 → middag 12:00 - 16:30', serviceWindowForKickoff('16:00').time === '12:00 - 16:30');
+assert('kickoff 16:30 → avond 16:30 - 19:30', serviceWindowForKickoff('16:30').time === '16:30 - 19:30');
 
 const day = new Date('2026-09-12T12:00:00');
 const fiveSameTime = [1, 2, 3, 4, 5].map((n) => ({
@@ -129,7 +136,7 @@ const morningSpread = groupHomeMatchesByKickoff([
   { home: true, date: day, time: '10:15', opponent: 'B' },
   { home: true, date: day, time: '11:00', opponent: 'C' },
 ]);
-assert('morning kickoffs share 09:00-12:00', morningSpread.length === 1 && morningSpread[0].window.time === '09:00 - 12:00');
+assert('morning kickoffs share 07:30-12:00', morningSpread.length === 1 && morningSpread[0].window.time === '07:30 - 12:00');
 
 const mixedTimes = groupHomeMatchesByKickoff([
   { home: true, date: day, time: '09:00', opponent: 'A' },
@@ -165,7 +172,7 @@ assert(
   'pdf slot times bar',
   SLOT_ROWS.filter((r) => r.type === 'BAR')
     .map((r) => r.time)
-    .join('|') === '09:00 - 12:00|12:00 - 16:00|16:00 - 20:30',
+    .join('|') === '07:30 - 12:00|12:00 - 16:30|16:30 - 19:30',
 );
 assert('infer 19:00 as evening', inferSlot({ time: '19:00 - 22:00', slot: 'EXTRA' }) === 'EVENING');
 assert('infer 09:00 as morning', inferSlot({ time: '09:00 - 12:00' }) === 'MORNING');
@@ -286,7 +293,8 @@ assert('O15 is tweede+laatste', defaultTeamFunctions('O15-1').teamDutySlots.join
 assert('JO15 is tweede+laatste', defaultTeamFunctions('JO15-1').teamDutySlots.join(',') === 'SECOND,LAST');
 assert('O13-1JM is tweede+laatste', defaultTeamFunctions('O13-1JM').teamDutySlots.join(',') === 'SECOND,LAST');
 assert('O13-1 is eerste O13', isO13FirstTeam('O13-1') === true);
-assert('JO13-2 geen extra teamdienst', defaultTeamFunctions('JO13-2').teamDutyUse === false);
+assert('JO13-2 wel teamdienst middag+avond', defaultTeamFunctions('JO13-2').teamDutyUse === true);
+assert('JO13-2 tweede+laatste', defaultTeamFunctions('JO13-2').teamDutySlots.join(',') === 'SECOND,LAST');
 assert('Lekkerkerk 3 alleen beschikbaarheid', defaultTeamFunctions('Lekkerkerk 3').teamDutyUse === false);
 
 assert('person number 7 digits', isCanonicalPersonNumber('4829103') === true);
@@ -296,6 +304,7 @@ assert('role Bestuur becomes Admin', normalizeRole('Bestuur') === 'Admin');
 assert('canonical Bestuur is Admin', canonicalAccessRole('Bestuur') === 'Admin');
 assert('vrijwilliger geen dashboard', canAccess('Vrijwilliger', 'dashboard') === false);
 assert('vrijwilliger wel inschrijven', canAccess('Vrijwilliger', 'inschrijven') === true);
+assert('vrijwilliger geen voorkeuren-tab', canAccess('Vrijwilliger', 'voorkeuren') === false);
 assert('vrijwilliger geen planning', canAccess('Vrijwilliger', 'planning') === false);
 assert('barcommissie geen inschrijven', canAccess('Barcommissie', 'inschrijven') === false);
 assert('barcommissie geen ruilen-tab', canAccess('Barcommissie', 'ruilen') === false);
@@ -304,6 +313,8 @@ assert('barcommissie wel beheer', canAccess('Barcommissie', 'beheer') === true);
 assert('admin geen inschrijven', canAccess('Admin', 'inschrijven') === false);
 assert('admin wel beheer', canAccess('Admin', 'beheer') === true);
 assert('teamco wel inschrijven', canAccess('Teamcoördinator', 'inschrijven') === true);
+assert('teamco wel mijn team', canAccess('Teamcoördinator', 'teams') === true);
+assert('teamco geen voorkeuren-tab', canAccess('Teamcoördinator', 'voorkeuren') === false);
 
 const makeupFirst = compareFillCandidates(
   { person: { makeupDue: 1, obligation: 'FULL', personNumber: '2000000' }, counts: { countYear: 4 }, lastPersonalAt: new Date('2026-06-01') },
@@ -447,6 +458,59 @@ const swapMail = swapCommitteeEmailContent({
 });
 assert('ruilmail naar barcommissie', swapMail.subject.includes('goedkeuring') && swapMail.text.includes('barcommissie'));
 assert('ruilmail link naar beheer', swapMail.text.includes('/beheer?tab=ruilen'));
+
+const o12 = {
+  id: 12,
+  name: 'O12-1',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['MORNING']),
+};
+const o15 = {
+  id: 15,
+  name: 'O15-1',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['SECOND', 'LAST']),
+};
+const morningRule = { teamDuty: true, teamDutySlotRole: 'MORNING' };
+const secondRule = { teamDuty: true, teamDutySlotRole: 'SECOND' };
+const lastRule = { teamDuty: true, teamDutySlotRole: 'LAST' };
+const o12Home = {
+  team: o12,
+  home: true,
+  time: '09:00',
+  date: new Date('2026-09-19T12:00:00'),
+};
+const o15Home = {
+  team: o15,
+  home: true,
+  time: '14:00',
+  date: new Date('2026-09-19T12:00:00'),
+};
+const morningAssign = teamDutyAssignments(morningRule, [o12Home]);
+assert('O12 thuis ochtend 2 teamplekken', morningAssign.length === 1 && morningAssign[0].reserved === 2);
+assert(
+  'ochtend 2 team + 1 open = 3 nodig',
+  requiredForTeamDuties(3, 'MORNING', morningAssign) === 3,
+);
+assert(
+  'O15 thuis → middag teamdienst',
+  teamDutyAssignments(secondRule, [o15Home]).length === 1,
+);
+assert(
+  'O15 thuis → ook avond teamdienst',
+  teamDutyAssignments(lastRule, [o15Home]).length === 1 &&
+    teamDutyAssignments(lastRule, [o15Home])[0].reserved === 1,
+);
+assert(
+  'avond 1 team + 1 open = 2 nodig',
+  requiredForTeamDuties(2, 'LAST', teamDutyAssignments(lastRule, [o15Home])) === 2,
+);
+
+const period = resolvePlanningPeriod({ from: '2026-10-01', to: '2026-12-31' });
+assert(
+  'planperiode okt–dec',
+  toIsoDate(period.from) === '2026-10-01' && toIsoDate(period.to) === '2026-12-31',
+);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

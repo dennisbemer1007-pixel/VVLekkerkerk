@@ -33,7 +33,7 @@ export function inferSlot(service) {
   if (!start) return 'EXTRA';
   const minutes = Number(start[1]) * 60 + Number(start[2]);
   if (minutes < 12 * 60) return 'MORNING';
-  if (minutes < 16 * 60) return 'AFTERNOON';
+  if (minutes < 16 * 60 + 30) return 'AFTERNOON';
   return 'EVENING';
 }
 
@@ -59,7 +59,7 @@ export function rosterDaySections() {
   return DAY_LABELS.map((label, day) => ({ day, label, rows: SLOT_ROWS }));
 }
 
-export function weekStartsInRange(from, to, max = 6) {
+export function weekStartsInRange(from, to, max = 60) {
   const weekStarts = [];
   let cursor = startOfWeek(from);
   const last = startOfWeek(to);
@@ -135,136 +135,146 @@ export function renderPlanningRoster(doc, {
   generatedAt = new Date(),
   official = false,
   clubhouse = false,
-  maxWeeks = 6,
+  maxWeeks = 60,
 }) {
-  const weekStarts = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
+  const allWeeks = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
   const byWeekDay = groupServicesByWeekDay(services || []);
   const daySections = rosterDaySections();
+  const chunkSize = clubhouse ? 1 : 6;
+  const chunks = [];
+  for (let i = 0; i < Math.max(allWeeks.length, 1); i += chunkSize) {
+    chunks.push(allWeeks.slice(i, i + chunkSize));
+  }
 
   const pageW = doc.page.width - 48;
   const left = 24;
-  let y = 22;
-
   const labelW = 88;
-  const colW = (pageW - labelW) / Math.max(weekStarts.length, 1);
   const headerH = 26;
   const sectionH = 14;
   const rowH = 18;
 
-  const drawTitle = () => {
-    doc
-      .fontSize(13)
-      .font('Helvetica-Bold')
-      .fillColor('#000000')
-      .text(
-        official
-          ? 'V.V. Lekkerkerk — Officieel rooster kantinediensten'
-          : 'V.V. Lekkerkerk — Rooster kantinediensten',
-        left,
-        y,
-        {
-          width: pageW,
-          align: 'center',
-        },
-      );
-    y = doc.y + 2;
-    doc
-      .fontSize(7)
-      .font('Helvetica')
-      .fillColor('#555555')
-      .text(
-        clubhouse
-          ? 'Clubhuisprint · bar én keuken · namen per tijdsblok'
-          : 'Bar- en keukendienst per tijdsblok (ma–zo)',
-        left,
-        y,
-        {
-          width: pageW,
-          align: 'center',
-        },
-      );
-    doc.fillColor('#000000');
-    y = doc.y + 8;
-  };
+  chunks.forEach((weekStarts, chunkIndex) => {
+    if (chunkIndex > 0) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin: 24 });
+    }
+    let y = 22;
+    const colW = (pageW - labelW) / Math.max(weekStarts.length, 1);
 
-  const drawWeekHeader = () => {
-    drawCell(doc, left, y, labelW, headerH, 'Dag / Tijd', {
-      bold: true,
-      size: 7,
-      fill: '#f0f0f0',
-      stroke: '#888888',
-    });
-    weekStarts.forEach((ws, i) => {
-      const x = left + labelW + i * colW;
-      drawCell(doc, x, y, colW, headerH, `Week ${isoWeekNumber(ws)}\n${formatWeekRange(ws)}`, {
+    const drawTitle = () => {
+      doc
+        .fontSize(13)
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text(
+          official
+            ? 'V.V. Lekkerkerk — Officieel rooster kantinediensten'
+            : 'V.V. Lekkerkerk — Rooster kantinediensten',
+          left,
+          y,
+          {
+            width: pageW,
+            align: 'center',
+          },
+        );
+      y = doc.y + 2;
+      doc
+        .fontSize(7)
+        .font('Helvetica')
+        .fillColor('#555555')
+        .text(
+          clubhouse
+            ? 'Clubhuisprint · bar én keuken · namen per tijdsblok'
+            : 'Bar- en keukendienst per tijdsblok (ma–zo)',
+          left,
+          y,
+          {
+            width: pageW,
+            align: 'center',
+          },
+        );
+      doc.fillColor('#000000');
+      y = doc.y + 8;
+    };
+
+    const drawWeekHeader = () => {
+      drawCell(doc, left, y, labelW, headerH, 'Dag / Tijd', {
         bold: true,
-        size: 6.5,
-        align: 'center',
+        size: 7,
         fill: '#f0f0f0',
         stroke: '#888888',
       });
-    });
-    y += headerH;
-  };
+      weekStarts.forEach((ws, i) => {
+        const x = left + labelW + i * colW;
+        drawCell(doc, x, y, colW, headerH, `Week ${isoWeekNumber(ws)}\n${formatWeekRange(ws)}`, {
+          bold: true,
+          size: 6.5,
+          align: 'center',
+          fill: '#f0f0f0',
+          stroke: '#888888',
+        });
+      });
+      y += headerH;
+    };
 
-  const ensureSpace = (need) => {
-    if (y + need > doc.page.height - 28) {
-      doc.addPage({ size: 'A4', layout: 'landscape', margin: 24 });
-      y = 24;
-      drawWeekHeader();
-    }
-  };
+    const ensureSpace = (need) => {
+      if (y + need > doc.page.height - 28) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 24 });
+        y = 24;
+        drawWeekHeader();
+      }
+    };
 
-  drawTitle();
-  drawWeekHeader();
+    drawTitle();
+    drawWeekHeader();
 
-  for (const section of daySections) {
-    ensureSpace(sectionH + SLOT_ROWS.length * rowH);
+    for (const section of daySections) {
+      ensureSpace(sectionH + SLOT_ROWS.length * rowH);
 
-    drawCell(doc, left, y, labelW, sectionH, section.label, {
-      bold: true,
-      size: 8,
-      fill: '#e8e8e8',
-      stroke: '#888888',
-    });
-    weekStarts.forEach((_ws, i) => {
-      const x = left + labelW + i * colW;
-      drawCell(doc, x, y, colW, sectionH, '', {
+      drawCell(doc, left, y, labelW, sectionH, section.label, {
+        bold: true,
+        size: 8,
         fill: '#e8e8e8',
         stroke: '#888888',
       });
-    });
-    y += sectionH;
-
-    for (const row of section.rows) {
-      drawCell(doc, left, y, labelW, rowH, `${row.label}\n${row.time}`, {
-        bold: true,
-        size: 5.5,
-        fill: '#f7f7f7',
-        stroke: '#aaaaaa',
-      });
-      weekStarts.forEach((ws, i) => {
+      weekStarts.forEach((_ws, i) => {
         const x = left + labelW + i * colW;
-        const list = byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [];
-        const text = slotCellText(servicesForSlotRow(list, row));
-        drawCell(doc, x, y, colW, rowH, text, {
-          size: 6,
-          align: text === 'gesloten' || text === 'nog open' ? 'center' : 'left',
-          stroke: '#cccccc',
+        drawCell(doc, x, y, colW, sectionH, '', {
+          fill: '#e8e8e8',
+          stroke: '#888888',
         });
       });
-      y += rowH;
-    }
-  }
+      y += sectionH;
 
-  doc
-    .fontSize(6.5)
-    .fillColor('#666666')
-    .text(
-      `Gegenereerd ${generatedAt.toLocaleString('nl-NL')} — VVL Planning App`,
-      left,
-      doc.page.height - 18,
-      { align: 'center', width: pageW },
-    );
+      for (const row of section.rows) {
+        drawCell(doc, left, y, labelW, rowH, `${row.label}\n${row.time}`, {
+          bold: true,
+          size: 5.5,
+          fill: '#f7f7f7',
+          stroke: '#aaaaaa',
+        });
+        weekStarts.forEach((ws, i) => {
+          const x = left + labelW + i * colW;
+          const list = byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [];
+          const text = slotCellText(servicesForSlotRow(list, row));
+          drawCell(doc, x, y, colW, rowH, text, {
+            size: 6,
+            align: text === 'gesloten' || text === 'nog open' ? 'center' : 'left',
+            stroke: '#cccccc',
+          });
+        });
+        y += rowH;
+      }
+    }
+
+    doc
+      .fontSize(6.5)
+      .fillColor('#666666')
+      .text(
+        `Gegenereerd ${generatedAt.toLocaleString('nl-NL')} — VVL Planning App`,
+        left,
+        doc.page.height - 18,
+        { align: 'center', width: pageW },
+      );
+  });
 }
 

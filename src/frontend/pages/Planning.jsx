@@ -53,7 +53,7 @@ export default function Planning() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster-6-weken.pdf';
+      a.download = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster.pdf';
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -111,8 +111,8 @@ export default function Planning() {
         <div>
           <PageTitle {...PAGE_HELP.planning}>Planning</PageTitle>
           <p className="mt-1 text-sm text-gray-700">
-            Overzicht voor de komende 6 weken: bar- en keukendiensten uit de
-            configureerbare regels, wedstrijden en activiteiten.
+            Overzicht van bar- en keukendiensten in de gekozen planningsperiode (dienstregels,
+            thuiswedstrijden en activiteiten).
           </p>
           {period ? (
             <p className="mt-1 text-xs text-gray-600">
@@ -159,7 +159,7 @@ export default function Planning() {
             disabled={pdfBusy}
             onClick={() => downloadPdf(false)}
           >
-            {pdfBusy ? 'PDF laden…' : 'PDF 6 weken'}
+            {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
           </button>
         </div>
       </header>

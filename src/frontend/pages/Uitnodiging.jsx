@@ -121,14 +121,14 @@ export default function Uitnodiging() {
           />
         </div>
         <div>
-          <label className="vvl-label">Wachtwoord (min. 6 tekens)</label>
+          <label className="vvl-label">Wachtwoord (min. 8 tekens)</label>
           <input
             type="password"
             className="vvl-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
           />
         </div>
@@ -140,7 +140,7 @@ export default function Uitnodiging() {
             value={password2}
             onChange={(e) => setPassword2(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
           />
         </div>

@@ -1,6 +1,7 @@
 import prisma from './prisma.js';
 import { defaultServiceRuleSeed } from './defaultServiceRules.js';
-import { defaultTeamFunctions, isO13FirstTeam, parseTeamDutySlots } from './teamFunctions.js';
+import { defaultTeamFunctions, parseTeamDutySlots } from './teamFunctions.js';
+import { isOldYouthTeam, isYoungYouthTeam } from './youthTeams.js';
 import { ensurePersonNumbers } from './personNumber.js';
 import { getClubSettings } from './season.js';
 import { cleanupPrivacy } from './privacy.js';
@@ -16,11 +17,47 @@ export async function ensureDefaultServiceRules() {
   return { seeded: true, count: seed.length };
 }
 
-function isStrayO13TeamDuty(team) {
-  const compact = String(team.name || '').replace(/\s+/g, '');
-  if (!/(?:JO|O)13/i.test(compact) || isO13FirstTeam(team.name)) return false;
-  const slots = parseTeamDutySlots(team.teamDutySlots);
-  return Boolean(team.teamDutyUse) && slots.join(',') === 'SECOND,LAST';
+/** Bestaande zaterdag-barregels gelijk trekken met de standaard teamdienst-tijden. */
+export async function ensureStandardSaturdayBarRules() {
+  const specs = defaultServiceRuleSeed().filter(
+    (rule) => rule.weekday === 6 && rule.type === 'BAR' && rule.teamDuty,
+  );
+  let updated = 0;
+  for (const spec of specs) {
+    const existing = await prisma.serviceRule.findFirst({
+      where: {
+        weekday: 6,
+        type: 'BAR',
+        OR: [{ slot: spec.slot }, { teamDutySlotRole: spec.teamDutySlotRole }],
+      },
+    });
+    if (!existing) continue;
+    const same =
+      existing.startTime === spec.startTime &&
+      existing.endTime === spec.endTime &&
+      existing.required === spec.required &&
+      existing.teamDuty === true &&
+      existing.teamDutySlotRole === spec.teamDutySlotRole;
+    if (same) continue;
+    await prisma.serviceRule.update({
+      where: { id: existing.id },
+      data: {
+        startTime: spec.startTime,
+        endTime: spec.endTime,
+        required: spec.required,
+        teamDuty: true,
+        teamDutySlotRole: spec.teamDutySlotRole,
+        conditionType: 'ALWAYS',
+        active: true,
+      },
+    });
+    updated += 1;
+  }
+  return { updated };
+}
+
+function isYouthTeamName(name) {
+  return isYoungYouthTeam(name) || isOldYouthTeam(name);
 }
 
 export async function ensureTeamFunctions() {
@@ -29,13 +66,12 @@ export async function ensureTeamFunctions() {
   for (const team of teams) {
     const fn = defaultTeamFunctions(team.name);
     const slots = parseTeamDutySlots(team.teamDutySlots);
+    const youth = isYouthTeamName(team.name);
     const missedYouthDuty =
-      team.functionsConfigured &&
+      youth &&
       fn.teamDutyUse &&
-      !team.teamDutyUse &&
-      slots.length === 0;
-    const strayO13 = isStrayO13TeamDuty(team);
-    if (team.functionsConfigured && !missedYouthDuty && !strayO13) continue;
+      (slots.join(',') !== fn.teamDutySlots.join(',') || team.teamDutyUse !== fn.teamDutyUse);
+    if (team.functionsConfigured && !missedYouthDuty) continue;
     await prisma.team.update({
       where: { id: team.id },
       data: {
@@ -81,6 +117,7 @@ export async function ensureClubDefaults() {
   await ensurePersonNumbers();
   await getClubSettings();
   await ensureDefaultServiceRules();
+  await ensureStandardSaturdayBarRules();
   await ensureTeamFunctions();
   try {
     await purgeExpiredSessions();

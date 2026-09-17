@@ -12,9 +12,7 @@ export default function Layout({ children }) {
     { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
     { to: '/planning', label: 'Planning', show: can('planning') },
     { to: '/wedstrijden', label: 'Wedstrijden', show: can('wedstrijden') },
-    { to: '/voorkeuren', label: 'Voorkeuren', show: can('voorkeuren') },
     { to: '/teams', label: 'Mijn team', show: can('teams') && !can('beheer') },
-    { to: '/uitnodigen', label: 'Uitnodigen', show: can('teams') && !can('beheer') },
     { to: '/beheer', label: 'Beheer', show: can('beheer') },
   ].filter((i) => i.show);
 

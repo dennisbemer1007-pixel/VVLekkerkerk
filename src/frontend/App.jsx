@@ -11,7 +11,6 @@ import Ruilen from './pages/Ruilen.jsx';
 import TeamDashboard from './pages/TeamDashboard.jsx';
 import Privacy from './pages/Privacy.jsx';
 import Uitnodiging from './pages/Uitnodiging.jsx';
-import Voorkeuren from './pages/Voorkeuren.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
 import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
 import Wedstrijden from './pages/Wedstrijden.jsx';
@@ -45,7 +44,6 @@ function RoleHome() {
   if (can('dashboard')) return <Dashboard />;
   if (can('inschrijven')) return <Navigate to="/inschrijven" replace />;
   if (can('beheer')) return <Navigate to="/beheer" replace />;
-  if (can('voorkeuren')) return <Navigate to="/voorkeuren" replace />;
   return <Navigate to="/login" replace />;
 }
 
@@ -103,14 +101,7 @@ export default function App() {
                   </Protected>
                 }
               />
-              <Route
-                path="/voorkeuren"
-                element={
-                  <Protected feature="voorkeuren">
-                    <Voorkeuren />
-                  </Protected>
-                }
-              />
+              <Route path="/voorkeuren" element={<Navigate to="/inschrijven" replace />} />
               <Route
                 path="/beheer"
                 element={

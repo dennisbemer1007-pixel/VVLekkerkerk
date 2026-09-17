@@ -7,7 +7,7 @@ export const BAR_SLOTS = [
     slot: 'MORNING',
     label: 'Ochtend',
     time: SLOT_TIMES.MORNING.BAR,
-    startMinutes: 9 * 60,
+    startMinutes: 7 * 60 + 30,
   },
   {
     slot: 'AFTERNOON',
@@ -17,9 +17,9 @@ export const BAR_SLOTS = [
   },
   {
     slot: 'EVENING',
-    label: 'Late middag/avond',
+    label: 'Avond',
     time: SLOT_TIMES.EVENING.BAR,
-    startMinutes: 16 * 60,
+    startMinutes: 16 * 60 + 30,
   },
 ];
 
@@ -49,11 +49,11 @@ export function kickoffTimeFromMatch(match) {
   return '09:00';
 }
 
-/** Aftrap voor 12:00 → ochtend, tot 16:00 → middag, daarna avond. */
+/** Aftrap voor 12:00 → ochtend, tot 16:30 → middag, daarna avond. */
 export function slotForKickoff(kickoffHm) {
   const mins = parseTimeStartMinutes(kickoffHm);
   if (mins == null || mins < 12 * 60) return 'MORNING';
-  if (mins < 16 * 60) return 'AFTERNOON';
+  if (mins < 16 * 60 + 30) return 'AFTERNOON';
   return 'EVENING';
 }
 
@@ -75,7 +75,7 @@ export function windowForSlot(slot) {
   };
 }
 
-/** Aftrap 08:30 of 11:00 → vaste ochtenddienst 09:00 - 12:00. */
+/** Aftrap 08:30 of 11:00 → vaste ochtenddienst 07:30 - 12:00. */
 export function serviceWindowForKickoff(kickoffHm) {
   return windowForSlot(slotForKickoff(kickoffHm));
 }

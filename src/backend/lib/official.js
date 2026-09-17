@@ -1,17 +1,18 @@
 import prisma from './prisma.js';
-import { addWeeks, endOfDay, startOfDay } from './dates.js';
+import { resolvePlanningPeriod, periodFromRound } from './planningPeriod.js';
 
 export const OFFICIAL_DECISION =
-  'Na “officieel maken” is de 6-wekenplanning vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Teamcoördinatoren vullen teamdiensten vóór dit moment.';
+  'Na “officieel maken” is de planning van de gekozen periode vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.';
 
-export async function markPlanningOfficial({ weeks = 6 } = {}) {
-  const from = startOfDay(new Date());
-  const to = endOfDay(addWeeks(from, weeks));
+export async function markPlanningOfficial({ from, to, weeks } = {}) {
+  const period = from || to
+    ? resolvePlanningPeriod({ from, to, weeks })
+    : await periodFromRound(prisma);
   const locked = await prisma.service.updateMany({
     where: {
       active: true,
       draft: false,
-      date: { gte: from, lte: to },
+      date: { gte: period.from, lte: period.to },
     },
     data: { locked: true },
   });
@@ -19,18 +20,20 @@ export async function markPlanningOfficial({ weeks = 6 } = {}) {
     where: { id: 1 },
     create: {
       id: 1,
-      fromDate: from,
-      toDate: to,
+      fromDate: period.from,
+      toDate: period.to,
       status: 'OFFICIAL',
       official: true,
       publishedAt: new Date(),
     },
     update: {
+      fromDate: period.from,
+      toDate: period.to,
       status: 'OFFICIAL',
       official: true,
     },
   });
-  return { locked: locked.count, round };
+  return { locked: locked.count, round, period };
 }
 
 export async function planningIsOfficial() {

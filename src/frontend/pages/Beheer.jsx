@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
 import DienstCard from '../components/DienstCard.jsx';
@@ -6,6 +6,7 @@ import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
 import { SERVICE_TYPE_LABEL, todayInputValue, toDateInputValue } from '../utils/formatDate.js';
 import { helpForBeheerTab } from '../utils/pageHelp.js';
+import { scrollToForm } from '../utils/scrollToForm.js';
 
 import DienstregelsBeheer from './DienstregelsBeheer.jsx';
 import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
@@ -76,7 +77,7 @@ export default function Beheer({ mode = 'full' }) {
             ? 'Schrijf ouders of teamleden in voor een bardienst.'
             : mode === 'invite'
               ? 'Nodig ouders uit per e-mail. Zij maken zelf een account via de link.'
-              : 'Personen beheren, de 6-wekenplanning in stappen maken (Beheer → Planning), en ruilverzoeken goedkeuren.'}
+              : 'Personen beheren, een planning voor een zelf gekozen periode maken (Beheer → Planning), en ruilverzoeken goedkeuren.'}
         </p>
       </header>
 
@@ -111,6 +112,7 @@ export default function Beheer({ mode = 'full' }) {
 }
 
 function PersonenBeheer() {
+  const formRef = useRef(null);
   const [persons, setPersons] = useState([]);
   const [teams, setTeams] = useState([]);
   const [form, setForm] = useState({
@@ -204,6 +206,7 @@ function PersonenBeheer() {
       unavailableWeekdays: p.unavailableWeekdays || [],
       preferredSlots: p.preferredSlots || [],
     });
+    scrollToForm(formRef);
   };
 
   const toggleActive = async (p) => {
@@ -243,7 +246,11 @@ function PersonenBeheer() {
 
   return (
     <section className="space-y-4">
-      <form onSubmit={submit} className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <form
+        ref={formRef}
+        onSubmit={submit}
+        className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
         <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
           {editId ? 'Persoon bewerken' : 'Uitnodigen per e-mail'}
         </h2>
@@ -331,7 +338,7 @@ function PersonenBeheer() {
           Vrijgesteld (niet automatisch inplannen)
         </label>
         <div className="sm:col-span-2 lg:col-span-3">
-          <p className="vvl-label mb-2">Niet beschikbaar (vaste dagen)</p>
+          <p className="vvl-label mb-2">Kan niet op deze vaste weekdagen (voor automatische planning)</p>
           <div className="flex flex-wrap gap-3">
             {WEEKDAYS.map((d) => (
               <label key={d.id} className="flex items-center gap-1 text-sm font-semibold">
@@ -354,7 +361,7 @@ function PersonenBeheer() {
           </div>
         </div>
         <div className="sm:col-span-2 lg:col-span-3">
-          <p className="vvl-label mb-2">Voorkeur dagdeel</p>
+          <p className="vvl-label mb-2">Voorkeur dagdeel (alleen voor automatische planning, niet zichtbaar voor vrijwilligers)</p>
           <div className="flex flex-wrap gap-3">
             {SLOT_OPTS.map((s) => (
               <label key={s.id} className="flex items-center gap-1 text-sm font-semibold">
@@ -715,6 +722,7 @@ function ClubBeheer() {
 }
 
 function DienstenBeheer() {
+  const formRef = useRef(null);
   const [services, setServices] = useState([]);
   const [persons, setPersons] = useState([]);
   const [form, setForm] = useState({
@@ -790,6 +798,7 @@ function DienstenBeheer() {
       draft: Boolean(s.draft),
       slot: s.slot || 'EXTRA',
     });
+    scrollToForm(formRef);
   };
 
   const addPerson = async (serviceId) => {
@@ -835,7 +844,11 @@ function DienstenBeheer() {
 
   return (
     <section className="space-y-4">
-      <form onSubmit={submit} className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <form
+        ref={formRef}
+        onSubmit={submit}
+        className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
         <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
           {editId ? 'Dienst bewerken' : 'Dienst toevoegen'}
         </h2>
@@ -1130,7 +1143,7 @@ function TeamsBeheer() {
             checked={teamForm.availabilityUse}
             onChange={(e) => setTeamForm({ ...teamForm, availabilityUse: e.target.checked })}
           />
-          Persoonlijke beschikbaarheid (wedstrijdblokkade)
+          Persoonlijke beschikbaarheid: wedstrijd van dit team blokkeert inschrijven
         </label>
         <label className="flex items-center gap-2 text-sm font-semibold">
           <input
@@ -1138,7 +1151,7 @@ function TeamsBeheer() {
             checked={teamForm.teamDutyUse}
             onChange={(e) => setTeamForm({ ...teamForm, teamDutyUse: e.target.checked })}
           />
-          Teamdienst bij thuiswedstrijd
+          Teamdienst bij thuiswedstrijd (jeugd: ouders vullen de bardienstcoördinator in)
         </label>
         {teamForm.teamDutyUse ? (
           <div className="sm:col-span-2 flex flex-wrap gap-3">
@@ -1157,7 +1170,11 @@ function TeamsBeheer() {
                     });
                   }}
                 />
-                {slot === 'MORNING' ? 'Ochtend' : slot === 'SECOND' ? 'Tweede shift' : 'Laatste shift'}
+                {slot === 'MORNING'
+                  ? 'Ochtend 07:30–12:00'
+                  : slot === 'SECOND'
+                    ? 'Middag 12:00–16:30'
+                    : 'Avond 16:30–19:30'}
               </label>
             ))}
           </div>
@@ -1324,9 +1341,17 @@ function PlanningBeheer() {
   const [drafts, setDrafts] = useState([]);
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
+  const [fromDate, setFromDate] = useState(todayInputValue());
+  const [toDate, setToDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 42);
+    return toDateInputValue(d);
+  });
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const periodPayload = () => ({ from: fromDate, to: toDate });
 
   const load = () =>
     Promise.all([
@@ -1344,6 +1369,8 @@ function PlanningBeheer() {
         if (r?.volunteerDeadline) {
           setDeadline(toDateInputValue(r.volunteerDeadline));
         }
+        if (r?.fromDate) setFromDate(toDateInputValue(r.fromDate));
+        if (r?.toDate) setToDate(toDateInputValue(r.toDate));
       })
       .catch((e) => setError(e.message));
 
@@ -1390,14 +1417,14 @@ function PlanningBeheer() {
           Zo maak je de barplanning
         </h2>
         <p className="text-sm text-gray-800">
-          Volg de stappen hieronder van boven naar beneden. Eerst maakt de app de diensten
-          aan, daarna kunnen vrijwilligers zich inschrijven, en tot slot schrijf je de
-          <strong> verplichte mensen automatisch</strong> in op open plekken.
+          Volg de stappen van boven naar beneden. Je kiest zelf de periode (bijvoorbeeld oktober tot
+          december). De app deelt teamdiensten in bij jeugdteams die <strong>thuis</strong> spelen,
+          laat vrijwilligers de open plekken vullen, en plant daarna verplichte mensen in.
         </p>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-800">
-          <li>Diensten aanmaken uit regels + thuiswedstrijden</li>
+          <li>Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)</li>
           <li>Publiceren zodat mensen zich mogen inschrijven</li>
-          <li>Open plekken automatisch vullen met verplichte leden</li>
+          <li>Open (niet-team) plekken vullen met verplichte leden; coördinator vult ouders</li>
           <li>Rooster officieel vastzetten</li>
         </ol>
         <p className="text-sm">
@@ -1411,26 +1438,54 @@ function PlanningBeheer() {
 
       <PlanningStep number={1} title="Diensten aanmaken" done={hasServices}>
         <p className="text-sm text-gray-700">
-          De app maakt bar- en keukendiensten voor de komende ±6 weken uit de
-          <strong> dienstregels</strong> (Beheer → Dienstregels), plus{' '}
-          <strong>thuiswedstrijden</strong> en activiteiten. Handmatige of vastgezette
-          diensten blijven staan.
+          Kies de periode waarvoor je wilt plannen (bijvoorbeeld 1 oktober t/m 31 december).
+          De app gebruikt de <strong>standaard dienstregels</strong> van de club, plus
+          thuiswedstrijden en activiteiten. Jeugdteams die thuis spelen krijgen automatisch
+          hun teamdiensten:
         </p>
+        <ul className="list-disc pl-5 text-sm text-gray-700">
+          <li>O8 t/m O12, 07:30–12:00: 2 teamplekken (plus 1 open plek)</li>
+          <li>O13 t/m O17, 12:00–16:30: 2 teamplekken</li>
+          <li>O13 t/m O17, 16:30–19:30: 1 teamplek (plus 1 open plek)</li>
+        </ul>
         <p className="text-xs text-gray-600">
-          Tip: importeer eerst wedstrijden via Wedstrijden, en controleer of personen
-          de juiste verplichting hebben (Beheer → Personen).
+          Tip: importeer eerst wedstrijden via Wedstrijden. Ontbrekende jeugdteams worden bij
+          import automatisch aangemaakt.
         </p>
+        <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
+          <div>
+            <label className="vvl-label">Van</label>
+            <input
+              type="date"
+              className="vvl-input"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="vvl-label">Tot en met</label>
+            <input
+              type="date"
+              className="vvl-input"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              required
+            />
+          </div>
+        </div>
         <button
           type="button"
           className="vvl-btn-primary"
           disabled={busy}
           onClick={() =>
             run(
-              () => api.syncPlanningFromMatches({ required: 2 }),
+              () => api.syncPlanningFromMatches(periodPayload()),
               (r) => {
                 const parts = [];
                 if (r.created) parts.push(`${r.created} dienst(en) aangemaakt`);
                 if (r.updated) parts.push(`${r.updated} bijgewerkt`);
+                if (r.teamDuties) parts.push(`${r.teamDuties} met jeugd-teamdienst`);
                 if (r.removed) {
                   parts.push(
                     `${r.removed} dienst(en) verwijderd die niet meer bij de regels passen`,
@@ -1475,7 +1530,7 @@ function PlanningBeheer() {
                 }
               }
               run(
-                () => api.publishPlanning({ volunteerDeadline: deadline || undefined }),
+                () => api.publishPlanning({ volunteerDeadline: deadline || undefined, ...periodPayload() }),
                 (r) =>
                   `Stap 2 klaar: ${r.published} concept-dienst(en) gepubliceerd. Vrijwilligers kunnen nu inschrijven.`,
               );
@@ -1508,14 +1563,12 @@ function PlanningBeheer() {
         done={step3Done}
       >
         <p className="text-sm text-gray-700">
-          Klik hieronder om open <strong>persoonlijke</strong> plekken te vullen met leden
-          die verplicht zijn (1× / 6 weken), VR18+ of een inhaaldienst hebben. De app
-          kiest eerlijk: eerst inhaal, dan verplicht, dan wie het minst/langst geleden
-          heeft gestaan, rekening houdend met voorkeuren.
+          Klik hieronder om open <strong>vrijwilligersplekken</strong> te vullen met leden
+          die verplicht zijn (1× / 6 weken), VR18+ of een inhaaldienst hebben. Teamplekken
+          (O8–O17 thuis) blijven staan voor de bardienstcoördinator, die de namen van ouders invult.
         </p>
         <p className="text-xs text-gray-600">
-          Teamdiensten vult de teamcoördinator via <strong>Mijn team</strong> — die
-          worden hier niet automatisch gevuld.
+          Teamdiensten vult de bardienstcoördinator via <strong>Mijn team</strong>.
           {isPublished && publishedOpen > 0
             ? ` Er zijn nu ${publishedOpen} open dienst(en) met nog plek.`
             : null}
@@ -1528,7 +1581,7 @@ function PlanningBeheer() {
             title={!isPublished ? 'Publiceer eerst de planning (stap 2)' : undefined}
             onClick={() =>
               run(
-                () => api.fillMandatory(),
+                () => api.fillMandatory(periodPayload()),
                 (r) =>
                   `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${r.unfilled?.length ?? 0} verplichting(en) nog open.`,
               )
@@ -1567,8 +1620,8 @@ function PlanningBeheer() {
 
       <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
         <p className="text-sm text-gray-700">
-          Vergrendelt de komende 6 weken. Alleen de barcommissie kan daarna nog
-          in- of uitschrijven. Teamco’s moeten teamdiensten <strong>vóór</strong> deze
+          Vergrendelt de gekozen periode. Alleen de barcommissie kan daarna nog
+          in- of uitschrijven. Bardienstcoördinatoren moeten teamdiensten <strong>vóór</strong> deze
           stap hebben gevuld.
         </p>
         <div className="flex flex-wrap gap-2">
@@ -1579,13 +1632,13 @@ function PlanningBeheer() {
             onClick={() => {
               if (
                 !window.confirm(
-                  'Officieel maken vergrendelt de komende 6 weken. Alleen de barcommissie kan daarna nog wijzigen. Doorgaan?',
+                  'Officieel maken vergrendelt deze periode. Alleen de barcommissie kan daarna nog wijzigen. Doorgaan?',
                 )
               ) {
                 return;
               }
               run(
-                () => api.markPlanningOfficial(),
+                () => api.markPlanningOfficial(periodPayload()),
                 (r) => `Stap 4 klaar: officieel — ${r.locked} dienst(en) vergrendeld.`,
               );
             }}

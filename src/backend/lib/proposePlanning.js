@@ -1,6 +1,7 @@
 import { generateServicesFromRules } from './serviceGeneration.js';
 import prisma from './prisma.js';
-import { addWeeks, endOfDay, startOfDay } from './dates.js';
+import { addWeeks, endOfDay } from './dates.js';
+import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 
 /**
  * Maak/bijwerken van diensten op basis van configureerbare dienstregels,
@@ -31,22 +32,23 @@ export async function proposeFromMatches(options = {}) {
   return generateServicesFromRules(options);
 }
 
-export async function publishDraftServices({ volunteerDeadline, weeks = 6 } = {}) {
-  const from = startOfDay(new Date());
-  const to = endOfDay(addWeeks(from, weeks));
+export async function publishDraftServices({ volunteerDeadline, from, to, weeks } = {}) {
+  const period = from || to
+    ? resolvePlanningPeriod({ from, to, weeks })
+    : await periodFromRound(prisma);
 
   const result = await prisma.service.updateMany({
     where: {
       draft: true,
       active: true,
-      date: { gte: from, lte: to },
+      date: { gte: period.from, lte: period.to },
     },
     data: { draft: false },
   });
 
   const deadline = volunteerDeadline
     ? endOfDay(new Date(volunteerDeadline))
-    : endOfDay(addWeeks(from, 1));
+    : endOfDay(addWeeks(period.from, 1));
 
   if (Number.isNaN(deadline.getTime())) {
     const err = new Error('Ongeldige deadline-datum. Kies een geldige datum of laat het veld leeg.');
@@ -58,20 +60,20 @@ export async function publishDraftServices({ volunteerDeadline, weeks = 6 } = {}
     where: { id: 1 },
     create: {
       id: 1,
-      fromDate: from,
-      toDate: to,
+      fromDate: period.from,
+      toDate: period.to,
       status: 'VOLUNTEER_OPEN',
       volunteerDeadline: deadline,
       publishedAt: new Date(),
     },
     update: {
-      fromDate: from,
-      toDate: to,
+      fromDate: period.from,
+      toDate: period.to,
       status: 'VOLUNTEER_OPEN',
       volunteerDeadline: deadline,
       publishedAt: new Date(),
     },
   });
 
-  return { published: result.count, volunteerDeadline: deadline };
+  return { published: result.count, volunteerDeadline: deadline, period };
 }

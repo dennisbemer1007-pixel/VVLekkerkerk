@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
-import { ADMIN_ROLES, isAdminRole, publicPersonBrief } from '../lib/roles.js';
+import { ADMIN_ROLES, isAdminRole, publicPerson, publicPersonBrief } from '../lib/roles.js';
 import { parseTeamDutySlots } from '../lib/teamFunctions.js';
 import { teamIdsForActor } from '../lib/authz.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { executedCountForObligation, remainingObligation, personalEnrollmentCount } from '../lib/obligation.js';
 import { mapService, serviceInclude } from '../lib/serviceHelpers.js';
 import { getClubSettings } from '../lib/season.js';
+import { periodFromRound } from '../lib/planningPeriod.js';
+import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
+import { writeAudit } from '../lib/audit.js';
+import { teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -57,8 +61,9 @@ router.get(
         return res.json({ seasonLabel: settings.seasonLabel, teams: [] });
       }
 
-      const from = startOfDay(new Date());
-      const to = endOfDay(addWeeks(from, 6));
+      const roundPeriod = await periodFromRound(prisma);
+      const from = roundPeriod.from;
+      const to = roundPeriod.to;
       const yearStart = new Date(from.getFullYear(), 0, 1);
 
       const teams = await prisma.team.findMany({
@@ -74,6 +79,10 @@ router.get(
             where: { active: true, draft: false, date: { gte: from, lte: to } },
             include: serviceInclude,
             orderBy: [{ date: 'asc' }, { time: 'asc' }],
+          },
+          teamDuties: {
+            where: { service: { active: true, draft: false, date: { gte: from, lte: to } } },
+            include: { service: { include: serviceInclude } },
           },
         },
         orderBy: { name: 'asc' },
@@ -107,13 +116,34 @@ router.get(
             countYear: personalEnrollmentCount(enrollments, yearStart, to),
           };
           const executed = executedCountForObligation(member, counts);
+          const teamStands = enrollments.filter(
+            (e) => e.kind === 'TEAM' && e.forTeamId === team.id && !e.noShow,
+          ).length;
           members.push({
             ...publicPersonBrief(member),
             stillNeeded: remainingObligation(member, executed),
             makeupDue: member.makeupDue ?? 0,
             barLast6Weeks: counts.count6w,
+            barThisYear: counts.countYear,
+            teamDutyCount: teamStands,
+            hasAccount: Boolean(member.passwordHash),
+            email: Boolean(member.email),
           });
         }
+        const dutyById = new Map();
+        for (const s of team.assignedServices) dutyById.set(s.id, s);
+        for (const duty of team.teamDuties || []) {
+          if (duty.service) dutyById.set(duty.service.id, duty.service);
+        }
+        const teamServices = [...dutyById.values()]
+          .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.time).localeCompare(String(b.time)))
+          .map((s) => {
+            const mapped = mapService(s);
+            return {
+              ...mapped,
+              teamOpen: teamDutyOpenForTeam(mapped, team.id),
+            };
+          });
         payload.push({
           id: team.id,
           name: team.name,
@@ -128,7 +158,7 @@ router.get(
             home: m.home,
             opponent: m.opponent,
           })),
-          teamServices: team.assignedServices.map(mapService),
+          teamServices,
         });
       }
 
@@ -220,6 +250,47 @@ router.put(
         data,
       });
       res.json(mapTeam({ ...team, coordinator: undefined, members: undefined }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/parents',
+  requireAuth(async (req, res, next) => {
+    try {
+      const teamId = Number(req.params.id);
+      const team = await prisma.team.findUnique({ where: { id: teamId } });
+      if (!team) return res.status(404).json({ error: 'Team niet gevonden' });
+      const allowed = isAdminRole(req.person.role)
+        ? true
+        : req.person.role === 'Teamcoördinator' && (await teamIdsForActor(req.person)).has(teamId);
+      if (!allowed) {
+        return res.status(403).json({ error: 'Je mag alleen ouders van je eigen team toevoegen' });
+      }
+      const name = String(req.body?.name || '').trim();
+      if (!name) return res.status(400).json({ error: 'Naam is verplicht' });
+      const person = await prisma.person.create({
+        data: {
+          name,
+          personNumber: await nextPersonNumber(),
+          email: null,
+          role: 'Vrijwilliger',
+          obligation: 'NONE',
+          teamId,
+          active: true,
+        },
+      });
+      await syncPrimaryTeamMembership(person.id, teamId);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.create_parent',
+        entity: 'Person',
+        entityId: person.id,
+        detail: `${person.name} · ${team.name}`,
+      });
+      res.status(201).json(publicPerson(person, { viewerRole: req.person.role }));
     } catch (err) {
       next(err);
     }

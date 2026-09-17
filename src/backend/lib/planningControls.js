@@ -7,25 +7,21 @@ import {
   OBLIGATION_LABELS,
   personalEnrollmentCount,
   remainingObligation,
+  isUnavailableOn,
 } from './obligation.js';
 import { skipReasonForPerson } from './autoFill.js';
 import { blocksForPerson, overlappingMatchBlocks } from './matchBlocks.js';
-import { isUnavailableOn } from './obligation.js';
-
-function windowsAround(now = new Date()) {
-  const from = startOfDay(now);
-  const to = endOfDay(addWeeks(from, 6));
-  return {
-    from,
-    to,
-    sixWeeksAgo: startOfDay(addWeeks(from, -6)),
-    twelveWeeksAgo: startOfDay(addWeeks(from, -12)),
-    yearStart: new Date(from.getFullYear(), 0, 1),
-  };
-}
+import { periodFromRound } from './planningPeriod.js';
 
 export async function buildPlanningControls(now = new Date()) {
-  const w = windowsAround(now);
+  const roundPeriod = await periodFromRound(prisma, now);
+  const w = {
+    from: roundPeriod.from,
+    to: roundPeriod.to,
+    sixWeeksAgo: startOfDay(addWeeks(roundPeriod.from, -6)),
+    twelveWeeksAgo: startOfDay(addWeeks(roundPeriod.from, -12)),
+    yearStart: new Date(roundPeriod.from.getFullYear(), 0, 1),
+  };
 
   const services = await prisma.service.findMany({
     where: {

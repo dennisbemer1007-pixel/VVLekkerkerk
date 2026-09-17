@@ -6,9 +6,9 @@ const AuthContext = createContext(null);
 export function homePathForUser(user) {
   const features = user?.access?.can || [];
   if (features.includes('dashboard')) return '/';
+  if (features.includes('teams')) return '/teams';
   if (features.includes('inschrijven')) return '/inschrijven';
   if (features.includes('beheer')) return '/beheer';
-  if (features.includes('voorkeuren')) return '/voorkeuren';
   return '/';
 }
 

@@ -164,7 +164,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...data, appUrl: window.location.origin }),
     }),
-  fillMandatory: () => json('/planning/fill-mandatory', { method: 'POST', body: '{}' }),
+  fillMandatory: (data) => json('/planning/fill-mandatory', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   getPlanningRound: () => json('/planning/round'),
   importMatches: (data) => json('/matches/import', { method: 'POST', body: JSON.stringify(data) }),
   validateMatchCsv: (data) =>
@@ -220,12 +220,25 @@ export const api = {
     json(`/swaps/${id}/approve`, { method: 'POST', body: JSON.stringify(data) }),
   rejectSwap: (id) => json(`/swaps/${id}/reject`, { method: 'POST', body: '{}' }),
   getTeamDashboard: () => json('/teams/dashboard'),
+  addTeamParent: (teamId, data) =>
+    json(`/teams/${teamId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
   getClubSettings: () => json('/settings/club'),
   rolloverSeason: (data) =>
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),
   importPersons: (data) => json('/persons/import', { method: 'POST', body: JSON.stringify(data) }),
   exportMyData: () => json('/persons/me/export'),
+  downloadMyDataExcel: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/me/export.xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Export mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   erasePersonContact: (id) => json(`/persons/${id}/erase-contact`, { method: 'POST', body: '{}' }),
   markPlanningOfficial: (data) =>
     json('/planning/official', { method: 'POST', body: JSON.stringify(data ?? {}) }),

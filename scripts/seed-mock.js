@@ -7,17 +7,42 @@
 import prisma from '../src/backend/lib/prisma.js';
 import { hashPassword } from '../src/backend/lib/auth.js';
 import { ensureAdmin } from '../src/backend/lib/seed.js';
+import { defaultTeamFunctions } from '../src/backend/lib/teamFunctions.js';
+import { generateServicesFromRules } from '../src/backend/lib/serviceGeneration.js';
+import { ensureClubDefaults } from '../src/backend/lib/clubDefaults.js';
+import { addWeeks, startOfDay } from '../src/backend/lib/dates.js';
 
-function atDay(offsetDays, hour = 12) {
+function nextSaturday(weeksAhead = 0) {
   const d = new Date();
-  d.setHours(hour, 0, 0, 0);
-  d.setDate(d.getDate() + offsetDays);
+  d.setHours(12, 0, 0, 0);
+  const add = (6 - d.getDay() + 7) % 7;
+  const days = (add === 0 ? 7 : add) + weeksAhead * 7;
+  d.setDate(d.getDate() + days);
   return d;
+}
+
+async function applyTeamFunctions(team) {
+  const fn = defaultTeamFunctions(team.name);
+  return prisma.team.update({
+    where: { id: team.id },
+    data: {
+      availabilityUse: fn.availabilityUse,
+      teamDutyUse: fn.teamDutyUse,
+      teamDutySlots: JSON.stringify(fn.teamDutySlots),
+      functionsConfigured: true,
+    },
+  });
 }
 
 async function clearDemoData(adminId) {
   await prisma.swapRequest.deleteMany();
   await prisma.enrollment.deleteMany();
+  try {
+    await prisma.serviceTeamDuty.deleteMany();
+  } catch {
+    /* model bestaat pas na prisma generate */
+  }
+  await prisma.activity.deleteMany();
   await prisma.session.deleteMany({ where: { personId: { not: adminId } } });
   await prisma.auditLog.deleteMany({ where: { actorId: { not: adminId } } });
   await prisma.personTeam.deleteMany();
@@ -41,15 +66,18 @@ async function main() {
   console.log('Admin behouden:', admin.email);
 
   await clearDemoData(admin.id);
+  await ensureClubDefaults();
   console.log('Oude demo-data opgeruimd');
 
   const pw = await hashPassword('demo123');
 
   // --- Teams (eerst zonder coordinator) ---
-  const teamJO11 = await prisma.team.create({ data: { name: 'JO11-1' } });
-  const teamJO15 = await prisma.team.create({ data: { name: 'JO15-1' } });
-  const teamJO13 = await prisma.team.create({ data: { name: 'JO13-2' } });
-  const teamSenior = await prisma.team.create({ data: { name: 'Senioren 1' } });
+  const teamJO11 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO11-1' } }));
+  const teamJO15 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO15-1' } }));
+  const teamJO13 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO13-2' } }));
+  const teamSenior = await applyTeamFunctions(
+    await prisma.team.create({ data: { name: 'Senioren 1' } }),
+  );
 
   // --- Personen ---
   const coordinator = await prisma.person.create({
@@ -115,7 +143,18 @@ async function main() {
       role: 'Vrijwilliger',
       teamId: teamJO15.id,
       inviteToken: 'demo-invite-token-open',
-      inviteExpiresAt: atDay(10),
+      inviteExpiresAt: addWeeks(new Date(), 2),
+      active: true,
+    },
+  });
+
+  await prisma.person.create({
+    data: {
+      name: 'Ouder Jansen',
+      email: null,
+      role: 'Vrijwilliger',
+      teamId: teamJO15.id,
+      obligation: 'NONE',
       active: true,
     },
   });
@@ -129,76 +168,120 @@ async function main() {
     data: { coordinatorId: coordinator.id },
   });
 
-  // --- Wedstrijden (gekoppeld aan JO-teams) ---
+  const sat0 = nextSaturday(0);
+  const sat1 = nextSaturday(1);
+  const sat2 = nextSaturday(2);
+
   await prisma.match.create({
-    data: { date: atDay(3), home: true, opponent: 'SV Capelle', note: 'Competitie', teamId: teamJO11.id },
+    data: {
+      date: sat0,
+      time: '09:00',
+      home: true,
+      opponent: 'SV Capelle',
+      note: 'Competitie',
+      teamId: teamJO11.id,
+    },
   });
   await prisma.match.create({
-    data: { date: atDay(7), home: true, opponent: 'VV Krimpen', note: 'Competitie', teamId: teamJO15.id },
+    data: {
+      date: sat0,
+      time: '14:00',
+      home: true,
+      opponent: 'VV Krimpen',
+      note: 'Competitie',
+      teamId: teamJO15.id,
+    },
   });
   await prisma.match.create({
-    data: { date: atDay(10), home: false, opponent: 'FC Dordrecht', note: 'Uit', teamId: teamJO13.id },
+    data: {
+      date: sat1,
+      time: '11:00',
+      home: false,
+      opponent: 'FC Dordrecht',
+      note: 'Uit',
+      teamId: teamJO13.id,
+    },
   });
   await prisma.match.create({
-    data: { date: atDay(14), home: true, opponent: 'VV Ridderkerk', note: 'Competitie', teamId: teamJO13.id },
+    data: {
+      date: sat1,
+      time: '14:00',
+      home: true,
+      opponent: 'VV Ridderkerk',
+      note: 'Competitie',
+      teamId: teamJO13.id,
+    },
   });
   await prisma.match.create({
-    data: { date: atDay(21), home: true, opponent: 'SV Bolnes', note: 'Competitie', teamId: teamJO11.id },
+    data: {
+      date: sat2,
+      time: '10:15',
+      home: true,
+      opponent: 'SV Bolnes',
+      note: 'Competitie',
+      teamId: teamJO11.id,
+    },
   });
 
+  const generated = await generateServicesFromRules({
+    from: startOfDay(new Date()),
+    to: addWeeks(startOfDay(new Date()), 8),
+  });
   await prisma.planningRound.upsert({
     where: { id: 1 },
-    create: { id: 1, status: 'DRAFT' },
-    update: { status: 'DRAFT' },
+    create: {
+      id: 1,
+      status: 'VOLUNTEER_OPEN',
+      fromDate: generated.period.from,
+      toDate: generated.period.to,
+      publishedAt: new Date(),
+    },
+    update: {
+      status: 'VOLUNTEER_OPEN',
+      fromDate: generated.period.from,
+      toDate: generated.period.to,
+      official: false,
+      publishedAt: new Date(),
+    },
+  });
+  await prisma.service.updateMany({
+    where: { date: { gte: generated.period.from, lte: generated.period.to } },
+    data: { draft: false, locked: false },
   });
 
-  // --- Diensten ---
-  const servicesSpec = [
-    { type: 'BAR', day: 0, time: '18:00 - 22:00', required: 3, note: 'Dinsdagavond bar', location: 'Bar', slot: 'EXTRA' },
-    { type: 'BAR', day: 3, time: '09:00 - 12:00', required: 2, note: 'Ochtend JO11', location: 'Bar', slot: 'MORNING', teamId: teamJO11.id },
-    { type: 'BAR', day: 5, time: '19:00 - 23:00', required: 2, note: 'Vrijdagavond', location: 'Bar', slot: 'EXTRA' },
-    { type: 'BAR', day: 7, time: '12:00 - 16:00', required: 2, note: 'Middag JO15', location: 'Bar', slot: 'AFTERNOON', teamId: teamJO15.id },
-    { type: 'BAR', day: 7, time: '16:00 - 20:30', required: 2, note: 'Avond JO15', location: 'Bar', slot: 'EVENING', teamId: teamJO15.id },
-    { type: 'BAR', day: 12, time: '18:00 - 22:00', required: 2, note: 'Doordeweeks', location: 'Bar', slot: 'EXTRA' },
-    { type: 'BAR', day: 21, time: '19:00 - 23:30', required: 4, note: 'Klaverjasavond', location: 'Bar', slot: 'EXTRA' },
-  ];
-
-  const services = [];
-  for (const s of servicesSpec) {
-    const service = await prisma.service.create({
-      data: {
-        type: s.type,
-        date: atDay(s.day),
-        time: s.time,
-        required: s.required,
-        note: s.note,
-        location: s.location,
-        active: true,
-        draft: false,
-        slot: s.slot,
-        assignedTeamId: s.teamId || null,
-      },
-    });
-    services.push(service);
-  }
-
-  // --- Inschrijvingen (variërende bezetting) ---
   const [lisa, tom, fatima, peter, anneke, kevin, noa, erik] = createdVolunteers;
+  const openPersonal = await prisma.service.findMany({
+    where: {
+      active: true,
+      draft: false,
+      type: 'BAR',
+      date: { gte: startOfDay(new Date()) },
+    },
+    include: { enrollments: true, teamDuties: true },
+    orderBy: [{ date: 'asc' }, { time: 'asc' }],
+  });
 
-  const enrollments = [
-    { service: services[0], people: [lisa, tom] },
-    { service: services[1], people: [anneke, kevin] },
-    { service: services[2], people: [noa] },
-    { service: services[3], people: [tom, lisa] },
-    { service: services[4], people: [erik] },
-    { service: services[5], people: [lisa] },
-    { service: services[6], people: [tom, peter, anneke] },
-  ];
-
-  for (const e of enrollments) {
-    for (const person of e.people) {
+  const peopleCycle = [lisa, tom, fatima, peter, anneke, kevin, noa, erik];
+  let pi = 0;
+  for (const service of openPersonal) {
+    const reserved = (service.teamDuties || []).reduce((sum, d) => sum + d.reserved, 0);
+    const personalOpen = Math.max(0, service.required - reserved - service.enrollments.length);
+    const take = Math.min(personalOpen, service.slot === 'MORNING' ? 1 : personalOpen > 1 ? 1 : 0);
+    for (let n = 0; n < take; n += 1) {
+      const person = peopleCycle[pi % peopleCycle.length];
+      pi += 1;
+      const exists = await prisma.enrollment.findUnique({
+        where: { serviceId_personId: { serviceId: service.id, personId: person.id } },
+      });
+      if (exists) continue;
       await prisma.enrollment.create({
-        data: { serviceId: e.service.id, personId: person.id },
+        data: {
+          serviceId: service.id,
+          personId: person.id,
+          source: 'SELF',
+          kind: 'PERSONAL',
+          reason: 'Zelf ingeschreven',
+        },
       });
     }
   }
@@ -207,6 +290,7 @@ async function main() {
     personen: await prisma.person.count(),
     teams: await prisma.team.count(),
     diensten: await prisma.service.count(),
+    teamdiensten: await prisma.serviceTeamDuty.count(),
     inschrijvingen: await prisma.enrollment.count(),
     wedstrijden: await prisma.match.count(),
   };

@@ -1,10 +1,11 @@
 import PDFDocument from 'pdfkit';
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
+import { endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { getPersonFromRequest } from '../lib/auth.js';
 import { renderPlanningRoster } from '../lib/pdfRoster.js';
 import { planningIsOfficial } from '../lib/official.js';
+import { periodFromRound } from '../lib/planningPeriod.js';
 
 const router = Router();
 
@@ -25,16 +26,17 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
   try {
     const now = startOfDay(new Date());
     const clubhouse = req.query.clubhouse === 'true' || req.query.week === 'current';
+    const roundPeriod = await periodFromRound(prisma);
     const from = req.query.from
       ? startOfDay(new Date(req.query.from))
       : clubhouse
         ? startOfWeek(now)
-        : now;
+        : roundPeriod.from;
     const to = req.query.to
       ? endOfDay(new Date(req.query.to))
       : clubhouse
         ? endOfWeek(from)
-        : endOfDay(addWeeks(from, 6));
+        : roundPeriod.to;
 
     const services = await prisma.service.findMany({
       where: {
@@ -52,7 +54,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
     });
 
     const official = await planningIsOfficial();
-    const filename = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster-6-weken.pdf';
+    const filename = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster.pdf';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
@@ -64,7 +66,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
       to,
       official,
       clubhouse,
-      maxWeeks: clubhouse ? 1 : 6,
+      maxWeeks: clubhouse ? 1 : 60,
     });
     doc.end();
   } catch (err) {

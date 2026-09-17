@@ -1,5 +1,4 @@
 import prisma from './prisma.js';
-import { addWeeks, endOfDay, startOfDay } from './dates.js';
 import { mapService, serviceInclude, serviceLocation } from './serviceHelpers.js';
 import { ensureClubDefaults } from './clubDefaults.js';
 import {
@@ -8,22 +7,61 @@ import {
   sameCalendarDay,
   serviceKey,
   startTimeFromService,
-  teamDutyCandidates,
 } from './serviceRuleLogic.js';
+import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import {
+  kindForAssignments,
+  requiredForTeamDuties,
+  teamDutyAssignments,
+} from './teamDutyPlanning.js';
 
-function buildNote(rule, evaluation, assigned, extraTeams) {
+function buildNote(rule, evaluation, assignments) {
   const bits = [rule.name];
   if (evaluation.activities?.[0]) bits.push(evaluation.activities[0].name);
-  if (assigned) bits.push(`Teamdienst: ${assigned.name}`);
-  if (extraTeams.length) bits.push(`+ ${extraTeams.map((t) => t.name).join(', ')}`);
+  if (assignments?.length) {
+    const names = assignments.map((a) => `${a.team.name} (${a.reserved})`);
+    bits.push(`Teamdienst: ${names.join(', ')}`);
+  }
   return bits.filter(Boolean).join(' · ');
 }
 
-export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
+async function syncTeamDuties(serviceId, assignments) {
+  const wanted = new Map((assignments || []).map((a) => [a.team.id, a.reserved]));
+  const existing = await prisma.serviceTeamDuty.findMany({ where: { serviceId } });
+  for (const row of existing) {
+    if (!wanted.has(row.teamId)) {
+      const used = await prisma.enrollment.count({
+        where: { serviceId, kind: 'TEAM', forTeamId: row.teamId },
+      });
+      if (used === 0) {
+        await prisma.serviceTeamDuty.delete({ where: { id: row.id } });
+      }
+      continue;
+    }
+    const reserved = Math.max(wanted.get(row.teamId), 1);
+    if (row.reserved !== reserved) {
+      await prisma.serviceTeamDuty.update({
+        where: { id: row.id },
+        data: { reserved },
+      });
+    }
+    wanted.delete(row.teamId);
+  }
+  for (const [teamId, reserved] of wanted) {
+    await prisma.serviceTeamDuty.create({
+      data: { serviceId, teamId, reserved },
+    });
+  }
+}
+
+export async function generateServicesFromRules({ from, to, weeks } = {}) {
   await ensureClubDefaults();
 
-  const start = startOfDay(from || new Date());
-  const end = endOfDay(to || addWeeks(start, weeks));
+  const period = from || to || weeks
+    ? resolvePlanningPeriod({ from, to, weeks })
+    : await periodFromRound(prisma);
+  const start = period.from;
+  const end = period.to;
 
   const [rules, matches, activities, teams, existing] = await Promise.all([
     prisma.serviceRule.findMany({
@@ -40,7 +78,7 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
     prisma.team.findMany(),
     prisma.service.findMany({
       where: { date: { gte: start, lte: end } },
-      include: { enrollments: { select: { id: true } } },
+      include: { enrollments: { select: { id: true } }, teamDuties: true },
     }),
   ]);
 
@@ -67,24 +105,25 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
       if (!evaluation.ok) continue;
       const key = serviceKey(date, rule.type, rule.startTime);
       if (needed.has(key)) continue;
-      const dutyTeams = teamDutyCandidates(rule, homeMatches);
-      const assigned = dutyTeams[0] || null;
-      const extraTeams = dutyTeams.slice(1);
+      const assignments = teamDutyAssignments(rule, homeMatches);
+      const required = requiredForTeamDuties(rule.required, rule.teamDutySlotRole, assignments);
+      const assigned = assignments[0]?.team || null;
       needed.set(key, {
         key,
         date,
         type: rule.type,
         time: `${rule.startTime} - ${rule.endTime}`,
-        required: Math.max(1, Number(rule.required) || 1),
+        required,
         slot: rule.slot || null,
-        kind: assigned ? 'TEAM' : 'PERSONAL',
+        kind: kindForAssignments(required, assignments),
         assignedTeamId: assigned?.id ?? null,
         sourceRuleId: rule.id,
         origin: 'AUTO',
         activityId: evaluation.activities?.[0]?.id ?? null,
-        matchId: (evaluation.matches?.[0] || homeMatches[0])?.id ?? null,
-        note: buildNote(rule, evaluation, assigned, extraTeams),
+        matchId: (assignments[0]?.match || evaluation.matches?.[0] || homeMatches[0])?.id ?? null,
+        note: buildNote(rule, evaluation, assignments),
         location: serviceLocation(rule.type),
+        assignments,
       });
     }
   }
@@ -97,14 +136,15 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
   for (const spec of needed.values()) {
     const list = existingByKey.get(spec.key) || [];
     const keepable = list.find((s) => s.origin === 'MANUAL' || s.locked || s.enrollments?.length);
-    const auto = list.find((s) => s.origin !== 'MANUAL') || list[0];
+    const auto = list.find((s) => s.origin === 'AUTO') || list.find((s) => s.origin !== 'MANUAL') || list[0];
     const target = keepable || auto || null;
 
+    const enrolled = target?.enrollments?.length || 0;
     const payload = {
       type: spec.type,
       date: spec.date,
       time: spec.time,
-      required: spec.required,
+      required: Math.max(spec.required, enrolled),
       slot: spec.slot,
       kind: spec.kind,
       assignedTeamId: spec.assignedTeamId,
@@ -125,6 +165,7 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
         where: { id: target.id },
         data: payload,
       });
+      await syncTeamDuties(target.id, spec.assignments);
       updated += 1;
       continue;
     }
@@ -138,6 +179,7 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
       },
       include: serviceInclude,
     });
+    await syncTeamDuties(service.id, spec.assignments);
     created += 1;
     createdServices.push(mapService(service));
   }
@@ -170,7 +212,7 @@ export async function generateServicesFromRules({ from, to, weeks = 6 } = {}) {
     },
   });
 
-  const teamDuties = [...needed.values()].filter((s) => s.kind === 'TEAM').length;
+  const teamDuties = [...needed.values()].filter((s) => s.kind === 'TEAM' || s.kind === 'MIXED').length;
 
   return {
     created,

@@ -12,6 +12,20 @@ function obligationMark(person) {
   return '';
 }
 
+function displayReason(reason, adminMode) {
+  if (!reason) return null;
+  if (adminMode) return reason;
+  if (/barcommissie/i.test(reason) && /handmatig/i.test(reason)) return null;
+  return reason;
+}
+
+function slotLabel(slot) {
+  if (slot === 'MORNING') return 'ochtend';
+  if (slot === 'AFTERNOON') return 'middag';
+  if (slot === 'EVENING') return 'avond';
+  return null;
+}
+
 export default function DienstCard({
   dienst,
   onInschrijven,
@@ -20,6 +34,7 @@ export default function DienstCard({
   showActions = false,
   headerActions = null,
   adminMode = false,
+  compact = false,
   onAdminRemoveEnrollment,
   onNoShow,
   onClearNoShow,
@@ -34,6 +49,47 @@ export default function DienstCard({
   const inactive = dienst.active === false;
   const isDraft = Boolean(dienst.draft);
   const isLocked = Boolean(dienst.locked);
+  const capacity = dienst.capacity;
+  const teamDuties = dienst.teamDuties || [];
+  const slot = slotLabel(dienst.slot);
+
+  if (compact) {
+    return (
+      <article className="vvl-card flex flex-wrap items-center justify-between gap-2 py-3">
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left text-sm font-semibold"
+          onClick={() => onInschrijven?.(dienst.id, 'expand')}
+        >
+          {new Date(dienst.date).toLocaleDateString('nl-NL', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          })}{' '}
+          · {dienst.time} · {dienst.location || type}
+          {teamDuties[0]?.team?.name ? ` · ${teamDuties[0].team.name}` : ''}
+          {myEnrollment ? ' · jij staat hier' : ''}
+        </button>
+        <div className="flex items-center gap-2">
+          {myEnrollment ? (
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold uppercase text-emerald-900">
+              Jij
+            </span>
+          ) : null}
+          <StatusBadge status={status} />
+          {showActions && !inactive && !isDraft && !myEnrollment && status !== 'full' && !(isLocked && !adminMode) ? (
+            <button
+              type="button"
+              className="vvl-btn-primary text-xs"
+              onClick={() => onInschrijven?.(dienst.id)}
+            >
+              Inschrijven
+            </button>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article
@@ -50,14 +106,24 @@ export default function DienstCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-wide text-vvl-accent">
-            {type} · {dienst.location}
-            {dienst.slot && dienst.slot !== 'EXTRA' ? ` · ${slotLabel(dienst.slot)}` : ''}
-            {dienst.slot === 'EXTRA' ? ' · extra' : ''}
+            {type}
+            {slot ? ` · ${slot}` : ''}
             {dienst.kind === 'TEAM' ? ' · teamdienst' : ''}
+            {dienst.kind === 'MIXED' ? ' · team + vrijwillig' : ''}
           </p>
           <h3 className="font-heading text-lg font-black uppercase">{formatServiceDate(dienst.date)}</h3>
           <p className="text-sm font-semibold">{dienst.time}</p>
-          {dienst.assignedTeam?.name ? (
+          {teamDuties.length ? (
+            <p className="text-xs text-gray-700">
+              Teamdienst:{' '}
+              {teamDuties
+                .map((d) => `${d.team?.name || 'team'} (${d.reserved} plek${d.reserved === 1 ? '' : 'ken'})`)
+                .join(', ')}
+              {capacity?.personalCapacity
+                ? ` · ${capacity.personalCapacity} plek${capacity.personalCapacity === 1 ? '' : 'ken'} voor vrijwilligers`
+                : ''}
+            </p>
+          ) : dienst.assignedTeam?.name ? (
             <p className="text-xs text-gray-600">Team: {dienst.assignedTeam.name}</p>
           ) : null}
         </div>
@@ -86,46 +152,50 @@ export default function DienstCard({
 
       {dienst.enrollments?.length > 0 ? (
         <ul className="space-y-1 border-t border-vvl-border pt-3 text-sm">
-          {dienst.enrollments.map((e) => (
-            <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
-              <span>
-                {e.person?.name ?? 'Onbekend'}
-                {obligationMark(e.person)}
-                {e.noShow ? ' · no-show' : ''}
-                {e.reason ? (
-                  <span className="block text-xs font-normal text-gray-600">{e.reason}</span>
-                ) : null}
-              </span>
-              {adminMode && onAdminRemoveEnrollment ? (
-                <span className="flex gap-2">
-                  {e.noShow ? (
-                    <button
-                      type="button"
-                      className="text-xs font-bold uppercase text-amber-800 hover:underline"
-                      onClick={() => onClearNoShow?.(e.id)}
-                    >
-                      No-show corrigeren
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs font-bold uppercase text-amber-800 hover:underline"
-                      onClick={() => onNoShow?.(e.id)}
-                    >
-                      No-show
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="text-xs font-bold uppercase text-red-700 hover:underline"
-                    onClick={() => onAdminRemoveEnrollment(e.id)}
-                  >
-                    Verwijder
-                  </button>
+          {dienst.enrollments.map((e) => {
+            const reason = displayReason(e.reason, adminMode);
+            return (
+              <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
+                <span>
+                  {e.person?.name ?? 'Onbekend'}
+                  {obligationMark(e.person)}
+                  {e.kind === 'TEAM' ? ' · team' : ''}
+                  {e.noShow ? ' · no-show' : ''}
+                  {reason ? (
+                    <span className="block text-xs font-normal text-gray-600">{reason}</span>
+                  ) : null}
                 </span>
-              ) : null}
-            </li>
-          ))}
+                {adminMode && onAdminRemoveEnrollment ? (
+                  <span className="flex gap-2">
+                    {e.noShow ? (
+                      <button
+                        type="button"
+                        className="text-xs font-bold uppercase text-amber-800 hover:underline"
+                        onClick={() => onClearNoShow?.(e.id)}
+                      >
+                        No-show corrigeren
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-xs font-bold uppercase text-amber-800 hover:underline"
+                        onClick={() => onNoShow?.(e.id)}
+                      >
+                        No-show
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="text-xs font-bold uppercase text-red-700 hover:underline"
+                      onClick={() => onAdminRemoveEnrollment(e.id)}
+                    >
+                      Verwijder
+                    </button>
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="text-sm text-gray-500">Nog niemand ingeschreven.</p>
@@ -145,6 +215,10 @@ export default function DienstCard({
             </button>
           ) : status === 'full' ? (
             <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
+          ) : capacity && capacity.personalOpen <= 0 && capacity.teamOpen > 0 ? (
+            <p className="text-sm text-gray-700">
+              De open plekken zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.
+            </p>
           ) : (
             <button
               type="button"
@@ -168,11 +242,4 @@ export default function DienstCard({
       ) : null}
     </article>
   );
-}
-
-function slotLabel(slot) {
-  if (slot === 'MORNING') return 'ochtend';
-  if (slot === 'AFTERNOON') return 'middag';
-  if (slot === 'EVENING') return 'late middag/avond';
-  return slot;
 }

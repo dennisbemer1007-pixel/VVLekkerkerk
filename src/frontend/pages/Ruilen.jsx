@@ -30,6 +30,7 @@ export default function Ruilen() {
   const [swaps, setSwaps] = useState([]);
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
+  const [toQuery, setToQuery] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,15 @@ export default function Ruilen() {
     () => swaps.filter((s) => ['PENDING_PEER', 'PENDING_COMMITTEE'].includes(s.status)),
     [swaps],
   );
+
+  const filteredOthers = useMemo(() => {
+    const q = toQuery.trim().toLowerCase();
+    if (!q) return others;
+    return others.filter((enrollment) => {
+      const hay = `${personName(enrollment)} ${serviceLabel(enrollment)}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [others, toQuery]);
 
   const run = async (fn, success) => {
     setBusy(true);
@@ -118,14 +128,24 @@ export default function Ruilen() {
         </div>
         <div>
           <label className="vvl-label">Dienst van iemand anders</label>
+          <input
+            className="vvl-input mb-2"
+            value={toQuery}
+            onChange={(e) => setToQuery(e.target.value)}
+            placeholder="Zoek op naam, datum of tijd"
+          />
           <select className="vvl-input" value={toId} onChange={(e) => setToId(e.target.value)} required>
             <option value="">Kies de dienst waarmee je wilt ruilen</option>
-            {others.map((enrollment) => (
+            {filteredOthers.map((enrollment) => (
               <option key={enrollment.id} value={enrollment.id}>
                 {personName(enrollment)} · {serviceLabel(enrollment)}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs text-gray-600">
+            {filteredOthers.length} van {others.length} diensten
+            {toQuery ? ' (gefilterd)' : ''}
+          </p>
         </div>
         <button type="submit" className="vvl-btn" disabled={busy || !mine.length || !others.length}>
           Ruilverzoek sturen

@@ -1,4 +1,4 @@
-import { isYoungYouthTeam } from './youthTeams.js';
+import { isOldYouthTeam, isYoungYouthTeam } from './youthTeams.js';
 
 export function parseTeamDutySlots(raw) {
   try {
@@ -16,14 +16,13 @@ export function isO13FirstTeam(name) {
   return /(?:JO|O)13-1(?:JM)?(?!\d)/i.test(compact);
 }
 
+/** O13 t/m O17: middag (2 plekken) + avond (1 plek) bij thuiswedstrijd. */
 export function hasDefaultSecondLastTeamDuty(name) {
-  const compact = String(name || '').replace(/\s+/g, '');
-  if (/(?:MO)17|(?:JO|O)16|(?:MO|JO|O)15/i.test(compact)) return true;
-  return isO13FirstTeam(name);
+  return isOldYouthTeam(name);
 }
 
 /**
- * Standaardfuncties uit FO 18–21. Barcommissie kan dit later overschrijven.
+ * Standaardfuncties. O8–O12 ochtend; O13–O17 middag+avond.
  */
 export function defaultTeamFunctions(name) {
   if (isYoungYouthTeam(name)) {

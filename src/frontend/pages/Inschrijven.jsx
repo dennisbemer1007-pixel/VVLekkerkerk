@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import FilterChips from '../components/FilterChips.jsx';
@@ -10,11 +10,13 @@ import { PAGE_HELP } from '../utils/pageHelp.js';
 export default function Inschrijven() {
   const { personId, user } = useAuth();
   const [searchParams] = useSearchParams();
-  const initialFilter = searchParams.get('filter') || 'open';
+  const initialFilter = searchParams.get('filter') ?? '';
   const [filter, setFilter] = useState(initialFilter);
   const [services, setServices] = useState([]);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [openId, setOpenId] = useState(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const load = useCallback(() => {
     const params = { filter: filter || undefined };
@@ -27,14 +29,18 @@ export default function Inschrijven() {
 
   useEffect(() => {
     const q = searchParams.get('filter');
-    if (q !== null && q !== filter) setFilter(q || 'open');
+    if (q !== null && q !== filter) setFilter(q);
   }, [searchParams]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const handleInschrijven = async (serviceId) => {
+  const handleInschrijven = async (serviceId, mode) => {
+    if (mode === 'expand') {
+      setOpenId((id) => (id === serviceId ? null : serviceId));
+      return;
+    }
     setMsg('');
     setError('');
     try {
@@ -57,12 +63,46 @@ export default function Inschrijven() {
     }
   };
 
+  const downloadData = async () => {
+    setExportBusy(true);
+    setError('');
+    try {
+      const blob = await api.downloadMyDataExcel();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vvl-mijn-gegevens.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsg('Je gegevens zijn gedownload als Excel-bestand.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const s of services) {
+      const key = new Date(s.date).toLocaleDateString('nl-NL', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(s);
+    }
+    return [...map.entries()];
+  }, [services]);
+
   return (
     <div className="space-y-6">
       <header>
         <PageTitle {...PAGE_HELP.inschrijven}>Inschrijven</PageTitle>
         <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Schrijf je in op een open dienst.
+          Ingelogd als <strong>{user?.name}</strong>. Standaard zie je alle komende diensten —
+          ook die waarop je al staat. Klik op een regel voor de namen, of schrijf je direct in.
         </p>
       </header>
 
@@ -78,19 +118,47 @@ export default function Inschrijven() {
       {services.length === 0 ? (
         <p className="vvl-card text-sm text-gray-600">Geen diensten gevonden voor dit filter.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {services.map((s) => (
-            <DienstCard
-              key={s.id}
-              dienst={s}
-              myPersonId={personId}
-              showActions
-              onInschrijven={handleInschrijven}
-              onUitschrijven={handleUitschrijven}
-            />
+        <div className="space-y-5">
+          {grouped.map(([day, list]) => (
+            <section key={day} className="space-y-2">
+              <h2 className="font-heading text-sm font-black uppercase text-vvl-accent">{day}</h2>
+              {list.map((s) =>
+                openId === s.id ? (
+                  <DienstCard
+                    key={s.id}
+                    dienst={s}
+                    myPersonId={personId}
+                    showActions
+                    onInschrijven={handleInschrijven}
+                    onUitschrijven={handleUitschrijven}
+                  />
+                ) : (
+                  <DienstCard
+                    key={s.id}
+                    dienst={s}
+                    myPersonId={personId}
+                    showActions
+                    compact
+                    onInschrijven={handleInschrijven}
+                    onUitschrijven={handleUitschrijven}
+                  />
+                ),
+              )}
+            </section>
           ))}
         </div>
       )}
+
+      <section className="vvl-card space-y-2">
+        <h2 className="font-heading text-lg font-black uppercase">Jouw gegevens</h2>
+        <p className="text-sm text-gray-700">
+          Download een kopie van je account en inschrijvingen (AVG). Het bestand open je in Excel;
+          geen JSON.
+        </p>
+        <button type="button" className="vvl-btn-outline text-xs" disabled={exportBusy} onClick={downloadData}>
+          {exportBusy ? 'Laden…' : 'Gegevens downloaden (Excel)'}
+        </button>
+      </section>
     </div>
   );
 }

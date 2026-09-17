@@ -162,3 +162,41 @@ export async function exportPersonData(personId) {
     })),
   };
 }
+
+export function personExportSheets(data) {
+  const person = data?.person || {};
+  return [
+    {
+      name: 'Gegevens',
+      headers: ['Veld', 'Waarde'],
+      rows: [
+        ['Naam', person.name || ''],
+        ['Persoonsnummer', person.personNumber || ''],
+        ['E-mail', person.email || ''],
+        ['Telefoon', person.phone || ''],
+        ['Rol', person.role || ''],
+        ['Team', person.team || ''],
+        ['Verplichting', person.obligation || ''],
+        ['Geëxporteerd', data?.exportedAt || ''],
+      ],
+    },
+    {
+      name: 'Inschrijvingen',
+      headers: ['Datum', 'Tijd', 'Type', 'Soort', 'Bron', 'Inhaal', 'No-show'],
+      rows: (data?.enrollments || []).map((e) => [
+        e.date ? new Date(e.date).toISOString().slice(0, 10) : '',
+        e.time || '',
+        e.type === 'KITCHEN' ? 'Keuken' : 'Bar',
+        e.kind || '',
+        e.source || '',
+        e.makeup ? 'ja' : 'nee',
+        e.noShow ? 'ja' : 'nee',
+      ]),
+    },
+    {
+      name: 'Teams',
+      headers: ['Team', 'Seizoen', 'Actief'],
+      rows: (data?.memberships || []).map((m) => [m.team || '', m.season || '', m.active ? 'ja' : 'nee']),
+    },
+  ];
+}

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
+import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpers.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
@@ -21,6 +21,8 @@ function buildServiceWhere(query) {
     where.date = { gte: startOfDay(now), lte: endOfDay(now) };
   } else if (filter === 'week') {
     where.date = { gte: startOfWeek(now), lte: endOfWeek(now) };
+  } else if (filter === 'mine') {
+    where.date = { gte: startOfDay(addWeeks(now, -8)) };
   } else if (from || to) {
     where.date = {};
     if (from) where.date.gte = startOfDay(new Date(from));
@@ -53,12 +55,13 @@ router.get(
       if (filter === 'open') {
         services = services.filter((s) => s.status !== 'full');
       }
-      if (filter === 'mine' && personId) {
-        if (personId !== req.person.id && !isAdminRole(req.person.role)) {
+      if (filter === 'mine') {
+        const pid = personId || req.person.id;
+        if (pid !== req.person.id && !isAdminRole(req.person.role)) {
           return res.status(403).json({ error: 'Geen toegang tot andermans diensten' });
         }
         services = services.filter((s) =>
-          s.enrollments.some((e) => e.personId === personId),
+          s.enrollments.some((e) => e.personId === pid),
         );
       }
 

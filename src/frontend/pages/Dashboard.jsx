@@ -152,7 +152,7 @@ export default function Dashboard() {
             </button>
           </div>
           <p className="text-xs text-gray-600">
-            {summary.enrolledPersonCount} personen ingepland in de komende 6 weken.
+            {summary.enrolledPersonCount} personen ingepland in deze planningsperiode.
           </p>
 
           {controlView === 'open' ? (
@@ -297,26 +297,16 @@ export default function Dashboard() {
             Wedstrijden
           </Link>
         ) : null}
-        {can('voorkeuren') ? (
-          <Link to="/voorkeuren" className="vvl-btn-outline">
-            Mijn voorkeuren
-          </Link>
-        ) : null}
         {can('beheer') ? (
           <Link to="/beheer" className="vvl-btn-outline">
             Beheer
           </Link>
         ) : null}
-        {can('teams') && !can('beheer') ? (
-          <>
+          {can('teams') && !can('beheer') ? (
             <Link to="/teams" className="vvl-btn-outline">
               Mijn team
             </Link>
-            <Link to="/uitnodigen" className="vvl-btn-outline">
-              Ouders uitnodigen
-            </Link>
-          </>
-        ) : null}
+          ) : null}
       </section>
 
       {can('beheer') && stats?.dutyStats ? (

@@ -14,7 +14,7 @@ export const PAGE_HELP = {
     purpose:
       'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
     actions: [
-      'Filter op open diensten, deze week, vandaag of jouw diensten',
+      'Filter op komende diensten, open diensten, deze week, vandaag of jouw diensten',
       'Schrijf je in op een dienst met nog plek',
       'Schrijf je uit zolang de vrijwilligersfase open is (niet na officieel maken)',
     ],
@@ -23,10 +23,10 @@ export const PAGE_HELP = {
     purpose:
       'Overzicht van de komende weken: wie staat wanneer. Handig om te checken en om een PDF voor de kantine te printen.',
     actions: [
-      'Bekijk alle diensten in de periode (ongeveer 6 weken)',
+      'Bekijk alle diensten in de gekozen planningsperiode',
       'Filter op open of jouw diensten',
-      'Als beheerder: Update om de planning gelijk te trekken met thuiswedstrijden',
-      'Download Excel, clubhuis-PDF (deze week) of het 6-weken-PDF',
+      'Als beheerder: diensten bijwerken vanuit regels en thuiswedstrijden',
+      'Download Excel, clubhuis-PDF (deze week) of het rooster-PDF van de periode',
     ],
   },
   voorkeuren: {
@@ -74,7 +74,7 @@ export const PAGE_HELP = {
     actions: [
       'Nieuwe mensen uitnodigen per e-mail',
       'Rol en verplichting (geen / verplicht / VR18+) instellen',
-      'Team, beschikbaarheid en voorkeuren beheren',
+      'Team, bardienstcoördinator en teamdienst-shifts (ochtend / middag / avond)',
       'Account activeren of deactiveren',
       'CSV importeren (naam;email;telefoon;team;rol;verplichting) — teams moeten al bestaan',
     ],
@@ -92,18 +92,18 @@ export const PAGE_HELP = {
     purpose:
       'Hier maak je de barplanning in 4 stappen: diensten aanmaken → publiceren → verplichte mensen automatisch inschrijven → officieel vastzetten.',
     actions: [
-      'Stap 1: Diensten aanmaken / bijwerken (uit regels + thuiswedstrijden)',
+      'Stap 1: Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)',
       'Stap 2: Concept publiceren (vrijwilligers mogen inschrijven tot de deadline)',
-      'Stap 3: Vul open plekken — schrijft verplichte leden / VR18+ / inhaal automatisch in',
-      'Stap 4: Maak officieel (vergrendelt 6 weken; optioneel herinneringen mailen)',
+      'Stap 3: Vul open vrijwilligersplekken — teamplekken vult de bardienstcoördinator',
+      'Stap 4: Maak officieel (vergrendelt de gekozen periode)',
     ],
   },
   beheerRegels: {
     purpose:
       'Dagen, tijden, aantallen en voorwaarden van diensten zijn configureerbaar. De barcommissie past regels aan zonder ontwikkelaar.',
     actions: [
-      'Regel toevoegen: altijd, bij thuiswedstrijd, bij team, bij activiteit, of handmatig',
-      'Toepassen op de komende 6 weken',
+      'Deze regels zijn de standaard van elk rooster; je hoeft ze niet opnieuw in te voeren',
+      'Optioneel: regels opnieuw toepassen op de gekozen planningsperiode',
       'Vrijdag-klaverjas en late keuken Lekkerkerk 1 zitten in de standaardregels',
     ],
   },
@@ -112,8 +112,8 @@ export const PAGE_HELP = {
       'Jaarplanning: klaverjasavonden, toernooien en andere activiteiten die diensten kunnen activeren.',
     actions: [
       'Activiteit met datum en type vastleggen',
-      'Optioneel vastzetten zodat automatische planning niets overschrijft',
-      'Valt de activiteit in de 6-wekenplanning, dan ontstaan bijbehorende diensten',
+      'Personen vooraf inplannen; die namen blijven staan bij het bijwerken',
+      'Valt de activiteit in de planningsperiode, dan ontstaan bijbehorende diensten',
     ],
   },
   beheerTeams: {
@@ -131,7 +131,7 @@ export const PAGE_HELP = {
     actions: [
       'Filteren op datum, team, wedstrijdnummer of spelniveau',
       'Ook gespeelde wedstrijden tonen via “Toon alle wedstrijden”',
-      'Als beheerder: KNVB-bestand importeren; thuiswedstrijden vullen ochtend-, middag- of avonddienst',
+      'Als beheerder: KNVB-bestand importeren; ontbrekende jeugdteams worden automatisch aangemaakt',
     ],
   },
   beheerMail: {
@@ -145,11 +145,11 @@ export const PAGE_HELP = {
   },
   teams: {
     purpose:
-      'Jouw team(s): leden, resterende verplichting, komende wedstrijden en teamdiensten. Schrijf een lid in op een open persoonlijke plek.',
+      'Jouw team(s): leden/ouders, hoe vaak ze al hebben gestaan, komende wedstrijden en teamdiensten. Vul ouders in op naam (geen e-mail nodig).',
     actions: [
-      'Bekijk wie nog een persoonlijke dienst open heeft',
-      'Zie teamdiensten en komende wedstrijden',
-      'Schrijf een teamlid of ouder in op een open dienst',
+      'Voeg een ouder toe met alleen de naam',
+      'Zie wie al heeft gestaan en hoe vaak',
+      'Zet een ouder op een open teamdienst-plek',
     ],
   },
   beheerClub: {
@@ -166,7 +166,7 @@ export const PAGE_HELP = {
       'Wat we bewaren en hoe lang: planning uitvoeren, geen push of WhatsApp. Contact van inactieve accounts na 24 maanden weg.',
     actions: [
       'Lees de bewaartermijnen',
-      'Download je gegevens via Voorkeuren als je bent ingelogd',
+      'Download je gegevens via Inschrijven → Gegevens downloaden (Excel) als je bent ingelogd',
     ],
   },
   uitnodigen: {

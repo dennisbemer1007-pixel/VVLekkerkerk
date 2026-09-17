@@ -10,14 +10,14 @@ import {
 export const ROLE_ACCESS = {
   Vrijwilliger: {
     label: 'Vrijwilliger',
-    can: ['inschrijven', 'ruilen', 'voorkeuren'],
-    description: 'Zelf inschrijven op open diensten, ruilen en voorkeuren instellen.',
+    can: ['inschrijven', 'ruilen'],
+    description: 'Zelf inschrijven op open bardiensten en ruilen.',
   },
   Teamcoördinator: {
-    label: 'Teamcoördinator',
-    can: ['dashboard', 'inschrijven', 'planning', 'wedstrijden', 'voorkeuren', 'ruilen', 'teams'],
+    label: 'Bardienstcoördinator',
+    can: ['inschrijven', 'ruilen', 'teams'],
     description:
-      'Inschrijven, ruilen en voorkeuren, plus dashboard, planning, ouders uitnodigen en voor je team inschrijven.',
+      'Zelfde als vrijwilliger, plus ouders van je team(s) op de teamdienst zetten. Ouders hebben geen account nodig.',
   },
   Barcommissie: {
     label: 'Barcommissie',

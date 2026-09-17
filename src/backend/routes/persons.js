@@ -17,7 +17,8 @@ import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber
 import { writeAudit } from '../lib/audit.js';
 import { parsePersonCsv, validatePersonRows } from '../lib/csvPersons.js';
 import { trySendInviteEmail } from '../lib/mail.js';
-import { exportPersonData, wipePersonContact } from '../lib/privacy.js';
+import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/privacy.js';
+import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { getClubSettings } from '../lib/season.js';
 
 const router = Router();
@@ -105,6 +106,31 @@ router.get(
         detail: 'AVG-export eigen gegevens',
       });
       res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/me/export.xlsx',
+  requireAuth(async (req, res, next) => {
+    try {
+      const data = await exportPersonData(req.person.id);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.export',
+        entity: 'Person',
+        entityId: req.person.id,
+        detail: 'AVG-export eigen gegevens (Excel)',
+      });
+      const buf = workbookToXlsx(personExportSheets(data));
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="vvl-mijn-gegevens.xlsx"');
+      res.send(buf);
     } catch (err) {
       next(err);
     }
