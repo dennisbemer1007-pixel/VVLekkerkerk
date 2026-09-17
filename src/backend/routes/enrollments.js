@@ -59,6 +59,27 @@ function enrollmentSource(actor, targetPersonId) {
   return 'SELF';
 }
 
+/** Ouders op de teamdienst van hun eigen thuiswedstrijd mogen niet door de wedstrijdblokkade worden tegengehouden. */
+function intendsTeamDuty(service, person, actor, requestedTeamId) {
+  if (!service) return false;
+  const dutyTeams = (service.teamDuties || []).map((d) => d.teamId);
+  if (!dutyTeams.length) return false;
+  if (
+    requestedTeamId &&
+    dutyTeams.includes(requestedTeamId) &&
+    teamDutyOpenForTeam(service, requestedTeamId) > 0
+  ) {
+    return true;
+  }
+  const fillingForSomeoneElse = Number(actor.id) !== Number(person.id);
+  if (!fillingForSomeoneElse) return false;
+  if (!isAdminRole(actor.role) && actor.role !== 'Teamcoördinator') return false;
+  const personTeams = new Set(personTeamIds(person));
+  return dutyTeams.some(
+    (teamId) => teamDutyOpenForTeam(service, teamId) > 0 && (personTeams.has(teamId) || isAdminRole(actor.role)),
+  );
+}
+
 router.get(
   '/',
   requireAuth(async (req, res, next) => {
@@ -118,7 +139,18 @@ router.post(
         where: { id: Number(serviceId) },
         include: serviceInclude,
       });
-      if (servicePreview) {
+      const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
+      const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
+      if (servicePreview && Number(req.person.id) === targetId && !requestedTeamId) {
+        const cap = serviceCapacity(servicePreview);
+        if (cap.personalOpen <= 0 && cap.teamOpen > 0) {
+          return res.status(409).json({
+            error:
+              'De open plekken op deze dienst zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.',
+          });
+        }
+      }
+      if (servicePreview && !fillingTeamDuty) {
         const matches = await prisma.match.findMany({
           where: {
             date: {
