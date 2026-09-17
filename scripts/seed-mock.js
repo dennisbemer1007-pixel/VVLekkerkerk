@@ -5,7 +5,6 @@
  * Behoudt admin@vvl.local. Verwijdert overige demo-data en vult opnieuw.
  */
 import prisma from '../src/backend/lib/prisma.js';
-import { hashPassword } from '../src/backend/lib/auth.js';
 import { ensureAdmin } from '../src/backend/lib/seed.js';
 import { defaultTeamFunctions } from '../src/backend/lib/teamFunctions.js';
 import { generateServicesFromRules } from '../src/backend/lib/serviceGeneration.js';
@@ -67,97 +66,58 @@ async function main() {
 
   await clearDemoData(admin.id);
   await ensureClubDefaults();
-  console.log('Oude demo-data opgeruimd');
+  console.log('Oude demo-data opgeruimd; demo-accounts en standaardregels staan klaar');
 
-  const pw = await hashPassword('demo123');
+  const teamJO11 = await applyTeamFunctions(await prisma.team.findFirst({ where: { name: 'JO11-1' } }));
+  const teamJO15 = await applyTeamFunctions(await prisma.team.findFirst({ where: { name: 'JO15-1' } }));
+  const teamJO13 = await applyTeamFunctions(await prisma.team.findFirst({ where: { name: 'JO13-2' } }));
+  await applyTeamFunctions(await prisma.team.findFirst({ where: { name: 'Senioren 1' } }));
 
-  // --- Teams (eerst zonder coordinator) ---
-  const teamJO11 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO11-1' } }));
-  const teamJO15 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO15-1' } }));
-  const teamJO13 = await applyTeamFunctions(await prisma.team.create({ data: { name: 'JO13-2' } }));
-  const teamSenior = await applyTeamFunctions(
-    await prisma.team.create({ data: { name: 'Senioren 1' } }),
-  );
-
-  // --- Personen ---
-  const coordinator = await prisma.person.create({
-    data: {
-      name: 'Sandra de Vries',
-      email: 'sandra@vvl.demo',
-      phone: '06-11223344',
-      role: 'Teamcoördinator',
-      passwordHash: pw,
-      accountCreatedAt: new Date(),
-      teamId: teamJO15.id,
-      active: true,
-    },
-  });
-
-  await prisma.person.create({
-    data: {
-      name: 'Mark Jansen',
-      email: 'mark@vvl.demo',
-      phone: '06-55667788',
-      role: 'Barcommissie',
-      passwordHash: pw,
-      accountCreatedAt: new Date(),
-      active: true,
-    },
-  });
-
-  const volunteers = [
-    { name: 'Lisa Bakker', email: 'lisa@vvl.demo', phone: '06-10101010', teamId: teamJO15.id, obligation: 'FULL' },
-    { name: 'Tom van Dam', email: 'tom@vvl.demo', phone: '06-20202020', teamId: teamJO15.id },
-    { name: 'Fatima El Amrani', email: 'fatima@vvl.demo', phone: '06-30303030', teamId: teamJO13.id },
-    { name: 'Peter Smit', email: 'peter@vvl.demo', phone: '06-40404040', teamId: teamJO13.id, obligation: 'FULL' },
-    { name: 'Anneke Mulder', email: 'anneke@vvl.demo', phone: '06-50505050', teamId: teamJO11.id, obligation: 'FULL' },
-    { name: 'Kevin de Boer', email: 'kevin@vvl.demo', phone: '06-60606060', teamId: teamJO11.id },
-    { name: 'Noa Visser', email: 'noa@vvl.demo', phone: '06-70707070', teamId: teamSenior.id },
-    { name: 'Erik Hofman', email: 'erik@vvl.demo', phone: '06-80808080', teamId: null },
+  const coordinator = await prisma.person.findUnique({ where: { email: 'sandra@vvl.demo' } });
+  const volunteerEmails = [
+    'lisa@vvl.demo',
+    'tom@vvl.demo',
+    'fatima@vvl.demo',
+    'peter@vvl.demo',
+    'anneke@vvl.demo',
+    'kevin@vvl.demo',
+    'noa@vvl.demo',
+    'erik@vvl.demo',
   ];
-
   const createdVolunteers = [];
-  for (const v of volunteers) {
-    const person = await prisma.person.create({
+  for (const email of volunteerEmails) {
+    createdVolunteers.push(await prisma.person.findUnique({ where: { email } }));
+  }
+
+  const inviteExists = await prisma.person.findUnique({ where: { email: 'nieuw@vvl.demo' } });
+  if (!inviteExists) {
+    await prisma.person.create({
       data: {
-        name: v.name,
-        email: v.email,
-        phone: v.phone,
+        name: 'Nieuwe Ouder',
+        email: 'nieuw@vvl.demo',
+        phone: '06-90909090',
         role: 'Vrijwilliger',
-        passwordHash: pw,
-        accountCreatedAt: new Date(),
-        teamId: v.teamId,
-        obligation: v.obligation || 'NONE',
+        teamId: teamJO15.id,
+        inviteToken: 'demo-invite-token-open',
+        inviteExpiresAt: addWeeks(new Date(), 2),
         active: true,
       },
     });
-    createdVolunteers.push(person);
   }
 
-  // Uitnodiging open (nog geen account)
-  await prisma.person.create({
-    data: {
-      name: 'Nieuwe Ouder',
-      email: 'nieuw@vvl.demo',
-      phone: '06-90909090',
-      role: 'Vrijwilliger',
-      teamId: teamJO15.id,
-      inviteToken: 'demo-invite-token-open',
-      inviteExpiresAt: addWeeks(new Date(), 2),
-      active: true,
-    },
-  });
-
-  await prisma.person.create({
-    data: {
-      name: 'Ouder Jansen',
-      email: null,
-      role: 'Vrijwilliger',
-      teamId: teamJO15.id,
-      obligation: 'NONE',
-      active: true,
-    },
-  });
+  const parentExists = await prisma.person.findFirst({ where: { name: 'Ouder Jansen', email: null } });
+  if (!parentExists) {
+    await prisma.person.create({
+      data: {
+        name: 'Ouder Jansen',
+        email: null,
+        role: 'Vrijwilliger',
+        teamId: teamJO15.id,
+        obligation: 'NONE',
+        active: true,
+      },
+    });
+  }
 
   await prisma.team.update({
     where: { id: teamJO15.id },
