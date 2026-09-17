@@ -141,6 +141,11 @@ router.post(
       });
       const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
       const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
+      if (servicePreview?.locked && !isAdminRole(req.person.role)) {
+        return res.status(403).json({
+          error: 'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+        });
+      }
       if (servicePreview && Number(req.person.id) === targetId && !requestedTeamId) {
         const cap = serviceCapacity(servicePreview);
         if (cap.personalOpen <= 0 && cap.teamOpen > 0) {
