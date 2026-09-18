@@ -19,13 +19,15 @@ Verplichting `HALF` (3×/jaar) bestaat niet meer. Bestaande `HALF` wordt `FULL` 
 Intern nummer is automatisch, **random, 7 cijfers** (`1000000`–`9999999`). Geen `VVL-00001`. E-mail blijft uniek voor login; dat is niet herzien.
 
 ### Jeugd-teamdiensten (O8–O17)
-Bij stap 1 van de planning reserveert de app teamplekken voor jeugdteams die **thuis** spelen:
+Bij stap 1 van de planning bepaalt de **dienstregel** eerst het aantal plekken (bijv. 3 op zaterdagochtend). Speelt er jeugd thuis, dan vult **één team** de teamplekken:
 
-- **O8 t/m O12**, 07:30–12:00: 2 teamplekken + 1 open plek (standaard 3).
-- **O13 t/m O17** (inclusief JO13-2), 12:00–16:30: 2 teamplekken.
+- **O8 t/m O12**, 07:30–12:00: 3 plekken, waarvan 2 voor het thuisspelende team + 1 open.
+- **O13 t/m O17** (inclusief JO13-2 en MO17), 12:00–16:30: 2 teamplekken.
 - **O13 t/m O17**, 16:30–19:30: 1 teamplek + 1 open plek.
 
-Vrijwilligers/verplichte vullen de open plek; de bardienstcoördinator vult de teamplekken met namen van ouders (geen e-mail nodig). Meerdere teams thuis: elk team krijgt de eigen teamplekken; `required` groeit mee.
+Welk team: onder de thuisspelende teams in die leeftijdsgroep het team dat dit seizoen het **minst** een teamdienst heeft gehad. Leeftijdsgroep en aantal teamplekken staan op de dienstregel (Beheer → Dienstregels) en kunnen later wijzigen.
+
+Vrijwilligers/verplichte vullen de open plek; de bardienstcoördinator vult de teamplekken met namen van ouders (geen e-mail nodig). Het totaal aantal plekken groeit **niet** mee met extra thuisteams.
 
 ### Planningsperiode
 De barcommissie kiest zelf van/tot (bijvoorbeeld oktober t/m december), maximaal 13 maanden. Niet meer hardcoded 6 weken.
@@ -86,9 +88,8 @@ Productie: **Render Starter** (of gelijkwaardig) met persistente schijf (`DATA_D
 Afgesproken 14 september 2026 (product owner akkoord met de voorgestelde lijn):
 
 1. **Zondagse keuken** — blijft **altijd 12:00–15:00** (standaardregel). Geen extra voorwaarde tot de club die later vastlegt.  
-2. **Meerdere jeugdteams thuis** — geen extra verdeelregel. Elk team volgt de bestaande teamdienst-regels.  
-3. **VoetbalAssist live** — niet gekoppeld. Wedstrijden blijven via KNVB-/CSV-import.  
-4. **Gedeeld e-mailadres** — e-mail blijft uniek voor login.  
-5. **Push / WhatsApp / bewerkbare mailteksten** — niet in deze versie. Alleen vaste e-mailteksten (uitnodiging, reset, herinnering).  
+2. **VoetbalAssist live** — niet gekoppeld. Wedstrijden blijven via KNVB-/CSV-import.  
+3. **Gedeeld e-mailadres** — e-mail blijft uniek voor login.  
+4. **Push / WhatsApp / bewerkbare mailteksten** — niet in deze versie. Alleen vaste e-mailteksten (uitnodiging, reset, herinnering).  
 
 Verfijning van ruilen en planner-volgorde mag later; de regels hierboven blijven gelden tot een nieuwe keuze.

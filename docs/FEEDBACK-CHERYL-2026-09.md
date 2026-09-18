@@ -4,7 +4,7 @@ Bron: mail + `Testlijst_Planningsapp_Concept_4.xlsx` tab 3/4/5.
 
 ## Mail / essentieel
 
-1. **Jeugd-teamdiensten bij thuiswedstrijd** — `ServiceTeamDuty` reserveert plekken op de zaterdagse bardienst. Generator in `teamDutyPlanning.js` + `serviceGeneration.js`. Tijden: 07:30–12:00 (O8–O12, 2 team + 1 open), 12:00–16:30 (O13–O17, 2 team), 16:30–19:30 (O13–O17, 1 team + 1 open). Stap 3 (`autoFill.js`) vult alleen `personalOpen`.
+1. **Jeugd-teamdiensten bij thuiswedstrijd** — `ServiceTeamDuty` reserveert plekken op de zaterdagse bardienst. Generator in `teamDutyPlanning.js` + `serviceGeneration.js`. Eerst het aantal plekken uit de dienstregel (ochtend 3, middag 2, avond 2); daarna **één** thuisspelend team uit de leeftijdsgroep op de regel (O8–O12 / O13–O17), het team dat dit seizoen het minst heeft gestaan. Tijden: 07:30–12:00 (2 team + 1 open), 12:00–16:30 (2 team), 16:30–19:30 (1 team + 1 open). Stap 3 (`autoFill.js`) vult alleen `personalOpen`.
 2. **Bardienstcoördinator vult ouders** — rol Teamcoördinator: Inschrijven + Ruilen + Mijn team. `POST /api/teams/:id/parents` (alleen naam). Dashboard toont `teamDutyCount`.
 3. **Planperiode zelf kiezen** — datums op `PlanningRound.fromDate/toDate`, UI in Beheer → Planning, max. 13 maanden (`planningPeriod.js`). Standaard tot 31 december als dat minstens 6 weken is.
 

@@ -1,19 +1,25 @@
 import { kickoffTimeFromMatch, slotForKickoff } from './matchPlanning.js';
-import { isOldYouthTeam, isYoungYouthTeam } from './youthTeams.js';
+import { ageInRuleRange, isOldYouthTeam, isYoungYouthTeam, parseJoAge } from './youthTeams.js';
 import { parseTeamDutySlots } from './teamFunctions.js';
 
-/** Aantal teamdienst-plekken per shift (FO + tester 2026-09). */
+/** Fallback aantal teamplekken per shift als de dienstregel geen aantal zet. */
 export const TEAM_DUTY_RESERVED = {
   MORNING: 2,
   SECOND: 2,
   LAST: 1,
 };
 
-/** Minimale vrije (persoonlijke) plekken naast teamdiensten. */
+/** Fallback vrije plekken naast teamdiensten (alleen nog voor labels/defaults). */
 export const TEAM_DUTY_PERSONAL_MIN = {
   MORNING: 1,
   SECOND: 0,
   LAST: 1,
+};
+
+export const TEAM_DUTY_AGE_DEFAULTS = {
+  MORNING: { from: 8, to: 12 },
+  SECOND: { from: 13, to: 17 },
+  LAST: { from: 13, to: 17 },
 };
 
 export function roleToSlot(role) {
@@ -39,23 +45,83 @@ export function personalMinimumForRole(role) {
   return TEAM_DUTY_PERSONAL_MIN[role] ?? 0;
 }
 
+export function parseAgeBound(value) {
+  if (value === '' || value == null) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 5 || n > 21) return null;
+  return n;
+}
+
+export function defaultsForTeamDutyRole(role) {
+  const ages = TEAM_DUTY_AGE_DEFAULTS[role] || {};
+  return {
+    teamDutyReserved: reservedSpotsForRole(role),
+    teamDutyAgeFrom: ages.from ?? null,
+    teamDutyAgeTo: ages.to ?? null,
+  };
+}
+
+/** Aantal teamplekken voor één team; nooit meer dan het totaal uit de dienstregel. */
+export function reservedSpotsForRule(rule) {
+  const role = rule?.teamDutySlotRole;
+  const fromRule = Number(rule?.teamDutyReserved);
+  const reserved =
+    Number.isFinite(fromRule) && fromRule > 0 ? Math.round(fromRule) : reservedSpotsForRole(role);
+  const requiredRaw = Number(rule?.required);
+  if (Number.isFinite(requiredRaw) && requiredRaw > 0) {
+    return Math.max(0, Math.min(reserved, Math.round(requiredRaw)));
+  }
+  return Math.max(0, reserved);
+}
+
+export function teamDutyAgeFrom(rule) {
+  const parsed = parseAgeBound(rule?.teamDutyAgeFrom);
+  if (parsed != null) return parsed;
+  return TEAM_DUTY_AGE_DEFAULTS[rule?.teamDutySlotRole]?.from ?? null;
+}
+
+export function teamDutyAgeTo(rule) {
+  const parsed = parseAgeBound(rule?.teamDutyAgeTo);
+  if (parsed != null) return parsed;
+  return TEAM_DUTY_AGE_DEFAULTS[rule?.teamDutySlotRole]?.to ?? null;
+}
+
+export function teamDutyAgeLabel(from, to) {
+  if (from == null && to == null) return null;
+  if (from != null && to != null) return `O${from}–O${to}`;
+  if (from != null) return `O${from}+`;
+  return `t/m O${to}`;
+}
+
 export function teamFitsDutyRole(team, role) {
+  return teamFitsDutyRule(team, { teamDutySlotRole: role });
+}
+
+/**
+ * Team hoort bij deze dienstregel: teamdienst aan, en leeftijdsgroep uit de regel
+ * (anders de standaard ochtend=O8–O12 / middag+avond=O13–O17 plus team-shift).
+ */
+export function teamFitsDutyRule(team, rule) {
   if (!team?.teamDutyUse) return false;
+  const role = rule?.teamDutySlotRole;
+  const age = parseJoAge(team.name)?.age ?? null;
+  const hasAgeFilter = rule?.teamDutyAgeFrom != null || rule?.teamDutyAgeTo != null;
+  if (hasAgeFilter) {
+    const from = parseAgeBound(rule.teamDutyAgeFrom);
+    const to = parseAgeBound(rule.teamDutyAgeTo);
+    return ageInRuleRange(age, from, to);
+  }
   const slots = parseTeamDutySlots(team.teamDutySlots);
-  if (!slots.includes(role)) return false;
+  if (role && !slots.includes(role)) return false;
   if (role === 'MORNING') return isYoungYouthTeam(team.name);
   if (role === 'SECOND' || role === 'LAST') return isOldYouthTeam(team.name);
   return false;
 }
 
-/**
- * Jeugdteams die op dit dagdeel thuis spelen, met gereserveerde plekken.
- * Meerdere teams thuis: elk team krijgt de standaard teamdiensten; required groeit mee.
- */
-export function teamDutyAssignments(rule, homeMatches) {
+export function eligibleTeamDutyCandidates(rule, homeMatches) {
   if (!rule?.teamDuty || !rule.teamDutySlotRole) return [];
   const role = rule.teamDutySlotRole;
-  const reserved = reservedSpotsForRole(role);
+  const reserved = reservedSpotsForRule(rule);
   if (!reserved) return [];
 
   const seen = new Set();
@@ -63,20 +129,56 @@ export function teamDutyAssignments(rule, homeMatches) {
   for (const match of homeMatches || []) {
     const team = match.team;
     if (!team || seen.has(team.id)) continue;
-    if (!teamFitsDutyRole(team, role)) continue;
+    if (!teamFitsDutyRule(team, rule)) continue;
     if (!slotMatchesKickoff(role, match)) continue;
     seen.add(team.id);
-    out.push({ team, reserved, match });
+    out.push({ team, match, reserved });
   }
   out.sort((a, b) => String(a.team.name).localeCompare(String(b.team.name), 'nl'));
   return out;
 }
 
-export function requiredForTeamDuties(ruleRequired, role, assignments) {
-  const base = Math.max(1, Number(ruleRequired) || 1);
-  const reserved = (assignments || []).reduce((sum, a) => sum + (a.reserved || 0), 0);
-  const personalMin = assignments?.length ? personalMinimumForRole(role) : 0;
-  return Math.max(base, reserved + personalMin);
+export function compareTeamDutyFairness(a, b, fairness = {}) {
+  const counts = fairness.counts || new Map();
+  const lastAt = fairness.lastAt || new Map();
+  const ca = counts.get(a.team.id) || 0;
+  const cb = counts.get(b.team.id) || 0;
+  if (ca !== cb) return ca - cb;
+  const la = lastAt.get(a.team.id) || 0;
+  const lb = lastAt.get(b.team.id) || 0;
+  if (la !== lb) return la - lb;
+  return String(a.team.name).localeCompare(String(b.team.name), 'nl');
+}
+
+/**
+ * Eén thuisspelend team per dienst: wie dit seizoen het minst heeft gestaan.
+ * keepTeamId houdt een team vast als daar al ouders op staan.
+ */
+export function pickTeamDutyAssignment(rule, candidates, options = {}) {
+  const list = candidates || [];
+  if (!list.length) return [];
+  const reserved = reservedSpotsForRule(rule);
+  if (!reserved) return [];
+  const keepId = options.keepTeamId != null ? Number(options.keepTeamId) : null;
+  const kept = keepId ? list.find((c) => Number(c.team.id) === keepId) : null;
+  const chosen = kept || [...list].sort((a, b) => compareTeamDutyFairness(a, b, options))[0];
+  if (!chosen) return [];
+  return [{ team: chosen.team, reserved, match: chosen.match }];
+}
+
+/**
+ * Jeugdteams die op dit dagdeel thuis spelen.
+ * Het aantal plekken komt uit de dienstregel; bij meerdere thuisteams krijgt
+ * één team de teamplekken (het team dat het minst heeft gestaan).
+ */
+export function teamDutyAssignments(rule, homeMatches, options = {}) {
+  const candidates = eligibleTeamDutyCandidates(rule, homeMatches);
+  return pickTeamDutyAssignment(rule, candidates, options);
+}
+
+/** Het totaal aantal plekken blijft de dienstregel; teamplekken groeien niet mee. */
+export function requiredForTeamDuties(ruleRequired, _role, _assignments) {
+  return Math.max(1, Number(ruleRequired) || 1);
 }
 
 export function kindForAssignments(required, assignments) {
@@ -84,6 +186,41 @@ export function kindForAssignments(required, assignments) {
   if (!reserved) return 'PERSONAL';
   if (reserved >= required) return 'TEAM';
   return 'MIXED';
+}
+
+export function standsFromDutyRows(rows) {
+  const counts = new Map();
+  const lastAt = new Map();
+  for (const row of rows || []) {
+    const teamId = row.teamId;
+    if (teamId == null) continue;
+    counts.set(teamId, (counts.get(teamId) || 0) + 1);
+    const t = new Date(row.service?.date || row.date || 0).getTime();
+    if (!Number.isFinite(t)) continue;
+    if (!lastAt.has(teamId) || t > lastAt.get(teamId)) lastAt.set(teamId, t);
+  }
+  return { counts, lastAt };
+}
+
+export function keepTeamIdFromExisting(service, candidates) {
+  if (!service) return null;
+  const eligible = new Set((candidates || []).map((c) => Number(c.team.id)));
+  const fromEnrollments = (service.enrollments || [])
+    .filter((e) => e.kind === 'TEAM' && e.forTeamId && eligible.has(Number(e.forTeamId)) && !e.noShow)
+    .map((e) => Number(e.forTeamId));
+  if (fromEnrollments.length) return fromEnrollments[0];
+  return null;
+}
+
+export function recordTeamDutyStand(fairness, teamId, at) {
+  if (teamId == null || !fairness) return;
+  const counts = fairness.counts || new Map();
+  const lastAt = fairness.lastAt || new Map();
+  counts.set(teamId, (counts.get(teamId) || 0) + 1);
+  const t = at instanceof Date ? at.getTime() : Number(at) || 0;
+  if (!lastAt.has(teamId) || t > lastAt.get(teamId)) lastAt.set(teamId, t);
+  fairness.counts = counts;
+  fairness.lastAt = lastAt;
 }
 
 export function serviceCapacity(service) {

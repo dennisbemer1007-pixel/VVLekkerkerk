@@ -77,6 +77,9 @@ export function defaultServiceRuleSeed() {
       conditionType: 'ALWAYS',
       teamDuty: true,
       teamDutySlotRole: 'MORNING',
+      teamDutyReserved: 2,
+      teamDutyAgeFrom: 8,
+      teamDutyAgeTo: 12,
       sortOrder: 50,
     },
     {
@@ -90,6 +93,9 @@ export function defaultServiceRuleSeed() {
       conditionType: 'ALWAYS',
       teamDuty: true,
       teamDutySlotRole: 'SECOND',
+      teamDutyReserved: 2,
+      teamDutyAgeFrom: 13,
+      teamDutyAgeTo: 17,
       sortOrder: 60,
     },
     {
@@ -103,6 +109,9 @@ export function defaultServiceRuleSeed() {
       conditionType: 'ALWAYS',
       teamDuty: true,
       teamDutySlotRole: 'LAST',
+      teamDutyReserved: 1,
+      teamDutyAgeFrom: 13,
+      teamDutyAgeTo: 17,
       sortOrder: 70,
     },
     {

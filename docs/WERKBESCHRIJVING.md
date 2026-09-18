@@ -45,9 +45,8 @@ Onderstaande tabel dekt de FO-onderwerpen. Geparkeerde punten verwijzen naar FO-
 | Zondag keuken 12:00–15:00 | Ja | Altijd; extra voorwaarde geparkeerd. [FO-KEUZES](FO-KEUZES.md) |
 | Late keuken bij Lekkerkerk 1 thuis | Ja | Regel “Zaterdag keuken laat” |
 | Teamdienst jonge jeugd ochtend | Ja | O8–O12 / JO8–JO12 |
-| Teamdienst oudere jeugd 2e + laatste | Ja | o.a. JO15, JO16, MO17, O13-1 |
-| JO13-2 geen extra teamdienst | Ja | Alleen O13-1 / JO13-1 / O13-1JM |
-| Meerdere jeugdteams thuis extra verdeelregel | Nee, bewust | [FO-KEUZES](FO-KEUZES.md) |
+| Teamdienst oudere jeugd 2e + laatste | Ja | O13–O17 (JO/MO), incl. JO13-2 |
+| Meerdere jeugdteams thuis | Ja | Eén team per dienst; wie dit seizoen het minst stond. Aantal plekken blijft de dienstregel. |
 | Activiteiten (klaverjas e.d.) | Ja | Beheer → Jaarplanning |
 | Vrijdag bar alleen bij klaverjas | Ja | Dienstregel met voorwaarde activiteit |
 | Dashboard 4 controles | Ja | Open diensten, verplichtingen, inhaal, waarom niet ingepland |
@@ -140,7 +139,7 @@ Niet hardcoded “er is een thuiswedstrijd dus 09:00–12:00 bar”. De **dienst
 | Zo 13:00–16:00 | Bar middag (1) |
 | Zo 12:00–15:00 | Keuken (1), altijd |
 
-Teamdiensten: jonge jeugd ochtend; oudere jeugd (o.a. JO15, JO16, MO17, O13-1) tweede + laatste shift. JO13-2 niet.
+Teamdiensten: aantal plekken uit de dienstregel (ochtend 3, middag 2, avond 2). Eén thuisspelend team uit de ingestelde leeftijdsgroep vult de teamplekken (standaard ochtend O8–O12 met 2, middag O13–O17 met 2, avond O13–O17 met 1); bij meerdere thuisteams het team dat dit seizoen het minst heeft gestaan.
 
 ---
 

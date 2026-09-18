@@ -6,11 +6,11 @@ import fs from 'fs';
 import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/lib/csvMatches.js';
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
-import { seasonLabelForDate, nextSeasonLabel } from '../src/backend/lib/season.js';
+import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../src/backend/lib/season.js';
 import { parsePersonCsv, validatePersonRows } from '../src/backend/lib/csvPersons.js';
 import { dutyReminderEmail } from '../src/backend/lib/reminders.js';
 import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
-import { isYoungYouthTeam, isOldYouthTeam } from '../src/backend/lib/youthTeams.js';
+import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
 import {
   underQuota,
   isUnavailableOn,
@@ -32,6 +32,8 @@ import {
   serviceWindowForKickoff,
 } from '../src/backend/lib/matchPlanning.js';
 import {
+  eligibleTeamDutyCandidates,
+  recordTeamDutyStand,
   requiredForTeamDuties,
   teamDutyAssignments,
 } from '../src/backend/lib/teamDutyPlanning.js';
@@ -113,6 +115,10 @@ assert(
 assert('O11-1 is young youth', isYoungYouthTeam('O11-1') === true);
 assert('JO15-1 is old youth', isOldYouthTeam('JO15-1') === true);
 assert('O16-1 is old youth', isOldYouthTeam('O16-1') === true);
+assert('MO17-1 is old youth', isOldYouthTeam('MO17-1') === true);
+assert('MO12-1 is young youth', isYoungYouthTeam('MO12-1') === true);
+assert('O8-2JM is young youth', isYoungYouthTeam('O8-2JM') === true);
+assert('parseJoAge MO17', parseJoAge('MO17-1')?.age === 17);
 
 const win9 = serviceWindowForKickoff('09:00');
 assert('kickoff 09:00 → 07:30 - 12:00', win9.time === '07:30 - 12:00' && win9.slot === 'MORNING');
@@ -404,6 +410,11 @@ assert(
 
 assert('season Sep 2026 is 2026-2027', seasonLabelForDate(new Date('2026-09-13T12:00:00')) === '2026-2027');
 assert('season Jul 2026 is 2025-2026', seasonLabelForDate(new Date('2026-07-31T12:00:00')) === '2025-2026');
+const season2026 = seasonRangeFromLabel('2026-2027', 8);
+assert(
+  'seizoensgrenzen 2026-2027',
+  toIsoDate(season2026.from) === '2026-08-01' && toIsoDate(season2026.to) === '2027-07-31',
+);
 assert('next season after 2026-2027', nextSeasonLabel('2026-2027') === '2027-2028');
 
 const personCsv = parsePersonCsv(
@@ -472,9 +483,30 @@ const o15 = {
   teamDutyUse: true,
   teamDutySlots: JSON.stringify(['SECOND', 'LAST']),
 };
-const morningRule = { teamDuty: true, teamDutySlotRole: 'MORNING' };
-const secondRule = { teamDuty: true, teamDutySlotRole: 'SECOND' };
-const lastRule = { teamDuty: true, teamDutySlotRole: 'LAST' };
+const morningRule = {
+  teamDuty: true,
+  teamDutySlotRole: 'MORNING',
+  required: 3,
+  teamDutyReserved: 2,
+  teamDutyAgeFrom: 8,
+  teamDutyAgeTo: 12,
+};
+const secondRule = {
+  teamDuty: true,
+  teamDutySlotRole: 'SECOND',
+  required: 2,
+  teamDutyReserved: 2,
+  teamDutyAgeFrom: 13,
+  teamDutyAgeTo: 17,
+};
+const lastRule = {
+  teamDuty: true,
+  teamDutySlotRole: 'LAST',
+  required: 2,
+  teamDutyReserved: 1,
+  teamDutyAgeFrom: 13,
+  teamDutyAgeTo: 17,
+};
 const o12Home = {
   team: o12,
   home: true,
@@ -505,6 +537,96 @@ assert(
 assert(
   'avond 1 team + 1 open = 2 nodig',
   requiredForTeamDuties(2, 'LAST', teamDutyAssignments(lastRule, [o15Home])) === 2,
+);
+
+const o8 = {
+  id: 8,
+  name: 'O8-2JM',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['MORNING']),
+};
+const o9 = {
+  id: 9,
+  name: 'O9-3',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['MORNING']),
+};
+const o10 = {
+  id: 10,
+  name: 'O10-2',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['MORNING']),
+};
+const jo11 = {
+  id: 11,
+  name: 'JO11-1',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['MORNING']),
+};
+function morningHome(team) {
+  return { team, home: true, time: '09:00', date: new Date('2026-09-19T12:00:00') };
+}
+const fiveMorningHomes = [o8, o9, o10, jo11, o12].map(morningHome);
+const fiveAssign = teamDutyAssignments(morningRule, fiveMorningHomes);
+assert(
+  'vijf jeugdteams thuis → één team op de ochtenddienst',
+  fiveAssign.length === 1 && fiveAssign[0].reserved === 2,
+);
+assert(
+  'ochtend blijft 3 plekken, groeit niet mee',
+  requiredForTeamDuties(3, 'MORNING', fiveAssign) === 3,
+);
+assert(
+  'vijf thuisteams zijn wel allemaal kandidaat',
+  eligibleTeamDutyCandidates(morningRule, fiveMorningHomes).length === 5,
+);
+const leastStood = teamDutyAssignments(morningRule, fiveMorningHomes, {
+  counts: new Map([
+    [8, 4],
+    [9, 1],
+    [10, 3],
+    [11, 2],
+    [12, 2],
+  ]),
+});
+assert('minst gestaan krijgt de ochtenddienst', leastStood[0]?.team?.id === 9);
+const fairness = { counts: new Map() };
+const firstSat = teamDutyAssignments(morningRule, fiveMorningHomes, fairness);
+recordTeamDutyStand(fairness, firstSat[0].team.id, new Date('2026-09-19'));
+const secondSat = teamDutyAssignments(morningRule, fiveMorningHomes, fairness);
+assert(
+  'volgende zaterdag een ander team',
+  firstSat[0].team.id !== secondSat[0].team.id,
+);
+const kept = teamDutyAssignments(morningRule, fiveMorningHomes, {
+  counts: new Map([[8, 9], [9, 0]]),
+  keepTeamId: 8,
+});
+assert('al ingevulde ouders houden hun team', kept[0]?.team?.id === 8);
+const mo17 = {
+  id: 17,
+  name: 'MO17-1',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify([]),
+};
+const mo17Home = {
+  team: mo17,
+  home: true,
+  time: '14:00',
+  date: new Date('2026-09-19T12:00:00'),
+};
+assert(
+  'MO17 valt in O13–O17 middagregel',
+  teamDutyAssignments(secondRule, [mo17Home, o12Home]).length === 1 &&
+    teamDutyAssignments(secondRule, [mo17Home, o12Home])[0].team.id === 17,
+);
+assert(
+  'twee oudere teams thuis → middag blijft 2 plekken',
+  requiredForTeamDuties(
+    2,
+    'SECOND',
+    teamDutyAssignments(secondRule, [o15Home, mo17Home]),
+  ) === 2 && teamDutyAssignments(secondRule, [o15Home, mo17Home]).length === 1,
 );
 
 const period = resolvePlanningPeriod({ from: '2026-10-01', to: '2026-12-31' });

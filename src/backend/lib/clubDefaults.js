@@ -32,12 +32,17 @@ export async function ensureStandardSaturdayBarRules() {
       },
     });
     if (!existing) continue;
+    const missingTeamDutyConfig =
+      Number(existing.teamDutyReserved || 0) === 0 ||
+      existing.teamDutyAgeFrom == null ||
+      existing.teamDutyAgeTo == null;
     const same =
       existing.startTime === spec.startTime &&
       existing.endTime === spec.endTime &&
       existing.required === spec.required &&
       existing.teamDuty === true &&
-      existing.teamDutySlotRole === spec.teamDutySlotRole;
+      existing.teamDutySlotRole === spec.teamDutySlotRole &&
+      !missingTeamDutyConfig;
     if (same) continue;
     await prisma.serviceRule.update({
       where: { id: existing.id },
@@ -47,6 +52,13 @@ export async function ensureStandardSaturdayBarRules() {
         required: spec.required,
         teamDuty: true,
         teamDutySlotRole: spec.teamDutySlotRole,
+        ...(missingTeamDutyConfig
+          ? {
+              teamDutyReserved: spec.teamDutyReserved,
+              teamDutyAgeFrom: spec.teamDutyAgeFrom,
+              teamDutyAgeTo: spec.teamDutyAgeTo,
+            }
+          : {}),
         conditionType: 'ALWAYS',
         active: true,
       },

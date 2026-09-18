@@ -142,6 +142,11 @@ model ServiceRule {
   teamDuty              Boolean      @default(false)
   /** MORNING | SECOND | LAST */
   teamDutySlotRole      String?
+  /** Aantal teamplekken voor één thuisspelend team (0 = standaard per shift). */
+  teamDutyReserved      Int          @default(0)
+  /** Leeftijdsgroep voor teamdienst, bijv. 8 t/m 12 of 13 t/m 17. */
+  teamDutyAgeFrom       Int?
+  teamDutyAgeTo         Int?
   active                Boolean      @default(true)
   validFrom             DateTime?
   validTo               DateTime?

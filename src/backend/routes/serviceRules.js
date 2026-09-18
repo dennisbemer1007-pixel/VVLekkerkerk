@@ -5,6 +5,7 @@ import { ADMIN_ROLES } from '../lib/roles.js';
 import { writeAudit } from '../lib/audit.js';
 import { generateServicesFromRules } from '../lib/serviceGeneration.js';
 import { CONDITION_TYPE_IDS } from '../lib/defaultServiceRules.js';
+import { parseAgeBound } from '../lib/teamDutyPlanning.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -15,6 +16,11 @@ function parseRuleBody(body) {
   const conditionType = CONDITION_TYPE_IDS.includes(body.conditionType)
     ? body.conditionType
     : 'ALWAYS';
+  let teamDutyAgeFrom = parseAgeBound(body.teamDutyAgeFrom);
+  let teamDutyAgeTo = parseAgeBound(body.teamDutyAgeTo);
+  if (teamDutyAgeFrom != null && teamDutyAgeTo != null && teamDutyAgeFrom > teamDutyAgeTo) {
+    [teamDutyAgeFrom, teamDutyAgeTo] = [teamDutyAgeTo, teamDutyAgeFrom];
+  }
   return {
     name: String(body.name || '').trim(),
     weekday: Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? weekday : null,
@@ -30,6 +36,9 @@ function parseRuleBody(body) {
     kickoffAfter: body.kickoffAfter?.trim() || null,
     teamDuty: Boolean(body.teamDuty),
     teamDutySlotRole: body.teamDutySlotRole?.trim() || null,
+    teamDutyReserved: Math.max(0, Math.min(20, Number(body.teamDutyReserved) || 0)),
+    teamDutyAgeFrom,
+    teamDutyAgeTo,
     active: body.active !== false,
     validFrom: body.validFrom ? new Date(body.validFrom) : null,
     validTo: body.validTo ? new Date(body.validTo) : null,

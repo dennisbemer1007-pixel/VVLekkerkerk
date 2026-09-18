@@ -128,6 +128,24 @@ async function main() {
     data: { coordinatorId: coordinator.id },
   });
 
+  const extraMorningTeams = [];
+  for (const name of ['O10-2', 'O12-3', 'O8-2JM', 'O9-3']) {
+    let team = await prisma.team.findFirst({ where: { name } });
+    if (!team) {
+      const fn = defaultTeamFunctions(name);
+      team = await prisma.team.create({
+        data: {
+          name,
+          availabilityUse: fn.availabilityUse,
+          teamDutyUse: fn.teamDutyUse,
+          teamDutySlots: JSON.stringify(fn.teamDutySlots),
+          functionsConfigured: true,
+        },
+      });
+    }
+    extraMorningTeams.push(await applyTeamFunctions(team));
+  }
+
   const sat0 = nextSaturday(0);
   const sat1 = nextSaturday(1);
   const sat2 = nextSaturday(2);
@@ -142,6 +160,19 @@ async function main() {
       teamId: teamJO11.id,
     },
   });
+  const extraOpponents = ['VV Berkenwoude', 'SV Slikkerveer', 'VV Streefkerk', 'FC IJsselmonde'];
+  for (let i = 0; i < extraMorningTeams.length; i += 1) {
+    await prisma.match.create({
+      data: {
+        date: sat0,
+        time: '09:30',
+        home: true,
+        opponent: extraOpponents[i],
+        note: 'Competitie',
+        teamId: extraMorningTeams[i].id,
+      },
+    });
+  }
   await prisma.match.create({
     data: {
       date: sat0,
