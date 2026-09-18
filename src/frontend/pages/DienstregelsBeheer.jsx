@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi.js';
-import { WEEKDAY_OPTIONS, CONDITION_OPTIONS, ACTIVITY_TYPE_OPTIONS } from './planningLabels.js';
+import { WEEKDAY_OPTIONS, CONDITION_OPTIONS, ACTIVITY_TYPE_OPTIONS, TEAM_DUTY_SHIFT_OPTIONS } from './planningLabels.js';
 import { scrollToForm } from '../utils/scrollToForm.js';
 
 const emptyRule = {
@@ -18,9 +18,27 @@ const emptyRule = {
   kickoffAfter: '',
   teamDuty: false,
   teamDutySlotRole: '',
+  teamDutyReserved: 2,
+  teamDutyAgeFrom: '',
+  teamDutyAgeTo: '',
   active: true,
   sortOrder: 0,
 };
+
+function shiftDefaults(role) {
+  if (role === 'MORNING') return { teamDutyReserved: 2, teamDutyAgeFrom: 8, teamDutyAgeTo: 12 };
+  if (role === 'SECOND') return { teamDutyReserved: 2, teamDutyAgeFrom: 13, teamDutyAgeTo: 17 };
+  if (role === 'LAST') return { teamDutyReserved: 1, teamDutyAgeFrom: 13, teamDutyAgeTo: 17 };
+  return {};
+}
+
+function ageGroupLabel(from, to) {
+  if (from == null || from === '') {
+    return to == null || to === '' ? null : `t/m O${to}`;
+  }
+  if (to == null || to === '') return `O${from}+`;
+  return `O${from}–O${to}`;
+}
 
 export default function DienstregelsBeheer() {
   const formRef = useRef(null);
@@ -60,6 +78,9 @@ export default function DienstregelsBeheer() {
         required: Number(form.required),
         conditionTeamId: form.conditionTeamId || null,
         teamDuty: Boolean(form.teamDuty),
+        teamDutyReserved: Number(form.teamDutyReserved) || 0,
+        teamDutyAgeFrom: form.teamDutyAgeFrom === '' ? null : Number(form.teamDutyAgeFrom),
+        teamDutyAgeTo: form.teamDutyAgeTo === '' ? null : Number(form.teamDutyAgeTo),
       };
       if (editId) await api.updateServiceRule(editId, payload);
       else await api.createServiceRule(payload);
@@ -95,8 +116,8 @@ export default function DienstregelsBeheer() {
           Dit zijn de <strong>standaardregels van de club</strong>. Elke nieuwe planning (stap 1)
           gebruikt ze automatisch: doordeweekse bar, zaterdag ochtend/middag/avond met
           jeugd-teamdiensten, keuken, vrijdag-klaverjas en late keuken bij Lekkerkerk 1 thuis.
-          Je hoeft ze niet opnieuw in te voeren. Alleen aanpassen als de club de tijden of
-          aantallen wijzigt.
+          Je hoeft ze niet opnieuw in te voeren. Alleen aanpassen als de club de tijden, aantallen
+          of jeugd-leeftijdsgroepen wijzigt.
         </p>
         <button type="button" className="vvl-btn-primary w-fit" disabled={busy} onClick={apply}>
           {busy ? 'Bezig…' : 'Standaardregels opnieuw toepassen op de planningsperiode'}
@@ -175,6 +196,10 @@ export default function DienstregelsBeheer() {
             value={form.required}
             onChange={(e) => setForm({ ...form, required: e.target.value })}
           />
+          <p className="mt-1 text-xs text-gray-600">
+            Totaal aantal plekken op deze dienst, bijvoorbeeld 3 op zaterdagochtend. Dit groeit
+            niet mee met het aantal thuisspelende teams.
+          </p>
         </div>
         <div>
           <label className="vvl-label">Voorwaarde</label>
@@ -233,7 +258,7 @@ export default function DienstregelsBeheer() {
             placeholder="15:00"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm font-semibold">
+        <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">
           <input
             type="checkbox"
             checked={form.teamDuty}
@@ -242,19 +267,67 @@ export default function DienstregelsBeheer() {
           Kan teamdienst worden
         </label>
         {form.teamDuty ? (
-          <div>
-            <label className="vvl-label">Teamdienst-shift</label>
-            <select
-              className="vvl-input"
-              value={form.teamDutySlotRole}
-              onChange={(e) => setForm({ ...form, teamDutySlotRole: e.target.value })}
-            >
-              <option value="">—</option>
-              <option value="MORNING">Ochtend</option>
-              <option value="SECOND">Tweede shift</option>
-              <option value="LAST">Laatste shift</option>
-            </select>
-          </div>
+          <>
+            <div>
+              <label className="vvl-label">Teamdienst-shift</label>
+              <select
+                className="vvl-input"
+                value={form.teamDutySlotRole}
+                onChange={(e) => {
+                  const role = e.target.value;
+                  setForm({ ...form, teamDutySlotRole: role, ...shiftDefaults(role) });
+                }}
+              >
+                <option value="">—</option>
+                {TEAM_DUTY_SHIFT_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="vvl-label">Teamplekken (één team)</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                className="vvl-input"
+                value={form.teamDutyReserved}
+                onChange={(e) => setForm({ ...form, teamDutyReserved: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="vvl-label">Leeftijd van (O…)</label>
+              <input
+                type="number"
+                min={5}
+                max={21}
+                className="vvl-input"
+                value={form.teamDutyAgeFrom}
+                onChange={(e) => setForm({ ...form, teamDutyAgeFrom: e.target.value })}
+                placeholder="8"
+              />
+            </div>
+            <div>
+              <label className="vvl-label">Leeftijd tot (O…)</label>
+              <input
+                type="number"
+                min={5}
+                max={21}
+                className="vvl-input"
+                value={form.teamDutyAgeTo}
+                onChange={(e) => setForm({ ...form, teamDutyAgeTo: e.target.value })}
+                placeholder="12"
+              />
+            </div>
+            <p className="sm:col-span-2 lg:col-span-3 text-xs text-gray-600">
+              Speelt er jeugd thuis, dan vult <strong>één team</strong> uit deze groep de
+              teamplekken: het team dat dit seizoen het minst heeft gestaan. De overige plekken
+              blijven open voor vrijwilligers. Voorbeeld: ochtend O8 t/m O12 met 2 teamplekken,
+              middag O13 t/m O17 met 2, avond O13 t/m O17 met 1.
+            </p>
+          </>
         ) : null}
         <label className="flex items-center gap-2 text-sm font-semibold">
           <input
@@ -296,6 +369,13 @@ export default function DienstregelsBeheer() {
                   <strong>{r.name}</strong>
                   <div className="text-xs text-gray-600">
                     {r.type === 'KITCHEN' ? 'Keuken' : 'Bar'} · {r.required} pers.
+                    {r.teamDuty
+                      ? ` · teamdienst${
+                          ageGroupLabel(r.teamDutyAgeFrom, r.teamDutyAgeTo)
+                            ? ` ${ageGroupLabel(r.teamDutyAgeFrom, r.teamDutyAgeTo)}`
+                            : ''
+                        }${r.teamDutyReserved ? ` · ${r.teamDutyReserved} teamplekken` : ''}`
+                      : ''}
                     {r.active ? '' : ' · uit'}
                   </div>
                 </td>
@@ -323,6 +403,9 @@ export default function DienstregelsBeheer() {
                         conditionActivityType: r.conditionActivityType || '',
                         kickoffAfter: r.kickoffAfter || '',
                         teamDutySlotRole: r.teamDutySlotRole || '',
+                        teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
+                        teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
+                        teamDutyAgeTo: r.teamDutyAgeTo ?? '',
                         slot: r.slot || '',
                       });
                       scrollToForm(formRef);

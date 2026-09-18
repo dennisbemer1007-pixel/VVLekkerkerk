@@ -10,10 +10,15 @@ import {
 } from './serviceRuleLogic.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import {
+  eligibleTeamDutyCandidates,
+  keepTeamIdFromExisting,
   kindForAssignments,
+  pickTeamDutyAssignment,
+  recordTeamDutyStand,
   requiredForTeamDuties,
-  teamDutyAssignments,
+  standsFromDutyRows,
 } from './teamDutyPlanning.js';
+import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
 function buildNote(rule, evaluation, assignments) {
   const bits = [rule.name];
@@ -23,6 +28,12 @@ function buildNote(rule, evaluation, assignments) {
     bits.push(`Teamdienst: ${names.join(', ')}`);
   }
   return bits.filter(Boolean).join(' · ');
+}
+
+function pickExistingTarget(list) {
+  const keepable = list.find((s) => s.origin === 'MANUAL' || s.locked || s.enrollments?.length);
+  const auto = list.find((s) => s.origin === 'AUTO') || list.find((s) => s.origin !== 'MANUAL') || list[0];
+  return keepable || auto || null;
 }
 
 async function syncTeamDuties(serviceId, assignments) {
@@ -54,6 +65,21 @@ async function syncTeamDuties(serviceId, assignments) {
   }
 }
 
+async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceIds }) {
+  const duties = await prisma.serviceTeamDuty.findMany({
+    where: {
+      service: {
+        type: 'BAR',
+        active: true,
+        date: { gte: seasonFrom, lte: seasonTo },
+        ...(excludeServiceIds.length ? { id: { notIn: excludeServiceIds } } : {}),
+      },
+    },
+    select: { teamId: true, service: { select: { date: true } } },
+  });
+  return standsFromDutyRows(duties);
+}
+
 export async function generateServicesFromRules({ from, to, weeks } = {}) {
   await ensureClubDefaults();
 
@@ -63,7 +89,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   const start = period.from;
   const end = period.to;
 
-  const [rules, matches, activities, teams, existing] = await Promise.all([
+  const [rules, matches, activities, teams, existing, settings] = await Promise.all([
     prisma.serviceRule.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
@@ -78,8 +104,12 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     prisma.team.findMany(),
     prisma.service.findMany({
       where: { date: { gte: start, lte: end } },
-      include: { enrollments: { select: { id: true } }, teamDuties: true },
+      include: {
+        enrollments: { select: { id: true, kind: true, forTeamId: true, noShow: true } },
+        teamDuties: true,
+      },
     }),
+    getClubSettings(),
   ]);
 
   const existingByKey = new Map();
@@ -105,26 +135,57 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       if (!evaluation.ok) continue;
       const key = serviceKey(date, rule.type, rule.startTime);
       if (needed.has(key)) continue;
-      const assignments = teamDutyAssignments(rule, homeMatches);
-      const required = requiredForTeamDuties(rule.required, rule.teamDutySlotRole, assignments);
-      const assigned = assignments[0]?.team || null;
       needed.set(key, {
         key,
         date,
+        rule,
+        evaluation,
+        homeMatches,
+        candidates: eligibleTeamDutyCandidates(rule, homeMatches),
         type: rule.type,
         time: `${rule.startTime} - ${rule.endTime}`,
-        required,
         slot: rule.slot || null,
-        kind: kindForAssignments(required, assignments),
-        assignedTeamId: assigned?.id ?? null,
         sourceRuleId: rule.id,
         origin: 'AUTO',
         activityId: evaluation.activities?.[0]?.id ?? null,
-        matchId: (assignments[0]?.match || evaluation.matches?.[0] || homeMatches[0])?.id ?? null,
-        note: buildNote(rule, evaluation, assignments),
         location: serviceLocation(rule.type),
-        assignments,
       });
+    }
+  }
+
+  const excludeServiceIds = [];
+  for (const spec of needed.values()) {
+    for (const service of existingByKey.get(spec.key) || []) {
+      if (service.origin === 'MANUAL' || service.locked) continue;
+      excludeServiceIds.push(service.id);
+    }
+  }
+
+  const season = seasonRangeFromLabel(settings.seasonLabel, settings.seasonStartMonth);
+  const seasonTo = end > season.to ? end : season.to;
+  const fairness = await loadSeasonTeamDutyStands({
+    seasonFrom: season.from,
+    seasonTo,
+    excludeServiceIds,
+  });
+
+  for (const spec of needed.values()) {
+    const target = pickExistingTarget(existingByKey.get(spec.key) || []);
+    const keepTeamId = keepTeamIdFromExisting(target, spec.candidates);
+    const assignments = pickTeamDutyAssignment(spec.rule, spec.candidates, {
+      counts: fairness.counts,
+      lastAt: fairness.lastAt,
+      keepTeamId,
+    });
+    const required = requiredForTeamDuties(spec.rule.required, spec.rule.teamDutySlotRole, assignments);
+    spec.assignments = assignments;
+    spec.required = required;
+    spec.kind = kindForAssignments(required, assignments);
+    spec.assignedTeamId = assignments[0]?.team?.id ?? null;
+    spec.matchId = (assignments[0]?.match || spec.evaluation.matches?.[0] || spec.homeMatches[0])?.id ?? null;
+    spec.note = buildNote(spec.rule, spec.evaluation, assignments);
+    if (assignments[0]?.team) {
+      recordTeamDutyStand(fairness, assignments[0].team.id, spec.date);
     }
   }
 
@@ -135,9 +196,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
 
   for (const spec of needed.values()) {
     const list = existingByKey.get(spec.key) || [];
-    const keepable = list.find((s) => s.origin === 'MANUAL' || s.locked || s.enrollments?.length);
-    const auto = list.find((s) => s.origin === 'AUTO') || list.find((s) => s.origin !== 'MANUAL') || list[0];
-    const target = keepable || auto || null;
+    const target = pickExistingTarget(list);
 
     const enrolled = target?.enrollments?.length || 0;
     const payload = {

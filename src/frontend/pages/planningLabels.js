@@ -24,3 +24,9 @@ export const ACTIVITY_TYPE_OPTIONS = [
   { id: 'opening', label: 'Bijzondere opening' },
   { id: 'overig', label: 'Overig' },
 ];
+
+export const TEAM_DUTY_SHIFT_OPTIONS = [
+  { id: 'MORNING', label: 'Ochtend' },
+  { id: 'SECOND', label: 'Middag (tweede shift)' },
+  { id: 'LAST', label: 'Avond (laatste shift)' },
+];

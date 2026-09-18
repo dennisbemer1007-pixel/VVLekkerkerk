@@ -2,7 +2,7 @@ import { addWeeks, endOfDay, startOfDay, toIsoDate } from './dates.js';
 import { kickoffTimeFromMatch } from './matchPlanning.js';
 import { parseTimeStartMinutes } from './time.js';
 import { findTeamInIndex, buildTeamIndex } from './knvbTeams.js';
-import { teamDutyAssignments } from './teamDutyPlanning.js';
+import { eligibleTeamDutyCandidates } from './teamDutyPlanning.js';
 
 export function serviceKey(date, type, startTime) {
   return `${toIsoDate(startOfDay(date))}|${type}|${startTime}`;
@@ -84,7 +84,7 @@ export function evaluateRule(rule, ctx) {
 }
 
 export function teamDutyCandidates(rule, homeMatches) {
-  return teamDutyAssignments(rule, homeMatches).map((a) => a.team);
+  return eligibleTeamDutyCandidates(rule, homeMatches).map((a) => a.team);
 }
 
 export { addWeeks, endOfDay, startOfDay };

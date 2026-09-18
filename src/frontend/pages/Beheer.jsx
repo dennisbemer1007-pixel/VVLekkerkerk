@@ -1419,8 +1419,9 @@ function PlanningBeheer() {
         </h2>
         <p className="text-sm text-gray-800">
           Volg de stappen van boven naar beneden. Je kiest zelf de periode (bijvoorbeeld oktober tot
-          december). De app deelt teamdiensten in bij jeugdteams die <strong>thuis</strong> spelen,
-          laat vrijwilligers de open plekken vullen, en plant daarna verplichte mensen in.
+          december). De app deelt per bardienst de teamplekken in bij <strong>één</strong> jeugdteam
+          dat <strong>thuis</strong> speelt (wie het minst heeft gestaan), laat vrijwilligers de
+          open plekken vullen, en plant daarna verplichte mensen in.
         </p>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-800">
           <li>Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)</li>
@@ -1441,17 +1442,19 @@ function PlanningBeheer() {
         <p className="text-sm text-gray-700">
           Kies de periode waarvoor je wilt plannen (bijvoorbeeld 1 oktober t/m 31 december).
           De app gebruikt de <strong>standaard dienstregels</strong> van de club, plus
-          thuiswedstrijden en activiteiten. Jeugdteams die thuis spelen krijgen automatisch
-          hun teamdiensten:
+          thuiswedstrijden en activiteiten. Per dienstregel staat het aantal plekken vast. Speelt
+          er jeugd thuis, dan krijgt <strong>één team</strong> de teamplekken — het team dat dit
+          seizoen het minst heeft gestaan. Standaard:
         </p>
         <ul className="list-disc pl-5 text-sm text-gray-700">
-          <li>O8 t/m O12, 07:30–12:00: 2 teamplekken (plus 1 open plek)</li>
-          <li>O13 t/m O17, 12:00–16:30: 2 teamplekken</li>
-          <li>O13 t/m O17, 16:30–19:30: 1 teamplek (plus 1 open plek)</li>
+          <li>O8 t/m O12, 07:30–12:00: 3 plekken, waarvan 2 voor één thuisspelend team</li>
+          <li>O13 t/m O17, 12:00–16:30: 2 plekken voor één thuisspelend team</li>
+          <li>O13 t/m O17, 16:30–19:30: 2 plekken, waarvan 1 voor één thuisspelend team</li>
         </ul>
         <p className="text-xs text-gray-600">
-          Tip: importeer eerst wedstrijden via Wedstrijden. Ontbrekende jeugdteams worden bij
-          import automatisch aangemaakt.
+          Leeftijdsgroep en aantal teamplekken pas je aan via Beheer → Dienstregels. Tip: importeer
+          eerst wedstrijden via Wedstrijden. Ontbrekende jeugdteams worden bij import automatisch
+          aangemaakt.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
           <div>

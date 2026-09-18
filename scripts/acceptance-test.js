@@ -202,10 +202,12 @@ async function main() {
     record(
       'zaterdag ochtend jeugd-teamdienst',
       Boolean(morningDuty) &&
-        (morningDuty.capacity?.teamReserved ?? 0) >= 2 &&
-        (morningDuty.capacity?.personalCapacity ?? 0) >= 1,
+        morningDuty.required === 3 &&
+        (morningDuty.teamDuties || []).length === 1 &&
+        (morningDuty.capacity?.teamReserved ?? 0) === 2 &&
+        (morningDuty.capacity?.personalCapacity ?? 0) === 1,
       morningDuty
-        ? `reserved ${morningDuty.capacity?.teamReserved} personal ${morningDuty.capacity?.personalCapacity}`
+        ? `required ${morningDuty.required} teams ${morningDuty.teamDuties?.length} reserved ${morningDuty.capacity?.teamReserved} personal ${morningDuty.capacity?.personalCapacity}`
         : 'geen teamdienst',
     ),
   );

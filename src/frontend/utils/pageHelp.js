@@ -100,9 +100,10 @@ export const PAGE_HELP = {
   },
   beheerRegels: {
     purpose:
-      'Dagen, tijden, aantallen en voorwaarden van diensten zijn configureerbaar. De barcommissie past regels aan zonder ontwikkelaar.',
+      'Dagen, tijden, aantallen en jeugd-teamdiensten zijn configureerbaar. De barcommissie past regels aan zonder ontwikkelaar.',
     actions: [
       'Deze regels zijn de standaard van elk rooster; je hoeft ze niet opnieuw in te voeren',
+      'Bij teamdienst: leeftijdsgroep (bijv. O8–O12) en aantal teamplekken voor één thuisteam',
       'Optioneel: regels opnieuw toepassen op de gekozen planningsperiode',
       'Vrijdag-klaverjas en late keuken Lekkerkerk 1 zitten in de standaardregels',
     ],

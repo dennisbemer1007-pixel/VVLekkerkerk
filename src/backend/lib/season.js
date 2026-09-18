@@ -18,6 +18,17 @@ export function nextSeasonLabel(label) {
   return `${start}-${start + 1}`;
 }
 
+/** Seizoensgrenzen bij een label (standaard 1 augustus t/m 31 juli). */
+export function seasonRangeFromLabel(label, startMonth = 8) {
+  const m = String(label || '').match(/^(\d{4})-(\d{4})$/);
+  const startYear = m ? Number(m[1]) : new Date().getFullYear();
+  const month = Number(startMonth) > 0 && Number(startMonth) <= 12 ? Number(startMonth) : 8;
+  const from = new Date(startYear, month - 1, 1);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(startYear + 1, month - 1, 0, 23, 59, 59, 999);
+  return { from, to };
+}
+
 export async function getClubSettings() {
   let settings = await prisma.clubSettings.findUnique({ where: { id: 1 } });
   if (!settings) {
