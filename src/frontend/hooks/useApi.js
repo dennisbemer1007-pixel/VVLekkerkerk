@@ -214,11 +214,16 @@ export const api = {
   getSwaps: () => json('/swaps'),
   getSwapCandidates: () => json('/swaps/candidates'),
   createSwap: (data) => json('/swaps', { method: 'POST', body: JSON.stringify(data) }),
-  acceptSwap: (id) => json(`/swaps/${id}/accept`, { method: 'POST', body: '{}' }),
+  acceptSwap: (id, data = {}) =>
+    json(`/swaps/${id}/accept`, { method: 'POST', body: JSON.stringify(data) }),
   cancelSwap: (id) => json(`/swaps/${id}/cancel`, { method: 'POST', body: '{}' }),
   approveSwap: (id, data = {}) =>
     json(`/swaps/${id}/approve`, { method: 'POST', body: JSON.stringify(data) }),
-  rejectSwap: (id) => json(`/swaps/${id}/reject`, { method: 'POST', body: '{}' }),
+  rejectSwap: (id, data = {}) =>
+    json(`/swaps/${id}/reject`, { method: 'POST', body: JSON.stringify(data) }),
+  getNotifications: () => json('/notifications'),
+  markNotificationRead: (id) => json(`/notifications/${id}/read`, { method: 'POST', body: '{}' }),
+  markAllNotificationsRead: () => json('/notifications/read-all', { method: 'POST', body: '{}' }),
   getTeamDashboard: () => json('/teams/dashboard'),
   addTeamParent: (teamId, data) =>
     json(`/teams/${teamId}/parents`, { method: 'POST', body: JSON.stringify(data) }),

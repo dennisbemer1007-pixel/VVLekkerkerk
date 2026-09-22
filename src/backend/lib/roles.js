@@ -23,13 +23,13 @@ export const ROLE_ACCESS = {
     label: 'Barcommissie',
     can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
     description:
-      'Clubplanning en beheer. Ruilverzoeken keur je goed via Beheer. Zelf inschrijven, ruilen en voorkeuren doen vrijwilligers.',
+      'Clubplanning en beheer. Ruilverzoeken zie je via het notificatiebelletje; vrijwilligers regelen akkoord onderling.',
   },
   Admin: {
     label: 'Admin',
     can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
     description:
-      'Volledig beheer, inclusief uitnodigingen, PDF-planning en ruilverzoeken via Beheer.',
+      'Volledig beheer, inclusief uitnodigingen en PDF-planning. Ruilverzoeken zie je via het notificatiebelletje.',
   },
 };
 

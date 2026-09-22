@@ -130,8 +130,14 @@ export default function DienstCard({
             {dienst.kind === 'TEAM' ? ' · teamdienst' : ''}
             {dienst.kind === 'MIXED' ? ' · team + vrijwillig' : ''}
           </p>
-          <h3 className="font-heading text-lg font-black uppercase">{formatServiceDate(dienst.date)}</h3>
-          <p className="text-sm font-semibold">{dienst.time}</p>
+          <button
+            type="button"
+            className="text-left"
+            onClick={() => !adminMode && onInschrijven?.(dienst.id, 'expand')}
+          >
+            <h3 className="font-heading text-lg font-black uppercase">{formatServiceDate(dienst.date)}</h3>
+            <p className="text-sm font-semibold">{dienst.time}</p>
+          </button>
           {teamDuties.length ? (
             <p className="text-xs text-gray-700">
               Teamdienst:{' '}
@@ -147,6 +153,15 @@ export default function DienstCard({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {onInschrijven && !adminMode ? (
+            <button
+              type="button"
+              className="vvl-btn-outline text-xs"
+              onClick={() => onInschrijven(dienst.id, 'expand')}
+            >
+              Inklappen
+            </button>
+          ) : null}
           {isDraft ? (
             <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-bold uppercase">Concept</span>
           ) : (

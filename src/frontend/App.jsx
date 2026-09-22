@@ -11,6 +11,7 @@ import Ruilen from './pages/Ruilen.jsx';
 import TeamDashboard from './pages/TeamDashboard.jsx';
 import Privacy from './pages/Privacy.jsx';
 import Uitnodiging from './pages/Uitnodiging.jsx';
+import Voorkeuren from './pages/Voorkeuren.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
 import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
 import Wedstrijden from './pages/Wedstrijden.jsx';
@@ -101,7 +102,14 @@ export default function App() {
                   </Protected>
                 }
               />
-              <Route path="/voorkeuren" element={<Navigate to="/inschrijven" replace />} />
+              <Route
+                path="/voorkeuren"
+                element={
+                  <Protected>
+                    <Voorkeuren />
+                  </Protected>
+                }
+              />
               <Route
                 path="/beheer"
                 element={

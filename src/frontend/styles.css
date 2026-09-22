@@ -43,4 +43,8 @@
     @apply bg-transparent;
     mix-blend-mode: multiply;
   }
+
+  .notification-bell-pulse {
+    @apply animate-bell-pulse text-vvl-gold;
+  }
 }

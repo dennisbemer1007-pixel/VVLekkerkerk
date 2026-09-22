@@ -6,7 +6,8 @@ export const PENDING_SWAP_STATUSES = ['PENDING_PEER', 'PENDING_COMMITTEE'];
 export const SWAP_RULES_DECISION = {
   personalOnly: true,
   bothMustAccept: true,
-  committeeApproves: true,
+  /** Peer-akkoord voert de ruil direct door; barcommissie keurt niet meer goed. */
+  committeeApproves: false,
   neverCreateOpenSlot: true,
   noUnenrollWorkflow: true,
   teamDutiesExcluded: true,

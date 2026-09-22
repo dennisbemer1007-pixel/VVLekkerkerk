@@ -8,16 +8,6 @@ import { api } from '../hooks/useApi.js';
 import { occupancyStatus } from '../utils/formatDate.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
-const FEATURE_LABELS = {
-  dashboard: 'Dashboard',
-  inschrijven: 'Inschrijven',
-  planning: 'Planning & PDF',
-  wedstrijden: 'Wedstrijden',
-  ruilen: 'Ruilen',
-  teams: 'Mijn team',
-  beheer: 'Beheer & uitnodigen',
-};
-
 const OBLIGATION_SHORT = {
   NONE: '',
   FULL: 'verplicht',
@@ -54,22 +44,6 @@ export default function Dashboard() {
         </p>
       </header>
 
-      <section className="vvl-card space-y-2 border-l-4 border-l-vvl-primary">
-        <p className="text-xs font-bold uppercase text-vvl-accent">Jouw rechten</p>
-        <p className="font-heading text-xl font-black uppercase">{user?.role}</p>
-        <p className="text-sm text-gray-700">{user?.access?.description}</p>
-        <ul className="flex flex-wrap gap-2 pt-1">
-          {(user?.access?.can || []).map((c) => (
-            <li
-              key={c}
-              className="rounded-full border border-vvl-primary px-3 py-1 text-xs font-bold uppercase"
-            >
-              {FEATURE_LABELS[c] || c}
-            </li>
-          ))}
-        </ul>
-      </section>
-
       {error ? (
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
@@ -92,25 +66,7 @@ export default function Dashboard() {
             </span>
             <span className="text-sm font-bold uppercase text-vvl-primary">Naar Planning →</span>
           </Link>
-          <Link
-            to="/beheer?tab=ruilen"
-            className={`vvl-card flex items-center justify-between border-l-4 transition hover:shadow-md ${
-              stats?.pendingSwapCount
-                ? 'border-l-vvl-accent'
-                : 'border-l-gray-400'
-            }`}
-          >
-            <span>
-              <span className="block text-xs font-bold uppercase text-vvl-accent">
-                Ruilverzoeken voor de barcommissie
-              </span>
-              <span className="text-sm text-gray-600">
-                Na akkoord van beide personen keur je goed via Beheer → Ruilen
-              </span>
-            </span>
-            <span className="font-heading text-3xl font-black">{stats?.pendingSwapCount ?? 0}</span>
-          </Link>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setControlView(controlView === 'open' ? null : 'open')}
@@ -130,24 +86,6 @@ export default function Dashboard() {
               <p className="text-xs font-bold uppercase text-vvl-accent">Verplichtingen open</p>
               <p className="font-heading text-3xl font-black">{summary.unfilledObligationCount}</p>
               <p className="text-sm text-gray-600">Nog niet ingedeeld</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setControlView(controlView === 'makeup' ? null : 'makeup')}
-              className="vvl-card text-left border-l-4 border-l-vvl-primary transition hover:shadow-md"
-            >
-              <p className="text-xs font-bold uppercase text-vvl-accent">Inhaaldiensten</p>
-              <p className="font-heading text-3xl font-black">{summary.makeupDueCount}</p>
-              <p className="text-sm text-gray-600">Openstaand</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setControlView(controlView === 'gaps' ? null : 'gaps')}
-              className="vvl-card text-left border-l-4 border-l-gray-500 transition hover:shadow-md"
-            >
-              <p className="text-xs font-bold uppercase text-vvl-accent">Waarom niet ingepland</p>
-              <p className="font-heading text-3xl font-black">{summary.assignmentGapCount}</p>
-              <p className="text-sm text-gray-600">Toelichting</p>
             </button>
           </div>
           <p className="text-xs text-gray-600">
@@ -190,7 +128,7 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          {controlView === 'obligations' || controlView === 'gaps' ? (
+          {controlView === 'obligations' ? (
             <div className="overflow-x-auto vvl-card p-0">
               <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-vvl-secondary text-xs font-bold uppercase">
@@ -204,34 +142,19 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(controlView === 'gaps' ? controls.assignmentGaps : controls.unfilledObligations).map(
-                    (p) => (
-                      <tr key={p.id} className="border-t border-vvl-border">
-                        <td className="p-3 font-semibold">{p.name}</td>
-                        <td className="p-3">{OBLIGATION_SHORT[p.obligation] || p.obligation}</td>
-                        <td className="p-3 text-right">{p.planned}</td>
-                        <td className="p-3 text-right">{p.makeupDue}</td>
-                        <td className="p-3 text-right">{p.stillNeeded}</td>
-                        <td className="p-3 text-gray-700">{p.reason || '—'}</td>
-                      </tr>
-                    ),
-                  )}
+                  {(controls.unfilledObligations || []).map((p) => (
+                    <tr key={p.id} className="border-t border-vvl-border">
+                      <td className="p-3 font-semibold">{p.name}</td>
+                      <td className="p-3">{OBLIGATION_SHORT[p.obligation] || p.obligation}</td>
+                      <td className="p-3 text-right">{p.planned}</td>
+                      <td className="p-3 text-right">{p.makeupDue}</td>
+                      <td className="p-3 text-right">{p.stillNeeded}</td>
+                      <td className="p-3 text-gray-700">{p.reason || '—'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          ) : null}
-
-          {controlView === 'makeup' ? (
-            <ul className="vvl-card divide-y divide-vvl-border p-0">
-              {(controls.makeupDue || []).map((p) => (
-                <li key={p.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
-                  <span className="font-semibold">{p.name}</span>
-                  <span>
-                    {p.makeupDue} inhaaldienst{p.makeupDue === 1 ? '' : 'en'} · nog nodig {p.stillNeeded}
-                  </span>
-                </li>
-              ))}
-            </ul>
           ) : null}
         </section>
       ) : null}

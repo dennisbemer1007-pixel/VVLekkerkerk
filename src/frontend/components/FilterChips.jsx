@@ -1,8 +1,5 @@
 const FILTERS = [
   { id: '', label: 'Komende diensten' },
-  { id: 'today', label: 'Vandaag' },
-  { id: 'week', label: 'Deze week' },
-  { id: 'open', label: 'Open diensten' },
   { id: 'mine', label: 'Mijn diensten' },
 ];
 

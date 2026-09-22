@@ -43,6 +43,7 @@ model Person {
   auditLogs        AuditLog[]
   swapRequests     SwapRequest[] @relation("SwapRequester")
   swapOffers       SwapRequest[] @relation("SwapCounterparty")
+  notifications    Notification[]
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
@@ -233,14 +234,32 @@ model SwapRequest {
   requester        Person     @relation("SwapRequester", fields: [requesterId], references: [id])
   counterpartyId   Int
   counterparty     Person     @relation("SwapCounterparty", fields: [counterpartyId], references: [id])
-  /** PENDING_PEER | PENDING_COMMITTEE | APPROVED | REJECTED | CANCELLED */
+  /** PENDING_PEER | PENDING_COMMITTEE (legacy) | APPROVED | REJECTED | CANCELLED */
   status           String     @default("PENDING_PEER")
   matchBlockWarning Boolean   @default(false)
   note             String?
+  rejectReason     String?
   decidedById      Int?
   decidedAt        DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  personId  Int
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  /** SWAP_INCOMING | SWAP_ACCEPTED | SWAP_REJECTED | SWAP_CANCELLED | SWAP_INFO */
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  swapId    Int?
+  createdAt DateTime  @default(now())
+
+  @@index([personId, readAt])
+  @@index([personId, createdAt])
 }
 
 enum ServiceType {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import NotificationBell from './NotificationBell.jsx';
 
 export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -9,6 +10,7 @@ export default function Layout({ children }) {
   const navItems = [
     { to: '/', label: 'Dashboard', end: true, show: can('dashboard') },
     { to: '/inschrijven', label: 'Inschrijven', show: can('inschrijven') },
+    { to: '/voorkeuren', label: 'Mijn voorkeuren', show: can('inschrijven') || can('ruilen') },
     { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
     { to: '/planning', label: 'Planning', show: can('planning') },
     { to: '/wedstrijden', label: 'Wedstrijden', show: can('wedstrijden') },
@@ -24,6 +26,7 @@ export default function Layout({ children }) {
             <span>V.V. Lekkerkerk</span>
             {isLoggedIn ? (
               <div className="flex items-center gap-3 normal-case tracking-normal">
+                <NotificationBell />
                 <span className="hidden sm:inline truncate max-w-[160px]">
                   {user.name} · {user.role}
                 </span>
