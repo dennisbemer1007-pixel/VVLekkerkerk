@@ -87,7 +87,7 @@ export default function NotificationBell() {
         <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
           <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 1 0-14 0v5l-2 2v1h18v-1l-2-2Z" />
         </svg>
-        {hasNew ? (
+        {hasNew && unreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-vvl-gold px-1 text-[10px] font-black text-vvl-primary">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
