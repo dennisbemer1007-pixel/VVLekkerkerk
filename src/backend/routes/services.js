@@ -4,6 +4,7 @@ import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/d
 import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpers.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
+import { clampServiceDateFilter, periodFromRound } from '../lib/planningPeriod.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -38,10 +39,16 @@ router.get(
   '/',
   requireAuth(async (req, res, next) => {
     try {
-      const { where, filter, personId } = buildServiceWhere(req.query);
+      let { where, filter, personId } = buildServiceWhere(req.query);
       // Alleen beheerders mogen concepten zien
       if (req.query.includeDraft === 'true' && !isAdminRole(req.person.role)) {
         where.draft = false;
+      }
+      // Vrijwilligers en teamcoördinatoren plannen alleen binnen de ronde.
+      // "Mijn diensten" blijft ongefilterd zodat bestaande inschrijvingen zichtbaar blijven.
+      if (!isAdminRole(req.person.role) && filter !== 'mine') {
+        const period = await periodFromRound(prisma);
+        where = { ...where, date: clampServiceDateFilter(where.date, period) };
       }
 
       let services = await prisma.service.findMany({

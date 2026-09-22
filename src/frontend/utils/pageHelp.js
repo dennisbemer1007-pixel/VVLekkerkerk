@@ -12,8 +12,9 @@ export const PAGE_HELP = {
   },
   inschrijven: {
     purpose:
-      'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
+      'Hier schrijf je jezelf in of uit voor open bardiensten binnen de planning die de barcommissie heeft klaargezet.',
     actions: [
+      'Je ziet alleen diensten tot en met de einddatum van de planning',
       'Filter op komende diensten of jouw diensten',
       'Klik een dienst open of dicht voor de namen',
       'Schrijf je in op een dienst met nog plek',

@@ -11,6 +11,7 @@ import { pendingForEnrollment } from '../lib/swapQueries.js';
 import { friendlyEnrollmentReason, serviceCapacity, teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
+import { isWithinPlanningPeriod, periodFromRound } from '../lib/planningPeriod.js';
 
 const router = Router();
 
@@ -139,6 +140,15 @@ router.post(
         where: { id: Number(serviceId) },
         include: serviceInclude,
       });
+      if (servicePreview && !isAdminRole(req.person.role)) {
+        const period = await periodFromRound(prisma);
+        if (!isWithinPlanningPeriod(servicePreview.date, period)) {
+          return res.status(403).json({
+            error:
+              'Deze dienst valt buiten de planning. Inschrijven kan alleen tot en met de einddatum van de planning.',
+          });
+        }
+      }
       const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
       const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
       if (servicePreview?.locked && !isAdminRole(req.person.role)) {

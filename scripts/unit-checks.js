@@ -37,7 +37,11 @@ import {
   requiredForTeamDuties,
   teamDutyAssignments,
 } from '../src/backend/lib/teamDutyPlanning.js';
-import { resolvePlanningPeriod } from '../src/backend/lib/planningPeriod.js';
+import {
+  clampServiceDateFilter,
+  isWithinPlanningPeriod,
+  resolvePlanningPeriod,
+} from '../src/backend/lib/planningPeriod.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
 import {
   SLOT_ROWS,
@@ -637,6 +641,40 @@ assert(
 assert(
   'standaard einddatum tot 31 dec in september',
   defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2026-12-31',
+);
+
+const volunteerBounds = resolvePlanningPeriod({ from: '2026-09-19', to: '2026-10-13' });
+const upcomingWindow = clampServiceDateFilter(
+  { gte: new Date('2026-09-22T00:00:00') },
+  volunteerBounds,
+);
+assert(
+  'vrijwilliger plant niet voorbij de planningsdatum',
+  toIsoDate(upcomingWindow.gte) === '2026-09-22' && toIsoDate(upcomingWindow.lte) === '2026-10-13',
+);
+const farQuery = clampServiceDateFilter(
+  { gte: new Date('2026-09-22T00:00:00'), lte: new Date('2026-12-31T23:59:59') },
+  volunteerBounds,
+);
+assert(
+  'gevraagde einddatum wordt afgekapt op de planning',
+  toIsoDate(farQuery.lte) === '2026-10-13',
+);
+const beforeStart = clampServiceDateFilter(
+  { gte: new Date('2026-09-01T00:00:00') },
+  volunteerBounds,
+);
+assert(
+  'vrijwilliger plant niet voor de start van de planning',
+  toIsoDate(beforeStart.gte) === '2026-09-19',
+);
+assert(
+  'einddag van de planning telt nog mee',
+  isWithinPlanningPeriod(new Date('2026-10-13T12:00:00'), volunteerBounds) === true,
+);
+assert(
+  'dag na de planning telt niet mee',
+  isWithinPlanningPeriod(new Date('2026-10-14T00:00:00'), volunteerBounds) === false,
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);
