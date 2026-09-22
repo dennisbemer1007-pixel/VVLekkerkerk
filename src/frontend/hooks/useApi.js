@@ -227,6 +227,12 @@ export const api = {
   getTeamDashboard: () => json('/teams/dashboard'),
   addTeamParent: (teamId, data) =>
     json(`/teams/${teamId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
+  updateTeamParent: (teamId, personId, data) =>
+    json(`/teams/${teamId}/parents/${personId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTeamParent: (teamId, personId) =>
+    json(`/teams/${teamId}/parents/${personId}`, { method: 'DELETE' }),
+  reassignEnrollment: (id, data) =>
+    json(`/enrollments/${id}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
   getClubSettings: () => json('/settings/club'),
   rolloverSeason: (data) =>
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),

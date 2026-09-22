@@ -149,8 +149,9 @@ export const PAGE_HELP = {
       'Jouw team(s): leden/ouders, hoe vaak ze al hebben gestaan, komende wedstrijden en teamdiensten. Vul ouders in op naam (geen e-mail nodig).',
     actions: [
       'Voeg een ouder toe met alleen de naam',
-      'Zie wie al heeft gestaan en hoe vaak',
-      'Zet een ouder op een open teamdienst-plek',
+      'Zie in de tabel hoe vaak iemand heeft gestaan',
+      'Wijzig of verwijder een ouder zonder account',
+      'Zet een ouder op een open teamdienst-plek, of wissel een ingevulde ouder',
     ],
   },
   beheerClub: {

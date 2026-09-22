@@ -118,14 +118,30 @@ router.get(
           const executed = executedCountForObligation(member, counts);
           const teamStands = enrollments.filter(
             (e) => e.kind === 'TEAM' && e.forTeamId === team.id && !e.noShow,
-          ).length;
+          );
+          const stoodBetween = (fromDate, toDate, list = enrollments) =>
+            list.filter((e) => {
+              if (e.noShow) return false;
+              const d = new Date(e.service?.date);
+              if (Number.isNaN(d.getTime())) return false;
+              if (fromDate && d < fromDate) return false;
+              if (toDate && d > toDate) return false;
+              return true;
+            }).length;
+          const sixWeeksAgo = startOfDay(addWeeks(new Date(), -6));
+          const yearStartNow = new Date(new Date().getFullYear(), 0, 1);
+          const nowEnd = endOfDay(new Date());
           members.push({
             ...publicPersonBrief(member),
             stillNeeded: remainingObligation(member, executed),
             makeupDue: member.makeupDue ?? 0,
             barLast6Weeks: counts.count6w,
             barThisYear: counts.countYear,
-            teamDutyCount: teamStands,
+            stood6w: stoodBetween(sixWeeksAgo, nowEnd),
+            stoodYear: stoodBetween(yearStartNow, nowEnd),
+            teamDutyCount: teamStands.length,
+            teamDuty6w: stoodBetween(sixWeeksAgo, nowEnd, teamStands),
+            teamDutyYear: stoodBetween(yearStartNow, nowEnd, teamStands),
             hasAccount: Boolean(member.passwordHash),
             email: Boolean(member.email),
           });
@@ -291,6 +307,90 @@ router.post(
         detail: `${person.name} · ${team.name}`,
       });
       res.status(201).json(publicPerson(person, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+async function parentOnTeam(personId, teamId) {
+  const person = await prisma.person.findUnique({
+    where: { id: personId },
+    include: { teamMemberships: { where: { active: true } } },
+  });
+  if (!person) return null;
+  const onTeam =
+    person.teamId === teamId ||
+    (person.teamMemberships || []).some((m) => m.teamId === teamId);
+  return onTeam ? person : null;
+}
+
+async function coordinatorMayEditTeam(actor, teamId) {
+  if (isAdminRole(actor.role)) return true;
+  if (actor.role !== 'Teamcoördinator') return false;
+  return (await teamIdsForActor(actor)).has(teamId);
+}
+
+router.put(
+  '/:id/parents/:personId',
+  requireAuth(async (req, res, next) => {
+    try {
+      const teamId = Number(req.params.id);
+      const personId = Number(req.params.personId);
+      if (!(await coordinatorMayEditTeam(req.person, teamId))) {
+        return res.status(403).json({ error: 'Je mag alleen ouders van je eigen team wijzigen' });
+      }
+      const person = await parentOnTeam(personId, teamId);
+      if (!person) return res.status(404).json({ error: 'Ouder niet gevonden bij dit team' });
+      const name = String(req.body?.name || '').trim();
+      if (!name) return res.status(400).json({ error: 'Naam is verplicht' });
+      const updated = await prisma.person.update({
+        where: { id: person.id },
+        data: { name },
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.rename_parent',
+        entity: 'Person',
+        entityId: person.id,
+        detail: `${person.name} → ${name}`,
+      });
+      res.json(publicPerson(updated, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/:id/parents/:personId',
+  requireAuth(async (req, res, next) => {
+    try {
+      const teamId = Number(req.params.id);
+      const personId = Number(req.params.personId);
+      if (!(await coordinatorMayEditTeam(req.person, teamId))) {
+        return res.status(403).json({ error: 'Je mag alleen ouders van je eigen team verwijderen' });
+      }
+      const person = await parentOnTeam(personId, teamId);
+      if (!person) return res.status(404).json({ error: 'Ouder niet gevonden bij dit team' });
+      if (person.passwordHash || person.email) {
+        return res.status(400).json({
+          error: 'Deze ouder heeft een account. De barcommissie kan het account deactiveren.',
+        });
+      }
+      const coordinates = await prisma.team.count({ where: { coordinatorId: person.id } });
+      if (coordinates) {
+        return res.status(400).json({ error: 'Een coördinator kun je hier niet verwijderen' });
+      }
+      await prisma.person.delete({ where: { id: person.id } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.delete_parent',
+        entity: 'Person',
+        entityId: person.id,
+        detail: person.name,
+      });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

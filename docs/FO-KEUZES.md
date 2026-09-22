@@ -22,7 +22,7 @@ Intern nummer is automatisch, **random, 7 cijfers** (`1000000`–`9999999`). Gee
 Bij stap 1 van de planning bepaalt de **dienstregel** eerst het aantal plekken (bijv. 3 op zaterdagochtend). Speelt er jeugd thuis, dan vult **één team** de teamplekken:
 
 - **O8 t/m O12**, 07:30–12:00: 3 plekken, waarvan 2 voor het thuisspelende team + 1 open.
-- **O13 t/m O17** (inclusief JO13-2 en MO17), 12:00–16:30: 2 teamplekken.
+- **O13 t/m O17** (inclusief JO13-2 en MO17), 12:00–16:30: 3 plekken, waarvan 2 voor het thuisspelende team + 1 open. De teamplekken tellen meteen als bezet; de teamnaam staat in de planning tot de coördinator een ouder invult.
 - **O13 t/m O17**, 16:30–19:30: 1 teamplek + 1 open plek.
 
 Welk team: onder de thuisspelende teams in die leeftijdsgroep het team dat dit seizoen het **minst** een teamdienst heeft gehad. Leeftijdsgroep en aantal teamplekken staan op de dienstregel (Beheer → Dienstregels) en kunnen later wijzigen.

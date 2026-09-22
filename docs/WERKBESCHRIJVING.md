@@ -130,7 +130,7 @@ Niet hardcoded “er is een thuiswedstrijd dus 09:00–12:00 bar”. De **dienst
 | Do 18:30–00:00 | Bar (1) |
 | Vr 18:30–00:00 | Bar (2), alleen bij klaverjasavond |
 | Za 07:30–12:00 | Bar ochtend (3), teamdienst ochtend |
-| Za 12:00–16:30 | Bar tweede shift (2), teamdienst tweede |
+| Za 12:00–16:30 | Bar tweede shift (3), waarvan 2 teamdienst |
 | Za 16:30–19:30 | Bar laatste shift (2), teamdienst laatste |
 | Za 10:00–13:00 | Keuken ochtend (1) |
 | Za 13:00–16:00 | Keuken middag (2) |
