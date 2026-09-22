@@ -122,12 +122,13 @@ function PersonenBeheer() {
   const [pwPersonId, setPwPersonId] = useState(null);
   const [pwValue, setPwValue] = useState('');
   const [pwMsg, setPwMsg] = useState('');
+  const [showNameless, setShowNameless] = useState(false);
 
-  const load = async () => {
+  const load = async (includeNameless = showNameless) => {
     setError('');
     const errors = [];
     try {
-      setPersons(await api.getPersons(true));
+      setPersons(await api.getPersons(true, { includeNameless }));
     } catch (e) {
       errors.push(`Personen: ${e.message}`);
     }
@@ -503,9 +504,22 @@ function PersonenBeheer() {
         </table>
       </div>
       <p className="text-xs text-gray-600">
-        * = verplichte bardienst. Contactgegevens alleen hier (beheer) zichtbaar.
+        * = verplichte bardienst. Contactgegevens alleen hier (beheer) zichtbaar. Ouders die een
+        coördinator alleen op naam zet (zonder e-mail) staan hier niet, zodat iemand met een
+        account niet twee keer voorkomt. Die namen beheer je via Mijn team.
       </p>
-      <PersonImport onDone={load} />
+      <label className="flex items-center gap-2 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={showNameless}
+          onChange={(e) => {
+            setShowNameless(e.target.checked);
+            load(e.target.checked);
+          }}
+        />
+        Toon ook namen zonder account
+      </label>
+      <PersonImport onDone={() => load(showNameless)} />
     </section>
   );
 }
@@ -542,8 +556,28 @@ function PersonImport({ onDone }) {
       <h2 className="font-heading text-lg font-black uppercase">Personen importeren</h2>
       <p className="text-sm text-gray-700">
         CSV met kolommen <code>naam;email;telefoon;team;rol;verplichting</code>. Onbekende teams
-        worden niet aangemaakt.
+        worden niet aangemaakt. Verplichting: geen, verplicht of VR18.
       </p>
+      <button
+        type="button"
+        className="vvl-btn-outline text-xs"
+        onClick={async () => {
+          setError('');
+          try {
+            const blob = await api.downloadPersonCsvExample();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'voorbeeld-personen.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (err) {
+            setError(err.message);
+          }
+        }}
+      >
+        Voorbeeld-CSV downloaden
+      </button>
       <textarea
         className="vvl-input min-h-[120px] font-mono text-xs"
         value={csv}
@@ -968,6 +1002,7 @@ function TeamsBeheer() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [editDuration, setEditDuration] = useState({});
+  const [editing, setEditing] = useState(null);
 
   const load = () =>
     Promise.all([api.getTeams(), api.getPersons(), api.getServices({ filter: 'open' })])
@@ -1018,6 +1053,43 @@ function TeamsBeheer() {
         matchDurationMinutes: Number(editDuration[teamId]) || 90,
       });
       setMsg('Wedstrijdduur opgeslagen.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const saveTeam = async (e) => {
+    e.preventDefault();
+    if (!editing?.id) return;
+    setError('');
+    setMsg('');
+    try {
+      await api.updateTeam(editing.id, {
+        name: editing.name,
+        coordinatorId: editing.coordinatorId || null,
+      });
+      setMsg('Team bijgewerkt. Ouders en de coördinator blijven aan dit team gekoppeld.');
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const removeTeam = async (team) => {
+    setError('');
+    setMsg('');
+    const ok = window.confirm(
+      `${team.name} verwijderen?\n\nOuders met een account blijven in de personenlijst, maar zijn niet meer aan dit team gekoppeld.\nOuders zonder account en zonder dienst verdwijnen.\nOuders zonder account die al een dienst hebben gedraaid blijven in de historie, maar niet meer op het team.`,
+    );
+    if (!ok) return;
+    try {
+      const res = await api.deleteTeam(team.id);
+      setMsg(
+        `${team.name} verwijderd. ${res.removedParents || 0} ouder(s) zonder dienst weg, ${res.keptAccounts || 0} account(s) bewaard${res.keptHistory ? `, ${res.keptHistory} in de historie` : ''}.`,
+      );
+      setEditing(null);
       await load();
     } catch (err) {
       setError(err.message);
@@ -1130,7 +1202,71 @@ function TeamsBeheer() {
       <div className="grid gap-3">
         {teams.map((t) => (
           <div key={t.id} className="vvl-card space-y-3">
-            <h3 className="font-heading text-lg font-black uppercase">{t.name}</h3>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h3 className="font-heading text-lg font-black uppercase">{t.name}</h3>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="vvl-btn-outline text-xs"
+                  onClick={() =>
+                    setEditing({
+                      id: t.id,
+                      name: t.name,
+                      coordinatorId: t.coordinator?.id ? String(t.coordinator.id) : '',
+                    })
+                  }
+                >
+                  Wijzigen
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-bold uppercase text-red-800"
+                  onClick={() => removeTeam(t)}
+                >
+                  Verwijderen
+                </button>
+              </div>
+            </div>
+            {editing?.id === t.id ? (
+              <form onSubmit={saveTeam} className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="vvl-label">Teamnaam</label>
+                  <input
+                    className="vvl-input"
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="vvl-label">Bardienstcoördinator</label>
+                  <select
+                    className="vvl-input"
+                    value={editing.coordinatorId}
+                    onChange={(e) => setEditing({ ...editing, coordinatorId: e.target.value })}
+                  >
+                    <option value="">— Geen —</option>
+                    {persons.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="sm:col-span-2 text-xs text-gray-600">
+                  Hernoemen (bijvoorbeeld O12 naar O13) houdt dezelfde ouders en coördinator.
+                  Een vrijwilliger die je als coördinator kiest, krijgt de rol Teamcoördinator.
+                </p>
+                <div className="flex gap-2">
+                  <button type="submit" className="vvl-btn-primary text-xs">
+                    Opslaan
+                  </button>
+                  <button type="button" className="vvl-btn-outline text-xs" onClick={() => setEditing(null)}>
+                    Annuleren
+                  </button>
+                </div>
+              </form>
+            ) : null}
             <p className="text-sm text-gray-700">
               Coördinator: {t.coordinator?.name ?? '—'} · {t.members?.length ?? 0} leden
               {t.active === false ? ' · inactief' : ''}
@@ -1386,7 +1522,7 @@ function PlanningBeheer() {
         </p>
         <ul className="list-disc pl-5 text-sm text-gray-700">
           <li>O8 t/m O12, 07:30–12:00: 3 plekken, waarvan 2 voor één thuisspelend team</li>
-          <li>O13 t/m O17, 12:00–16:30: 2 plekken voor één thuisspelend team</li>
+          <li>O13 t/m O17, 12:00–16:30: 3 plekken, waarvan 2 voor één thuisspelend team</li>
           <li>O13 t/m O17, 16:30–19:30: 2 plekken, waarvan 1 voor één thuisspelend team</li>
         </ul>
         <p className="text-xs text-gray-600">
@@ -1562,9 +1698,10 @@ function PlanningBeheer() {
 
       <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
         <p className="text-sm text-gray-700">
-          Vergrendelt de gekozen periode. Alleen de barcommissie kan daarna nog
-          in- of uitschrijven. Bardienstcoördinatoren moeten teamdiensten <strong>vóór</strong> deze
-          stap hebben gevuld.
+          Dit zet het rooster vast, zodat de lijst in de kantine hetzelfde blijft als in de app.
+          Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven en niet meer ruilen.
+          De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam
+          zetten. Accounts krijgen de mail “de planning is klaar” als de mailserver aanstaat.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1574,7 +1711,7 @@ function PlanningBeheer() {
             onClick={() => {
               if (
                 !window.confirm(
-                  'Officieel maken vergrendelt deze periode. Alleen de barcommissie kan daarna nog wijzigen. Doorgaan?',
+                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna niet meer zelf wijzigen of ruilen. De barcommissie nog wel. Doorgaan?',
                 )
               ) {
                 return;
@@ -1601,7 +1738,7 @@ function PlanningBeheer() {
               )
             }
           >
-            Herinneringen morgen
+            Herinneringen over 2 dagen
           </button>
         </div>
         {isOfficial ? (
@@ -1678,6 +1815,12 @@ function MailBeheer() {
     password: '',
     fromEmail: '',
     fromName: 'V.V. Lekkerkerk',
+    templates: {
+      invite: { subject: '', body: '' },
+      scheduled: { subject: '', body: '' },
+      reminder: { subject: '', body: '' },
+      planningReady: { subject: '', body: '' },
+    },
   });
   const [passwordSet, setPasswordSet] = useState(false);
   const [testTo, setTestTo] = useState('');
@@ -1698,6 +1841,7 @@ function MailBeheer() {
           password: '',
           fromEmail: s.fromEmail || '',
           fromName: s.fromName || 'V.V. Lekkerkerk',
+          templates: s.templates || form.templates,
         });
         setPasswordSet(s.passwordSet);
         setTestTo(s.fromEmail || '');
@@ -1755,8 +1899,9 @@ function MailBeheer() {
       <div className="vvl-card space-y-2">
         <h2 className="font-heading text-lg font-black uppercase">Mailserver aansluiten</h2>
         <p className="text-sm text-gray-700">
-          Vul hier je SMTP-gegevens in. Daarna stuurt de app uitnodigingen automatisch.
-          Zonder mailserver kun je de deeplink nog steeds kopiëren.
+          Vul hier je SMTP-gegevens in. Daarna stuurt de app uitnodigingen, een bevestiging bij
+          inplannen, een herinnering twee dagen van tevoren en “planning klaar” bij officieel maken.
+          Zonder mailserver kun je de deeplink nog steeds kopiëren. Push en WhatsApp zitten er niet in.
         </p>
         <div className="flex flex-wrap gap-2 pt-2">
           {MAIL_PRESETS.map((p) => (
@@ -1849,6 +1994,50 @@ function MailBeheer() {
           />
           Beveiligde verbinding — alleen bij poort 465 (bij Gmail/587 uit laten)
         </label>
+        <div className="sm:col-span-2 space-y-4 border-t border-vvl-border pt-4">
+          <h3 className="font-heading text-base font-black uppercase">E-mailteksten</h3>
+          <p className="text-xs text-gray-600">
+            Placeholders: {'{naam}'}, {'{datum}'}, {'{tijd}'}, {'{dienst}'}, {'{link}'}. Leeg opslaan
+            kan niet per ongeluk de standaard wissen: een lege tekst valt terug op de standaard.
+          </p>
+          {[
+            ['invite', 'Uitnodiging'],
+            ['scheduled', 'Bevestiging bij inplannen'],
+            ['reminder', 'Herinnering, twee dagen van tevoren'],
+            ['planningReady', 'Planning klaar'],
+          ].map(([key, label]) => (
+            <div key={key} className="space-y-2">
+              <p className="text-sm font-bold">{label}</p>
+              <input
+                className="vvl-input"
+                value={form.templates?.[key]?.subject || ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    templates: {
+                      ...form.templates,
+                      [key]: { ...form.templates?.[key], subject: e.target.value },
+                    },
+                  })
+                }
+                placeholder="Onderwerp"
+              />
+              <textarea
+                className="vvl-input min-h-[120px] font-mono text-xs"
+                value={form.templates?.[key]?.body || ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    templates: {
+                      ...form.templates,
+                      [key]: { ...form.templates?.[key], body: e.target.value },
+                    },
+                  })
+                }
+              />
+            </div>
+          ))}
+        </div>
         <div className="sm:col-span-2">
           <button type="submit" className="vvl-btn-primary" disabled={loading}>
             {loading ? 'Bezig…' : 'Opslaan'}

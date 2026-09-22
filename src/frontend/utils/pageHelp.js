@@ -12,11 +12,12 @@ export const PAGE_HELP = {
   },
   inschrijven: {
     purpose:
-      'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
+      'Hier schrijf je jezelf in of uit voor open bardiensten. Een kind zonder e-mail schrijf je in vanuit jouw account.',
     actions: [
       'Filter op komende diensten of jouw diensten',
       'Klik een dienst open of dicht voor de namen',
       'Schrijf je in op een dienst met nog plek',
+      'Voeg een kind zonder e-mail toe en kies dat kind bij “Inschrijven als”',
       'Schrijf je uit zolang de vrijwilligersfase open is (niet na officieel maken)',
     ],
   },
@@ -76,7 +77,8 @@ export const PAGE_HELP = {
       'Rol en verplichting (geen / verplicht / VR18+) instellen',
       'Team, bardienstcoördinator en teamdienst-shifts (ochtend / middag / avond)',
       'Account activeren of deactiveren',
-      'CSV importeren (naam;email;telefoon;team;rol;verplichting) — teams moeten al bestaan',
+      'CSV importeren (naam;email;telefoon;team;rol;verplichting) — download eerst het voorbeeldbestand. Teams moeten al bestaan',
+      'Namen zonder account (door een coördinator toegevoegd) staan niet in dit overzicht',
     ],
   },
   beheerDiensten: {
@@ -137,11 +139,12 @@ export const PAGE_HELP = {
   },
   beheerMail: {
     purpose:
-      'SMTP-mailserver aansluiten zodat uitnodigingen en planningsmails automatisch verstuurd worden.',
+      'SMTP-mailserver aansluiten en de teksten van uitnodiging, bevestiging, herinnering en “planning klaar” aanpassen.',
     actions: [
       'Host, poort en inloggegevens van je mailprovider invullen',
+      'Teksten wijzigen. Placeholders: {naam}, {datum}, {tijd}, {dienst}, {link}',
+      'Herinnering gaat twee dagen van tevoren de deur uit',
       'Testmail sturen om te controleren of het werkt',
-      'Zonder SMTP kun je uitnodigingslinks nog steeds kopiëren',
     ],
   },
   teams: {
@@ -149,8 +152,9 @@ export const PAGE_HELP = {
       'Jouw team(s): leden/ouders, hoe vaak ze al hebben gestaan, komende wedstrijden en teamdiensten. Vul ouders in op naam (geen e-mail nodig).',
     actions: [
       'Voeg een ouder toe met alleen de naam',
-      'Zie wie al heeft gestaan en hoe vaak',
-      'Zet een ouder op een open teamdienst-plek',
+      'Zie in de tabel hoe vaak iemand heeft gestaan',
+      'Wijzig of verwijder een ouder zonder account',
+      'Zet een ouder op een open teamdienst-plek, of wissel een ingevulde ouder',
     ],
   },
   beheerClub: {

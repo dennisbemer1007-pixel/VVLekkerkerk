@@ -24,6 +24,11 @@ const MAX_ROWS = 1000;
 
 export const PERSON_IMPORT_COLUMNS = 'naam;email;telefoon;team;rol;verplichting';
 
+export const PERSON_IMPORT_EXAMPLE = `${PERSON_IMPORT_COLUMNS}
+Anna de Vries;anna@example.nl;0612345678;JO15-1;Vrijwilliger;verplicht
+Piet Jansen;piet@example.nl;;JO13-2;Teamcoördinator;geen
+`;
+
 export function mapPersonHeader(value) {
   return HEADER_MAP[compactHeader(value)] || compactHeader(value);
 }

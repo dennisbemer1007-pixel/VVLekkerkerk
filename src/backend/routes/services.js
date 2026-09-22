@@ -60,8 +60,16 @@ router.get(
         if (pid !== req.person.id && !isAdminRole(req.person.role)) {
           return res.status(403).json({ error: 'Geen toegang tot andermans diensten' });
         }
+        const ids = new Set([pid]);
+        if (pid === req.person.id) {
+          const children = await prisma.person.findMany({
+            where: { guardianId: req.person.id },
+            select: { id: true },
+          });
+          for (const child of children) ids.add(child.id);
+        }
         services = services.filter((s) =>
-          s.enrollments.some((e) => e.personId === pid),
+          s.enrollments.some((e) => ids.has(e.personId)),
         );
       }
 

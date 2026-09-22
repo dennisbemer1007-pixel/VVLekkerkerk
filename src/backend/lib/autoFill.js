@@ -9,6 +9,7 @@ import {
 } from './obligation.js';
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
 import { writeAudit } from './audit.js';
+import { trySendScheduledConfirmation } from './mail.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import { friendlyEnrollmentReason, serviceCapacity } from './teamDutyPlanning.js';
@@ -142,6 +143,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
           makeup: isMakeup,
         },
       });
+      trySendScheduledConfirmation({ person: row.person, service }).catch(() => {});
       service.enrollments.push({ personId: row.person.id, kind: 'PERSONAL', noShow: false });
       if (isMakeup) {
         row.person.makeupDue = Math.max(0, (row.person.makeupDue ?? 0) - 1);
