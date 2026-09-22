@@ -141,7 +141,10 @@ router.post(
       });
       const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
       const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
-      if (servicePreview?.locked && !isAdminRole(req.person.role)) {
+      const coordinatorNamingTeam =
+        fillingTeamDuty &&
+        (req.person.role === 'Teamcoördinator' || isAdminRole(req.person.role));
+      if (servicePreview?.locked && !isAdminRole(req.person.role) && !coordinatorNamingTeam) {
         return res.status(403).json({
           error: 'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
         });
@@ -196,13 +199,6 @@ router.post(
             err.status = 403;
             throw err;
           }
-          if (service.locked && !isAdminRole(req.person.role)) {
-            const err = new Error(
-              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
-            );
-            err.status = 403;
-            throw err;
-          }
           if (service.enrollments.length >= service.required) {
             const err = new Error('Deze dienst is al vol');
             err.status = 409;
@@ -223,11 +219,18 @@ router.post(
             throw err;
           }
 
-          const source = enrollmentSource(req.person, targetId);
+          let source = enrollmentSource(req.person, targetId);
           const capacity = serviceCapacity(service);
-          const actorTeamIds = source === 'TEAM' ? await teamIdsForActor(req.person) : new Set();
           const personTeams = new Set(personTeamIds(person));
           const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
+          const fillingForSomeoneElseEarly = Number(req.person.id) !== targetId;
+          if (
+            req.person.role === 'Teamcoördinator' &&
+            (requestedTeamId || (fillingForSomeoneElseEarly && source === 'TEAM'))
+          ) {
+            source = 'TEAM';
+          }
+          const actorTeamIds = source === 'TEAM' ? await teamIdsForActor(req.person) : new Set();
           const dutyTeams = (service.teamDuties || []).map((d) => d.teamId);
           let forTeamId = null;
           let kind = 'PERSONAL';
@@ -251,6 +254,26 @@ router.post(
               kind = 'TEAM';
               forTeamId = dutyTeam;
             }
+          }
+
+          if (service.locked && !isAdminRole(req.person.role) && kind !== 'TEAM') {
+            const err = new Error(
+              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+            );
+            err.status = 403;
+            throw err;
+          }
+          if (
+            service.locked &&
+            kind === 'TEAM' &&
+            req.person.role !== 'Teamcoördinator' &&
+            !isAdminRole(req.person.role)
+          ) {
+            const err = new Error(
+              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+            );
+            err.status = 403;
+            throw err;
           }
 
           if (kind === 'TEAM') {
@@ -323,6 +346,78 @@ router.post(
         }
         throw e;
       }
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/reassign',
+  requireAuth(async (req, res, next) => {
+    try {
+      const enrollmentId = Number(req.params.id);
+      const nextPersonId = Number(req.body?.personId);
+      if (!nextPersonId) {
+        return res.status(400).json({ error: 'Kies de andere ouder' });
+      }
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { id: enrollmentId },
+        include: { service: { include: serviceInclude }, person: true },
+      });
+      if (!enrollment) return res.status(404).json({ error: 'Inschrijving niet gevonden' });
+      if (enrollment.kind !== 'TEAM' || !enrollment.forTeamId) {
+        return res.status(400).json({
+          error: 'Alleen een ingevulde teamdienst-plek kun je omzetten naar een andere ouder',
+        });
+      }
+      if (enrollment.personId === nextPersonId) {
+        return res.status(400).json({ error: 'Kies een andere ouder dan degene die er nu staat' });
+      }
+      const allowedTeams = isAdminRole(req.person.role)
+        ? null
+        : await teamIdsForActor(req.person);
+      if (allowedTeams && !allowedTeams.has(enrollment.forTeamId)) {
+        return res.status(403).json({ error: 'Je mag alleen ouders van je eigen team wijzigen' });
+      }
+      const nextPerson = await prisma.person.findUnique({
+        where: { id: nextPersonId },
+        include: { teamMemberships: { where: { active: true } } },
+      });
+      if (!nextPerson?.active) {
+        return res.status(400).json({ error: 'Deze persoon is niet actief' });
+      }
+      const onTeam =
+        nextPerson.teamId === enrollment.forTeamId ||
+        (nextPerson.teamMemberships || []).some((m) => m.teamId === enrollment.forTeamId);
+      if (!onTeam && !isAdminRole(req.person.role)) {
+        return res.status(400).json({ error: 'Deze ouder hoort niet bij dit team' });
+      }
+      const duplicate = await prisma.enrollment.findUnique({
+        where: {
+          serviceId_personId: { serviceId: enrollment.serviceId, personId: nextPersonId },
+        },
+      });
+      if (duplicate) {
+        return res.status(409).json({ error: 'Die ouder staat al op deze dienst' });
+      }
+      const updated = await prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: {
+          personId: nextPersonId,
+          source: 'TEAM',
+          reason: friendlyEnrollmentReason('TEAM'),
+        },
+        include: { person: true, service: true, forTeam: true },
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'enrollment.reassign',
+        entity: 'Enrollment',
+        entityId: enrollment.id,
+        detail: `${enrollment.person?.name || 'ouder'} → ${nextPerson.name}`,
+      });
+      res.json(mapEnrollment(updated));
     } catch (err) {
       next(err);
     }

@@ -211,18 +211,22 @@ async function main() {
         : 'geen teamdienst',
     ),
   );
-  const afternoonDuty = (afterPropose.json || []).find(
+  const afternoonDuties = (afterPropose.json || []).filter(
     (s) =>
       s.slot === 'AFTERNOON' &&
       s.type === 'BAR' &&
       (s.teamDuties || []).some((d) => /O15|JO15/i.test(d.team?.name || '')),
   );
+  const afternoonDuty =
+    afternoonDuties.find((s) => (s.capacity?.teamOpen ?? 0) > 0) || afternoonDuties[0];
   mark(
     record(
-      'zaterdag middag 2 teamplekken',
+      'zaterdag middag 2 team + 1 open',
       Boolean(afternoonDuty) &&
+        afternoonDuty.required === 3 &&
         (afternoonDuty.capacity?.teamReserved ?? 0) >= 2 &&
-        (afternoonDuty.capacity?.personalCapacity ?? 0) === 0,
+        (afternoonDuty.capacity?.personalCapacity ?? 0) === 1 &&
+        (afternoonDuty.enrolled ?? 0) >= (afternoonDuty.capacity?.teamReserved ?? 0),
       afternoonDuty
         ? `reserved ${afternoonDuty.capacity?.teamReserved} personal ${afternoonDuty.capacity?.personalCapacity}`
         : 'geen teamdienst',
@@ -256,8 +260,9 @@ async function main() {
     mark(
       record(
         'vrijwilliger geen teamplek',
-        lisaTeamSpot.status === 409,
-        String(lisaTeamSpot.status),
+        lisaTeamSpot.status === 409 ||
+          (lisaTeamSpot.status === 201 && lisaTeamSpot.json?.kind !== 'TEAM'),
+        `${lisaTeamSpot.status} ${lisaTeamSpot.json?.kind || lisaTeamSpot.json?.error || ''}`,
       ),
     );
   } else {
@@ -279,6 +284,11 @@ async function main() {
       ),
     );
     if (parent.json?.id) {
+      for (const taken of afternoonDuty.enrollments || []) {
+        if (taken.kind === 'TEAM') {
+          await req(`/api/enrollments/${taken.id}`, { method: 'DELETE', token: admin });
+        }
+      }
       const fill = await req('/api/enrollments', {
         method: 'POST',
         token: sandra,
@@ -287,10 +297,29 @@ async function main() {
       mark(
         record(
           'coordinator vult teamplek',
-          fill.status === 201 && fill.json?.kind === 'TEAM',
-          `${fill.status} ${fill.json?.kind || fill.json?.error || ''}`,
+          fill.status === 201 &&
+            fill.json?.kind === 'TEAM' &&
+            /coördinator/i.test(fill.json?.reason || ''),
+          `${fill.status} ${fill.json?.kind || ''} ${fill.json?.reason || fill.json?.error || ''}`,
         ),
       );
+      const sandraMe = await req('/api/auth/me', { token: sandra });
+      if (sandraMe.json?.id) {
+        const selfFill = await req('/api/enrollments', {
+          method: 'POST',
+          token: sandra,
+          body: { serviceId: afternoonDuty.id, personId: sandraMe.json.id, forTeamId: jo15.id },
+        });
+        mark(
+          record(
+            'coordinator zichzelf telt als coördinator',
+            selfFill.status === 201 &&
+              selfFill.json?.kind === 'TEAM' &&
+              /coördinator/i.test(selfFill.json?.reason || ''),
+            `${selfFill.status} ${selfFill.json?.reason || selfFill.json?.error || ''}`,
+          ),
+        );
+      }
     } else {
       mark(record('coordinator vult teamplek', false, 'geen ouder-id'));
     }

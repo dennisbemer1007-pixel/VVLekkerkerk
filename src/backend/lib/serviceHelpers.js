@@ -1,6 +1,6 @@
 import { occupancyStatus } from './dates.js';
 import { publicPersonBrief } from './roles.js';
-import { serviceCapacity } from './teamDutyPlanning.js';
+import { occupiedSlots, serviceCapacity } from './teamDutyPlanning.js';
 
 export function serviceLocation(type) {
   return type === 'KITCHEN' ? 'Keuken' : 'Bar';
@@ -32,9 +32,9 @@ export function mapService(service) {
     ...service,
     enrollments,
     teamDuties,
-    enrolled: capacity.enrolled,
+    enrolled: occupiedSlots(capacity),
     capacity,
-    status: occupancyStatus(capacity.enrolled, required),
+    status: occupancyStatus(occupiedSlots(capacity), required),
     assignedTeam: service.assignedTeam
       ? { id: service.assignedTeam.id, name: service.assignedTeam.name }
       : service.assignedTeam === null

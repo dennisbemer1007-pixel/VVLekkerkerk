@@ -1386,7 +1386,7 @@ function PlanningBeheer() {
         </p>
         <ul className="list-disc pl-5 text-sm text-gray-700">
           <li>O8 t/m O12, 07:30–12:00: 3 plekken, waarvan 2 voor één thuisspelend team</li>
-          <li>O13 t/m O17, 12:00–16:30: 2 plekken voor één thuisspelend team</li>
+          <li>O13 t/m O17, 12:00–16:30: 3 plekken, waarvan 2 voor één thuisspelend team</li>
           <li>O13 t/m O17, 16:30–19:30: 2 plekken, waarvan 1 voor één thuisspelend team</li>
         </ul>
         <p className="text-xs text-gray-600">

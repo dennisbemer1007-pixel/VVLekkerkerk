@@ -33,10 +33,13 @@ import {
 } from '../src/backend/lib/matchPlanning.js';
 import {
   eligibleTeamDutyCandidates,
+  occupiedSlots,
   recordTeamDutyStand,
   requiredForTeamDuties,
+  serviceCapacity,
   teamDutyAssignments,
 } from '../src/backend/lib/teamDutyPlanning.js';
+import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
 import { resolvePlanningPeriod } from '../src/backend/lib/planningPeriod.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
 import {
@@ -619,6 +622,29 @@ assert(
   'MO17 valt in O13–O17 middagregel',
   teamDutyAssignments(secondRule, [mo17Home, o12Home]).length === 1 &&
     teamDutyAssignments(secondRule, [mo17Home, o12Home])[0].team.id === 17,
+);
+const afternoonRule = defaultServiceRuleSeed().find((rule) => rule.name === 'Zaterdag bar tweede shift');
+assert(
+  'zaterdagmiddag is 3 plekken waarvan 2 team',
+  afternoonRule?.required === 3 && afternoonRule?.teamDutyReserved === 2,
+);
+const emptyAfternoon = serviceCapacity({
+  required: 3,
+  teamDuties: [{ teamId: 15, reserved: 2 }],
+  enrollments: [],
+});
+assert(
+  'teamplekken tellen als bezet zonder naam',
+  emptyAfternoon.personalCapacity === 1 && occupiedSlots(emptyAfternoon) === 2,
+);
+const namedParent = serviceCapacity({
+  required: 3,
+  teamDuties: [{ teamId: 15, reserved: 2 }],
+  enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
+});
+assert(
+  'genoemde ouder zit in de teamplekken',
+  occupiedSlots(namedParent) === 2 && namedParent.teamOpen === 1,
 );
 assert(
   'twee oudere teams thuis → middag blijft 2 plekken',
