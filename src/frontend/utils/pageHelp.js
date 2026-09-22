@@ -42,11 +42,12 @@ export const PAGE_HELP = {
   },
   ruilen: {
     purpose:
-      'Ruil twee bestaande persoonlijke diensten. Zodra de andere persoon akkoord geeft, is de ruiling direct doorgevoerd. Er ontstaat geen open plek.',
+      'Ruil twee bestaande persoonlijke diensten, ook nadat het rooster officieel is. Zodra de andere persoon akkoord geeft, is de ruiling direct doorgevoerd. Er ontstaat geen open plek.',
     actions: [
       'Kies jouw komende dienst en de dienst van iemand anders',
       'Stuur het verzoek — de ander krijgt een notificatie',
-      'Bij akkoord wordt meteen geruild; bij weigering kan een reden worden meegegeven',
+      'Bij akkoord wordt meteen geruild, ook op een officieel rooster',
+      'Bij weigering kan een reden worden meegegeven',
     ],
   },
   beheer: {
@@ -95,7 +96,7 @@ export const PAGE_HELP = {
       'Stap 1: Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)',
       'Stap 2: Concept publiceren (vrijwilligers mogen inschrijven tot de deadline)',
       'Stap 3: Vul open vrijwilligersplekken — teamplekken vult de bardienstcoördinator',
-      'Stap 4: Maak officieel (vergrendelt de gekozen periode)',
+      'Stap 4: Maak officieel (vergrendelt in- en uitschrijven; onderling ruilen blijft mogelijk)',
     ],
   },
   beheerRegels: {

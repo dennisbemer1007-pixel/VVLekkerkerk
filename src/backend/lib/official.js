@@ -2,7 +2,7 @@ import prisma from './prisma.js';
 import { resolvePlanningPeriod, periodFromRound } from './planningPeriod.js';
 
 export const OFFICIAL_DECISION =
-  'Na “officieel maken” is de planning van de gekozen periode vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.';
+  'Na “officieel maken” is de planning van de gekozen periode vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Vrijwilligers kunnen onderling blijven ruilen als beide personen akkoord zijn. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.';
 
 export async function markPlanningOfficial({ from, to, weeks } = {}) {
   const period = from || to

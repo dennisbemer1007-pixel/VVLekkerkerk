@@ -1563,7 +1563,8 @@ function PlanningBeheer() {
       <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
         <p className="text-sm text-gray-700">
           Vergrendelt de gekozen periode. Alleen de barcommissie kan daarna nog
-          in- of uitschrijven. Bardienstcoördinatoren moeten teamdiensten <strong>vóór</strong> deze
+          in- of uitschrijven. Vrijwilligers kunnen wel onderling ruilen als beide personen
+          akkoord zijn. Bardienstcoördinatoren moeten teamdiensten <strong>vóór</strong> deze
           stap hebben gevuld.
         </p>
         <div className="flex flex-wrap gap-2">
@@ -1574,7 +1575,7 @@ function PlanningBeheer() {
             onClick={() => {
               if (
                 !window.confirm(
-                  'Officieel maken vergrendelt deze periode. Alleen de barcommissie kan daarna nog wijzigen. Doorgaan?',
+                  'Officieel maken vergrendelt in- en uitschrijven in deze periode. Vrijwilligers kunnen daarna nog wel onderling ruilen als beide akkoord zijn. Doorgaan?',
                 )
               ) {
                 return;

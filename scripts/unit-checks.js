@@ -387,13 +387,16 @@ const lockedSwap = swapBlockers({
     personId: 2,
     kind: 'PERSONAL',
     noShow: false,
-    service: { active: true, draft: false, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
+    service: { active: true, draft: false, locked: true, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
   },
   fromPerson: { blocks: [] },
   toPerson: { blocks: [] },
   now: new Date('2026-09-13'),
 });
-assert('ruil weigert officieel rooster', lockedSwap.ok === false);
+assert(
+  'ruil mag op officieel rooster',
+  lockedSwap.ok === true && lockedSwap.errors.length === 0,
+);
 
 assert(
   'unavailable Monday',
