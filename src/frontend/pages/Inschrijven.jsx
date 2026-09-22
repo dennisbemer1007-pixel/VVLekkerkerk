@@ -40,6 +40,8 @@ export default function Inschrijven() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleInschrijven = async (serviceId, mode) => {
     if (mode === 'expand') {
       setOpenId((id) => (id === serviceId ? null : serviceId));
       return;
