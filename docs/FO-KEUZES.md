@@ -59,17 +59,25 @@ Teamdiensten en no-shows tellen niet mee. Geen extra straf op oude historie buit
 ### Bardienstcoördinator
 `/teams` (**Mijn team**): ouders/leden op naam, hoe vaak ze al hebben gestaan, komende wedstrijden, open teamplekken invullen. Ouders hebben geen account of e-mail nodig. De coordinator kan zichzelf ook inschrijven/ruilen als vrijwilliger.
 
-### Herinneringen (1 dag van tevoren)
-E-mail **1 dag voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen push, geen WhatsApp. `Enrollment.remindedAt` voorkomt dubbele mails. De server draait dit elk uur en bij `/api/health` (max. eens per 50 minuten). Barcommissie kan **Herinneringen morgen** forceren. Productie mag niet “in slaap” vallen, anders mist de cron.
+### Herinneringen (2 dagen van tevoren)
+E-mail **2 dagen voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen push, geen WhatsApp. `Enrollment.remindedAt` voorkomt dubbele mails. De server draait dit elk uur en bij `/api/health` (max. eens per 50 minuten). Barcommissie kan **Herinneringen over 2 dagen** forceren. Productie mag niet “in slaap” vallen, anders mist de cron.
+
+### E-mailteksten (Beheer → E-mail)
+Beheer past vier teksten aan: uitnodiging, bevestiging bij inplannen (zelf of door de app, met datum en tijd), herinnering twee dagen van tevoren, en “planning klaar” bij officieel maken. Placeholders: `{naam}`, `{datum}`, `{tijd}`, `{dienst}`, `{link}`. Zonder SMTP wordt er niets verstuurd.
 
 ### Publiceren als officieel
-Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.
+Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Reden: het rooster aan de muur moet hetzelfde blijven als in de app. Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven en niet meer ruilen. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen dan de mail “planning klaar” als SMTP aanstaat.
 
 ### Seizoen
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.
 
 ### Personenimport
-CSV `naam;email;telefoon;team;rol;verplichting`. **Maakt geen teams aan**; onbekend team → hele import geweigerd. Bestaand e-mailadres → bijwerken. Optioneel uitnodigingsmail als SMTP aanstaat.
+CSV `naam;email;telefoon;team;rol;verplichting`. Voorbeeldbestand via **Voorbeeld-CSV downloaden** in Beheer → Personen. **Maakt geen teams aan**; onbekend team → hele import geweigerd. Bestaand e-mailadres → bijwerken. Optioneel uitnodigingsmail als SMTP aanstaat.
+
+Namen die een bardienstcoördinator alleen op naam toevoegt (geen e-mail, geen account) staan niet in het beheeroverzicht, zodat dezelfde persoon niet dubbel voorkomt naast een vrijwilligersaccount. Bestaat de naam al, dan koppelt Mijn team dat account in plaats van een tweede persoon te maken.
+
+### Teams wijzigen
+Beheer → Teams: hernoemen (bijvoorbeeld O12 naar O13) houdt ouders en coördinator. Coördinator wijzigen kan; een vrijwilliger krijgt dan de rol Teamcoördinator. Verwijderen koppelt accounts los en verwijdert alleen ouders zonder account én zonder dienst. Wie al een dienst heeft gedraaid blijft in de historie.
 
 ### Excel-export
 `/api/planning/export.xlsx`: bladen Diensten en Inschrijvingen. Blad Personen alleen voor barcommissie/admin.
@@ -90,6 +98,6 @@ Afgesproken 14 september 2026 (product owner akkoord met de voorgestelde lijn):
 1. **Zondagse keuken** — blijft **altijd 12:00–15:00** (standaardregel). Geen extra voorwaarde tot de club die later vastlegt.  
 2. **VoetbalAssist live** — niet gekoppeld. Wedstrijden blijven via KNVB-/CSV-import.  
 3. **Gedeeld e-mailadres** — e-mail blijft uniek voor login.  
-4. **Push / WhatsApp / bewerkbare mailteksten** — niet in deze versie. Alleen vaste e-mailteksten (uitnodiging, reset, herinnering).  
+4. **Push / WhatsApp** — niet gebouwd. E-mail is voldoende. Bewerkbare mailteksten zitten wel in Beheer → E-mail.  
 
 Verfijning van ruilen en planner-volgorde mag later; de regels hierboven blijven gelden tot een nieuwe keuze.

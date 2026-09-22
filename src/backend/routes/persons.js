@@ -15,7 +15,8 @@ import { normalizeRole, resolvePublicAppUrl } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { writeAudit } from '../lib/audit.js';
-import { parsePersonCsv, validatePersonRows } from '../lib/csvPersons.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../lib/csvPersons.js';
+import { isNamelessRosterPerson } from '../lib/personMatch.js';
 import { trySendInviteEmail } from '../lib/mail.js';
 import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/privacy.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
@@ -60,12 +61,16 @@ router.get(
         return res.status(403).json({ error: 'Geen toegang tot de personenlijst' });
       }
       const includeInactive = req.query.all === 'true' && isAdmin;
+      const includeNameless = req.query.includeNameless === 'true' && isAdmin;
       const persons = await prisma.person.findMany({
         where: includeInactive ? undefined : { active: true },
         include: { team: true },
         orderBy: { name: 'asc' },
       });
-      res.json(persons.map((p) => publicPerson(p, { viewerRole: req.person.role })));
+      const visible = includeNameless
+        ? persons
+        : persons.filter((p) => !isNamelessRosterPerson(p));
+      res.json(visible.map((p) => publicPerson(p, { viewerRole: req.person.role })));
     } catch (err) {
       next(err);
     }
@@ -131,6 +136,90 @@ router.get(
       );
       res.setHeader('Content-Disposition', 'attachment; filename="vvl-mijn-gegevens.xlsx"');
       res.send(buf);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/import-example',
+  requireRole(...ADMIN_ROLES)(async (_req, res) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="voorbeeld-personen.csv"');
+    res.send(`\uFEFF${PERSON_IMPORT_EXAMPLE}`);
+  }),
+);
+
+router.get(
+  '/me/children',
+  requireAuth(async (req, res, next) => {
+    try {
+      const children = await prisma.person.findMany({
+        where: { guardianId: req.person.id, active: true },
+        orderBy: { name: 'asc' },
+      });
+      res.json(children.map((p) => publicPerson(p, { viewerRole: req.person.role })));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/me/children',
+  requireAuth(async (req, res, next) => {
+    try {
+      const name = String(req.body?.name || '').trim();
+      if (name.length < 2) return res.status(400).json({ error: 'Vul de naam van het kind in.' });
+      const guardian = await prisma.person.findUnique({ where: { id: req.person.id } });
+      const child = await prisma.person.create({
+        data: {
+          name,
+          personNumber: await nextPersonNumber(),
+          email: null,
+          role: 'Vrijwilliger',
+          obligation: 'NONE',
+          teamId: guardian?.teamId ?? null,
+          guardianId: req.person.id,
+          active: true,
+        },
+      });
+      if (child.teamId) await syncPrimaryTeamMembership(child.id, child.teamId);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.create_child',
+        entity: 'Person',
+        entityId: child.id,
+        detail: child.name,
+      });
+      res.status(201).json(publicPerson(child, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/me/children/:id',
+  requireAuth(async (req, res, next) => {
+    try {
+      const child = await prisma.person.findUnique({ where: { id: Number(req.params.id) } });
+      if (!child || child.guardianId !== req.person.id) {
+        return res.status(404).json({ error: 'Kind niet gevonden' });
+      }
+      if (child.email || child.passwordHash) {
+        return res.status(400).json({ error: 'Dit account verwijder je niet hier' });
+      }
+      await prisma.person.delete({ where: { id: child.id } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.delete_child',
+        entity: 'Person',
+        entityId: child.id,
+        detail: child.name,
+      });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

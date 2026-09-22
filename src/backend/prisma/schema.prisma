@@ -36,6 +36,10 @@ model Person {
   deactivatedAt    DateTime?
   teamId           Int?
   team             Team?        @relation(fields: [teamId], references: [id])
+  /** Ouder-account dat dit kind zonder e-mail beheert */
+  guardianId       Int?
+  guardian         Person?      @relation("PersonGuardian", fields: [guardianId], references: [id])
+  children         Person[]     @relation("PersonGuardian")
   teamMemberships  PersonTeam[]
   enrollments      Enrollment[]
   coordinates      Team[]       @relation("TeamCoordinator")
@@ -299,6 +303,8 @@ model MailSettings {
   password  String   @default("")
   fromEmail String   @default("")
   fromName  String   @default("V.V. Lekkerkerk")
+  /** JSON: invite, scheduled, reminder, planningReady — leeg = standaardteksten */
+  templates String   @default("")
   updatedAt DateTime @updatedAt
 }
 

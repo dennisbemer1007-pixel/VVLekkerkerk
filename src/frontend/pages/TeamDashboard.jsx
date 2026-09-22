@@ -42,9 +42,12 @@ export default function TeamDashboard() {
         setError('Vul de naam van de ouder in.');
         return;
       }
-      await api.addTeamParent(teamId, { name });
+      const res = await api.addTeamParent(teamId, { name });
       setParentName((prev) => ({ ...prev, [teamId]: '' }));
-      setMsg(`${name} staat nu op de teamlijst. Je kunt deze ouder op een teamdienst zetten.`);
+      setMsg(
+        res.message ||
+          `${name} staat nu op de teamlijst. Je kunt deze ouder op een teamdienst zetten.`,
+      );
       await load();
     } catch (err) {
       setError(err.message);

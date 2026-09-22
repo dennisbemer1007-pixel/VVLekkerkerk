@@ -7,8 +7,10 @@ import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
 import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../src/backend/lib/season.js';
-import { parsePersonCsv, validatePersonRows } from '../src/backend/lib/csvPersons.js';
-import { dutyReminderEmail } from '../src/backend/lib/reminders.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../src/backend/lib/csvPersons.js';
+import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
+import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
+import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
 import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
 import {
@@ -462,6 +464,24 @@ const reminder = dutyReminderEmail({
   appUrl: 'https://example.test',
 });
 assert('reminder subject has date', reminder.subject.includes('14 september'));
+assert('reminder is two days ahead', reminder.text.includes('twee dagen'));
+const window = reminderWindow(new Date('2026-09-22T15:00:00'));
+assert(
+  'reminder window is day plus two',
+  window.from.getDate() === 24 && window.to.getDate() === 24,
+);
+const filled = renderMail(resolveMailTemplates(null).scheduled, {
+  naam: 'Lisa',
+  datum: 'zaterdag 3 oktober',
+  tijd: '12:00 - 16:30',
+  dienst: 'bardienst',
+  link: 'https://example.test',
+});
+assert('scheduled mail has date and time', filled.text.includes('3 oktober') && filled.text.includes('12:00'));
+assert('voorbeeld csv heeft kolommen', PERSON_IMPORT_EXAMPLE.startsWith('naam;email;telefoon;team;rol;verplichting'));
+assert('naam normaliseren', normalizePersonName('José  van Dijk') === 'jose van dijk');
+assert('naamloos niet in beheer', isNamelessRosterPerson({ email: null, passwordHash: null }) === true);
+assert('account wel in beheer', isNamelessRosterPerson({ email: 'a@b.c', passwordHash: 'x' }) === false);
 
 const swapMail = swapCommitteeEmailContent({
   name: 'Mark',

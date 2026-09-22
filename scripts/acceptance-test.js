@@ -271,16 +271,29 @@ async function main() {
 
   const jo15 = (dash.json?.teams || []).find((t) => /O15|JO15/i.test(t.name));
   if (jo15 && afternoonDuty) {
+    const parentName = `Test Ouder ${Date.now()}`;
     const parent = await req(`/api/teams/${jo15.id}/parents`, {
       method: 'POST',
       token: sandra,
-      body: { name: 'Test Ouder Cheryl' },
+      body: { name: parentName },
     });
     mark(
       record(
         'coordinator ouder op naam',
-        parent.status === 201 && parent.json?.name === 'Test Ouder Cheryl' && parent.json?.hasAccount === false,
+        parent.status === 201 && parent.json?.name === parentName && parent.json?.hasAccount === false,
         String(parent.status),
+      ),
+    );
+    const again = await req(`/api/teams/${jo15.id}/parents`, {
+      method: 'POST',
+      token: sandra,
+      body: { name: parentName },
+    });
+    mark(
+      record(
+        'zelfde naam koppelt bestaand, geen tweede persoon',
+        again.status === 200 && again.json?.linked === true && again.json?.id === parent.json?.id,
+        `${again.status} ${again.json?.id || again.json?.error || ''}`,
       ),
     );
     if (parent.json?.id) {

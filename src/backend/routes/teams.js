@@ -10,6 +10,7 @@ import { mapService, serviceInclude } from '../lib/serviceHelpers.js';
 import { getClubSettings } from '../lib/season.js';
 import { periodFromRound } from '../lib/planningPeriod.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
+import { normalizePersonName } from '../lib/personMatch.js';
 import { writeAudit } from '../lib/audit.js';
 import { teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
 
@@ -226,15 +227,22 @@ router.post(
       const { name, coordinatorId, matchDurationMinutes } = req.body;
       if (!name?.trim()) return res.status(400).json({ error: 'Teamnaam is verplicht' });
       const duration = Number(matchDurationMinutes);
+      const coordinator = coordinatorId ? Number(coordinatorId) : null;
       const team = await prisma.team.create({
         data: {
           name: name.trim(),
-          coordinatorId: coordinatorId ? Number(coordinatorId) : null,
+          coordinatorId: coordinator,
           matchDurationMinutes:
             Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 90,
           ...teamFunctionFields(req.body),
         },
       });
+      if (coordinator) {
+        const person = await prisma.person.findUnique({ where: { id: coordinator } });
+        if (person?.role === 'Vrijwilliger') {
+          await prisma.person.update({ where: { id: person.id }, data: { role: 'Teamcoördinator' } });
+        }
+      }
       res.status(201).json(mapTeam({ ...team, coordinator: null, members: [] }));
     } catch (err) {
       next(err);
@@ -265,6 +273,15 @@ router.put(
         where: { id: Number(req.params.id) },
         data,
       });
+      if (data.coordinatorId) {
+        const coordinator = await prisma.person.findUnique({ where: { id: data.coordinatorId } });
+        if (coordinator && coordinator.role === 'Vrijwilliger') {
+          await prisma.person.update({
+            where: { id: coordinator.id },
+            data: { role: 'Teamcoördinator' },
+          });
+        }
+      }
       res.json(mapTeam({ ...team, coordinator: undefined, members: undefined }));
     } catch (err) {
       next(err);
@@ -287,6 +304,40 @@ router.post(
       }
       const name = String(req.body?.name || '').trim();
       if (!name) return res.status(400).json({ error: 'Naam is verplicht' });
+      const wanted = normalizePersonName(name);
+      const existingPeople = await prisma.person.findMany({
+        where: { active: true },
+        select: { id: true, name: true, email: true, teamId: true },
+      });
+      const matches = existingPeople.filter((p) => normalizePersonName(p.name) === wanted);
+      if (matches.length > 1) {
+        return res.status(409).json({
+          error:
+            'Er zijn meerdere personen met deze naam. Koppel het bestaande account via Beheer, zodat niemand twee keer voorkomt.',
+        });
+      }
+      if (matches.length === 1) {
+        const existing = matches[0];
+        if (!existing.teamId) {
+          await prisma.person.update({ where: { id: existing.id }, data: { teamId } });
+        }
+        await syncPrimaryTeamMembership(existing.id, teamId);
+        const full = await prisma.person.findUnique({ where: { id: existing.id } });
+        await writeAudit({
+          actorId: req.person.id,
+          action: 'person.link_parent',
+          entity: 'Person',
+          entityId: existing.id,
+          detail: `${full.name} gekoppeld aan ${team.name}`,
+        });
+        return res.status(200).json({
+          ...publicPerson(full, { viewerRole: req.person.role }),
+          linked: true,
+          message: existing.email
+            ? `${full.name} heeft al een account en is aan dit team gekoppeld. Er is geen tweede persoon gemaakt.`
+            : `${full.name} stond al op naam en is aan dit team gekoppeld.`,
+        });
+      }
       const person = await prisma.person.create({
         data: {
           name,
@@ -391,6 +442,65 @@ router.delete(
         detail: person.name,
       });
       res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/:id',
+  admin(async (req, res, next) => {
+    try {
+      const teamId = Number(req.params.id);
+      const team = await prisma.team.findUnique({
+        where: { id: teamId },
+        include: { members: true },
+      });
+      if (!team) return res.status(404).json({ error: 'Team niet gevonden' });
+
+      await prisma.team.update({ where: { id: teamId }, data: { coordinatorId: null } });
+
+      let removedParents = 0;
+      let keptAccounts = 0;
+      let keptHistory = 0;
+      for (const member of team.members) {
+        const nameless = !member.email && !member.passwordHash && !member.guardianId;
+        const otherTeams = await prisma.team.count({
+          where: { coordinatorId: member.id, id: { not: teamId } },
+        });
+        if (nameless && !otherTeams) {
+          const duties = await prisma.enrollment.count({ where: { personId: member.id } });
+          if (duties === 0) {
+            await prisma.person.delete({ where: { id: member.id } });
+            removedParents += 1;
+            continue;
+          }
+          keptHistory += 1;
+        } else {
+          keptAccounts += 1;
+        }
+        if (member.teamId === teamId) {
+          await prisma.person.update({ where: { id: member.id }, data: { teamId: null } });
+        }
+      }
+
+      await prisma.match.updateMany({ where: { teamId }, data: { teamId: null } });
+      await prisma.service.updateMany({ where: { assignedTeamId: teamId }, data: { assignedTeamId: null } });
+      await prisma.serviceRule.updateMany({
+        where: { conditionTeamId: teamId },
+        data: { conditionTeamId: null },
+      });
+      await prisma.enrollment.updateMany({ where: { forTeamId: teamId }, data: { forTeamId: null } });
+      await prisma.team.delete({ where: { id: teamId } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'team.delete',
+        entity: 'Team',
+        entityId: teamId,
+        detail: `${team.name} · ${removedParents} ouders zonder dienst verwijderd`,
+      });
+      res.json({ ok: true, removedParents, keptAccounts, keptHistory });
     } catch (err) {
       next(err);
     }

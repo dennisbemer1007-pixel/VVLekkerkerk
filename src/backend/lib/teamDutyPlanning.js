@@ -265,6 +265,7 @@ export function friendlyEnrollmentReason(source, { makeup = false, obligation } 
   if (source === 'SELF') return 'Zelf ingeschreven';
   if (source === 'TEAM') return 'Ingevuld door de bardienstcoördinator';
   if (source === 'ADMIN') return 'Ingepland door de barcommissie';
+  if (source === 'GUARDIAN') return 'Ingeschreven door ouder';
   if (source === 'AUTO') {
     if (makeup) return 'Automatisch ingepland: openstaande inhaaldienst.';
     if (obligation === 'VR18') {

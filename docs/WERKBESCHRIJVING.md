@@ -54,8 +54,8 @@ Onderstaande tabel dekt de FO-onderwerpen. Geparkeerde punten verwijzen naar FO-
 | Ruilen twee persoonlijke diensten (FO §53–56 / §89) | Ja | Beide akkoord + barcommissie; zie §7 |
 | Eerlijk automatisch vullen (FO §34 / §89) | Ja | Inhaal → verplicht → minst dit jaar → langst geleden → voorkeur |
 | Teamcoördinator-dashboard | Ja | Menu **Mijn team** |
-| Herinnering 1 dag van tevoren | Ja | Alleen e-mail (SMTP). Geen push/WhatsApp |
-| Bewerkbare mailteksten | Nee, bewust | Vaste teksten. [FO-KEUZES](FO-KEUZES.md) |
+| Herinnering 2 dagen van tevoren | Ja | Alleen e-mail (SMTP). Tekst aanpasbaar in Beheer |
+| Bewerkbare mailteksten | Ja | Uitnodiging, bevestiging, herinnering, planning klaar. Geen push/WhatsApp |
 | Publiceren / officieel vastzetten | Ja | Beheer → Planning → Maak officieel |
 | Seizoen 1 aug–31 jul | Ja | Beheer → Club; rollover archiveert lidmaatschappen |
 | Wedstrijden KNVB/CSV | Ja | Geen live VoetbalAssist. [FO-KEUZES](FO-KEUZES.md) |
@@ -105,7 +105,7 @@ Ga naar **Beheer → Planning**. Daar staan **4 genummerde stappen**:
 1. **Diensten aanmaken / bijwerken** — diensten uit regels, thuiswedstrijden en activiteiten (handmatige/vastgezette blijven staan). Zorg dat Wedstrijden en Dienstregels kloppen.
 2. **Concept publiceren** — vrijwilligers mogen inschrijven tot de deadline (optioneel: mail vrijwilligers).
 3. **Vul open plekken (verplicht)** — schrijft verplichte leden, VR18+ en inhaal **automatisch** in op open persoonlijke plekken (eerlijke volgorde FO §34). Teamdiensten vult de teamco via **Mijn team** vóór stap 4.
-4. **Maak officieel** — rooster op slot; alleen barcommissie/admin wijzigt daarna nog. Daarna print/Excel; herinneringen 1 dag van tevoren als SMTP aanstaat.
+4. **Maak officieel** — rooster vast voor de kantine. Vrijwilligers schrijven zich niet meer zelf in of uit en ruilen niet meer. Barcommissie kan nog wijzigen; de coördinator kan een teamdienst nog op naam zetten. Daarna print/Excel; herinneringen 2 dagen van tevoren als SMTP aanstaat.
 
 Status van de ronde staat bovenaan Beheer → Planning. Korte mailtekst voor testers: [MAIL-TOELICHTING-PLANNING.md](MAIL-TOELICHTING-PLANNING.md).
 
@@ -146,7 +146,7 @@ Teamdiensten: aantal plekken uit de dienstregel (ochtend 3, middag 2, avond 2). 
 ## 7. Inschrijven, ruilen, blokkades
 
 ### Inschrijven
-Filters: komende / vandaag / deze week / open / mijn diensten. Inschrijven tot de vrijwilligersfase sluit. Beheer mag altijd wijzigen. Na **officieel** alleen barcommissie.
+Filters: komende / vandaag / deze week / open / mijn diensten. Inschrijven tot de vrijwilligersfase sluit. Beheer mag altijd wijzigen. Na **officieel** wijzigen vrijwilligers zichzelf niet meer. Een kind zonder e-mail schrijft de ouder in vanuit het eigen account.
 
 Een vrijwilliger mag niet iemand anders inschrijven (IDOR-blokkade). Teamco mag teamleden inschrijven.
 

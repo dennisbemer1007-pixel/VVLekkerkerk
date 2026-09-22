@@ -11,6 +11,7 @@ import { pendingForEnrollment } from '../lib/swapQueries.js';
 import { friendlyEnrollmentReason, serviceCapacity, teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
+import { trySendScheduledConfirmation } from '../lib/mail.js';
 
 const router = Router();
 
@@ -35,6 +36,11 @@ function mapEnrollment(enrollment) {
 async function canManageEnrollment(actor, targetPersonId) {
   if (actor.id === Number(targetPersonId)) return true;
   if (isAdminRole(actor.role)) return true;
+  const target = await prisma.person.findUnique({
+    where: { id: Number(targetPersonId) },
+    select: { guardianId: true, teamId: true },
+  });
+  if (target?.guardianId === actor.id) return true;
 
   if (actor.role === 'Teamcoördinator') {
     const target = await prisma.person.findUnique({
@@ -220,6 +226,9 @@ router.post(
           }
 
           let source = enrollmentSource(req.person, targetId);
+          if (person.guardianId && person.guardianId === req.person.id && req.person.id !== targetId) {
+            source = 'GUARDIAN';
+          }
           const capacity = serviceCapacity(service);
           const personTeams = new Set(personTeamIds(person));
           const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
@@ -336,6 +345,10 @@ router.post(
           });
         }
 
+        trySendScheduledConfirmation({
+          person: enrollment.person,
+          service: enrollment.service,
+        }).catch(() => {});
         res.status(201).json(mapEnrollment(enrollment));
       } catch (e) {
         if (e.status) {
@@ -449,8 +462,15 @@ router.delete(
         });
       }
 
+      const enrolledPerson = await prisma.person.findUnique({
+        where: { id: enrollment.personId },
+        select: { guardianId: true },
+      });
+      const guardianActing =
+        enrolledPerson?.guardianId === req.person.id && req.person.id !== enrollment.personId;
+
       // Beheer mag altijd omgooien; vrijwilligers niet na deadline / CLOSED / verplichte fase
-      if (!isAdminRole(req.person.role) && req.person.id === enrollment.personId) {
+      if (!isAdminRole(req.person.role) && (req.person.id === enrollment.personId || guardianActing)) {
         const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
         const status = round?.status || '';
         if (status === 'CLOSED' || status === 'MANDATORY_OPEN') {
