@@ -12,6 +12,8 @@ export const SWAP_RULES_DECISION = {
   noUnenrollWorkflow: true,
   teamDutiesExcluded: true,
   futureOnly: true,
+  /** Officieel rooster blokkeert inschrijven, niet een ruil met wederzijds akkoord. */
+  allowedWhenOfficial: true,
   matchBlockBlocksUntilOverride: true,
   onePendingPerPerson: true,
   makeupFollowsPerson: true,
@@ -39,9 +41,6 @@ export function swapBlockers({ fromEnrollment, toEnrollment, fromPerson, toPerso
   const toService = toEnrollment.service;
   if (!fromService?.active || !toService?.active || fromService.draft || toService.draft) {
     errors.push('Alleen actieve, gepubliceerde diensten kunnen worden geruild.');
-  }
-  if (fromService?.locked || toService?.locked) {
-    errors.push('Dit rooster is officieel. Ruilen kan dan niet meer; vraag de barcommissie.');
   }
   const today = startOfDay(now);
   if (fromService && startOfDay(fromService.date) < today) {

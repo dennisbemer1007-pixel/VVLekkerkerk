@@ -358,6 +358,78 @@ async function main() {
         ),
       );
     }
+
+    const volunteerEmails = [
+      'lisa@vvl.demo',
+      'tom@vvl.demo',
+      'fatima@vvl.demo',
+      'peter@vvl.demo',
+      'anneke@vvl.demo',
+      'kevin@vvl.demo',
+      'noa@vvl.demo',
+      'erik@vvl.demo',
+    ];
+    const tokenByPersonId = {};
+    for (const email of volunteerEmails) {
+      const who = await req('/api/auth/me', { token: tokens[email] });
+      if (who.json?.id) tokenByPersonId[who.json.id] = tokens[email];
+    }
+    const openSwaps = await req('/api/swaps', { token: admin });
+    for (const pending of openSwaps.json || []) {
+      if (pending.status === 'PENDING_PEER' || pending.status === 'PENDING_COMMITTEE') {
+        await req(`/api/swaps/${pending.id}/cancel`, { method: 'POST', token: admin, body: {} });
+      }
+    }
+    const lockedServices = await req('/api/services?allDates=true', { token: admin });
+    const lockedServiceIds = new Set(
+      (lockedServices.json || []).filter((s) => s.locked).map((s) => s.id),
+    );
+    const candidates = await req('/api/swaps/candidates', { token: lisa });
+    const mineShift = (candidates.json?.mine || []).find((e) => lockedServiceIds.has(e.service?.id));
+    const otherShift = (candidates.json?.others || []).find(
+      (e) => lockedServiceIds.has(e.service?.id) && tokenByPersonId[e.person?.id],
+    );
+    if (!mineShift || !otherShift) {
+      mark(
+        record(
+          'ruil na officieel rooster',
+          false,
+          `mine ${candidates.json?.mine?.length ?? 0} other ${candidates.json?.others?.length ?? 0} locked ${lockedServiceIds.size}`,
+        ),
+      );
+    } else {
+      const created = await req('/api/swaps', {
+        method: 'POST',
+        token: lisa,
+        body: { fromEnrollmentId: mineShift.id, toEnrollmentId: otherShift.id },
+      });
+      let accepted = null;
+      if (created.status === 201 && created.json?.id) {
+        accepted = await req(`/api/swaps/${created.json.id}/accept`, {
+          method: 'POST',
+          token: tokenByPersonId[otherShift.person.id],
+          body: {},
+        });
+        if (accepted.status === 409 && accepted.json?.code === 'MATCH_BLOCK') {
+          accepted = await req(`/api/swaps/${created.json.id}/accept`, {
+            method: 'POST',
+            token: tokenByPersonId[otherShift.person.id],
+            body: { ignoreMatchBlock: true },
+          });
+        }
+      }
+      const afterSwap = await req('/api/swaps/candidates', { token: lisa });
+      const lisaTookOther = (afterSwap.json?.mine || []).some(
+        (e) => e.service?.id === otherShift.service.id,
+      );
+      mark(
+        record(
+          'ruil na officieel rooster',
+          created.status === 201 && accepted?.status === 200 && accepted.json?.status === 'APPROVED' && lisaTookOther,
+          `${created.status} ${accepted?.status || ''} ${accepted?.json?.status || accepted?.json?.error || created.json?.error || ''}`,
+        ),
+      );
+    }
   } finally {
     await prisma.service.updateMany({ data: { locked: false } });
     const restoreStatus =

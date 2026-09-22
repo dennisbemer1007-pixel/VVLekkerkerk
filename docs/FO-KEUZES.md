@@ -63,7 +63,7 @@ Teamdiensten en no-shows tellen niet mee. Geen extra straf op oude historie buit
 E-mail **1 dag voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen push, geen WhatsApp. `Enrollment.remindedAt` voorkomt dubbele mails. De server draait dit elk uur en bij `/api/health` (max. eens per 50 minuten). Barcommissie kan **Herinneringen morgen** forceren. Productie mag niet “in slaap” vallen, anders mist de cron.
 
 ### Publiceren als officieel
-Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.
+Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Alleen barcommissie/admin mag daarna in- of uitschrijven. Vrijwilligers kunnen onderling blijven ruilen als beide personen akkoord zijn. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.
 
 ### Seizoen
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.
