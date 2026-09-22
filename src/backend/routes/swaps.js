@@ -5,10 +5,9 @@ import { isAdminRole, publicPersonBrief } from '../lib/roles.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { blocksForPerson } from '../lib/matchBlocks.js';
 import { writeAudit } from '../lib/audit.js';
-import { notifyBarcommissieOfPendingSwap } from '../lib/mail.js';
-import { resolvePublicAppUrl } from '../lib/appUrl.js';
 import { PENDING_SWAP_STATUSES, swapBlockers } from '../lib/swapRules.js';
 import { pendingForEnrollment, pendingForPerson } from '../lib/swapQueries.js';
+import { createNotification, notifyBarcommissie } from '../lib/notifications.js';
 
 const router = Router();
 
@@ -63,6 +62,7 @@ function mapSwap(swap) {
     status: swap.status,
     matchBlockWarning: swap.matchBlockWarning,
     note: swap.note,
+    rejectReason: swap.rejectReason || null,
     createdAt: swap.createdAt,
     updatedAt: swap.updatedAt,
     decidedAt: swap.decidedAt,
@@ -122,6 +122,67 @@ async function evaluatePair(fromEnrollment, toEnrollment) {
   };
 }
 
+async function executeSwap(swap, { actorId, matchBlock, ignoreMatchBlock }) {
+  const fromEnrollment = await loadEnrollment(swap.fromEnrollmentId);
+  const toEnrollment = await loadEnrollment(swap.toEnrollmentId);
+  if (!fromEnrollment || !toEnrollment) {
+    const err = new Error('Een van de diensten is niet meer beschikbaar');
+    err.status = 404;
+    throw err;
+  }
+
+  const fromPersonId = fromEnrollment.personId;
+  const toPersonId = toEnrollment.personId;
+  const fromMakeup = fromEnrollment.makeup;
+  const toMakeup = toEnrollment.makeup;
+  const fromName = fromEnrollment.person.name;
+  const toName = toEnrollment.person.name;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: fromEnrollment.id },
+      data: {
+        personId: toPersonId,
+        makeup: toMakeup,
+        reason: `Geruild met ${fromName}`,
+      },
+    });
+    await tx.enrollment.update({
+      where: { id: toEnrollment.id },
+      data: {
+        personId: fromPersonId,
+        makeup: fromMakeup,
+        reason: `Geruild met ${toName}`,
+      },
+    });
+    await tx.swapRequest.update({
+      where: { id: swap.id },
+      data: {
+        status: 'APPROVED',
+        matchBlockWarning: Boolean(matchBlock),
+        decidedById: actorId,
+        decidedAt: new Date(),
+      },
+    });
+  });
+
+  if (ignoreMatchBlock && matchBlock) {
+    await writeAudit({
+      actorId,
+      action: 'swap.match_block_override',
+      entity: 'SwapRequest',
+      entityId: swap.id,
+      detail: `${fromName} ↔ ${toName}`,
+    });
+  }
+
+  return { fromName, toName };
+}
+
+function swapSummary(swap) {
+  return `${serviceText(swap.fromEnrollment)} ↔ ${serviceText(swap.toEnrollment)}`;
+}
+
 router.get(
   '/',
   requireAuth(async (req, res, next) => {
@@ -132,7 +193,7 @@ router.get(
             OR: [
               { requesterId: me },
               { counterpartyId: me },
-              { status: 'PENDING_COMMITTEE' },
+              { status: { in: PENDING_SWAP_STATUSES } },
             ],
           }
         : { OR: [{ requesterId: me }, { counterpartyId: me }] };
@@ -229,6 +290,26 @@ router.post(
         detail: `${fromEnrollment.person.name} ↔ ${toEnrollment.person.name}`,
       });
 
+      const summary = swapSummary(swap);
+      await createNotification({
+        personId: swap.counterpartyId,
+        type: 'SWAP_INCOMING',
+        title: 'Nieuw ruilverzoek',
+        body: `${swap.requester.name} wil met je ruilen: ${summary}`,
+        link: '/ruilen',
+        swapId: swap.id,
+      });
+      await notifyBarcommissie(
+        {
+          type: 'SWAP_INFO',
+          title: 'Nieuw ruilverzoek',
+          body: `${swap.requester.name} vraagt ruil met ${swap.counterparty.name}: ${summary}`,
+          link: '/beheer?tab=ruilen',
+          swapId: swap.id,
+        },
+        { excludeIds: [swap.requesterId, swap.counterpartyId] },
+      );
+
       res.status(201).json(mapSwap(swap));
     } catch (err) {
       next(err);
@@ -256,11 +337,19 @@ router.post(
       if (!check.ok) {
         return res.status(400).json({ error: check.errors[0], errors: check.errors });
       }
+      if (check.matchBlock && !req.body?.ignoreMatchBlock) {
+        return res.status(409).json({
+          error:
+            'Let op: bij deze ruil valt iemand binnen een wedstrijdblokkade. Toch akkoord geven?',
+          code: 'MATCH_BLOCK',
+          canOverride: true,
+        });
+      }
 
-      const updated = await prisma.swapRequest.update({
-        where: { id: swap.id },
-        data: { status: 'PENDING_COMMITTEE', matchBlockWarning: check.matchBlock },
-        include: SWAP_INCLUDE,
+      const { fromName, toName } = await executeSwap(swap, {
+        actorId: req.person.id,
+        matchBlock: check.matchBlock,
+        ignoreMatchBlock: Boolean(req.body?.ignoreMatchBlock),
       });
 
       await writeAudit({
@@ -268,26 +357,34 @@ router.post(
         action: 'swap.accept',
         entity: 'SwapRequest',
         entityId: swap.id,
-        detail: swap.counterparty.name,
+        detail: `${fromName} ↔ ${toName}`,
       });
 
-      let appUrl = '';
-      try {
-        appUrl = resolvePublicAppUrl();
-      } catch {
-        appUrl = '';
-      }
-      notifyBarcommissieOfPendingSwap({
-        requesterName: updated.requester?.name || 'Onbekend',
-        counterpartyName: updated.counterparty?.name || 'Onbekend',
-        fromLabel: serviceText(updated.fromEnrollment),
-        toLabel: serviceText(updated.toEnrollment),
-        appUrl,
-      }).catch((err) => {
-        console.error('[Mail] Ruil-notificatie barcommissie mislukt:', err.message);
+      const fresh = await prisma.swapRequest.findUnique({
+        where: { id: swap.id },
+        include: SWAP_INCLUDE,
       });
+      const summary = swapSummary(fresh);
+      await createNotification({
+        personId: swap.requesterId,
+        type: 'SWAP_ACCEPTED',
+        title: 'Ruilverzoek geaccepteerd',
+        body: `${swap.counterparty.name} heeft je ruilverzoek geaccepteerd. De ruiling is doorgevoerd: ${summary}`,
+        link: '/ruilen',
+        swapId: swap.id,
+      });
+      await notifyBarcommissie(
+        {
+          type: 'SWAP_INFO',
+          title: 'Ruiling doorgevoerd',
+          body: `${swap.requester.name} en ${swap.counterparty.name} hebben geruild: ${summary}`,
+          link: '/beheer?tab=ruilen',
+          swapId: swap.id,
+        },
+        { excludeIds: [swap.requesterId, swap.counterpartyId] },
+      );
 
-      res.json(mapSwap(updated));
+      res.json(mapSwap(fresh));
     } catch (err) {
       next(err);
     }
@@ -325,6 +422,19 @@ router.post(
         detail: swap.status,
       });
 
+      const otherId =
+        req.person.id === swap.requesterId ? swap.counterpartyId : swap.requesterId;
+      if (otherId && otherId !== req.person.id) {
+        await createNotification({
+          personId: otherId,
+          type: 'SWAP_CANCELLED',
+          title: 'Ruilverzoek ingetrokken',
+          body: `${req.person.name} heeft het ruilverzoek ingetrokken.`,
+          link: '/ruilen',
+          swapId: swap.id,
+        });
+      }
+
       res.json(mapSwap(updated));
     } catch (err) {
       next(err);
@@ -343,14 +453,25 @@ router.post(
       if (!swap) return res.status(404).json({ error: 'Ruilverzoek niet gevonden' });
 
       const asPeer = swap.counterpartyId === req.person.id && swap.status === 'PENDING_PEER';
-      const asCommittee = isAdminRole(req.person.role) && PENDING_SWAP_STATUSES.includes(swap.status);
+      const asCommittee =
+        isAdminRole(req.person.role) && PENDING_SWAP_STATUSES.includes(swap.status);
       if (!asPeer && !asCommittee) {
         return res.status(403).json({ error: 'Je mag dit verzoek niet afwijzen' });
       }
 
+      const rejectReason = req.body?.reason != null ? String(req.body.reason).trim().slice(0, 500) : '';
+      if (asPeer && !rejectReason) {
+        return res.status(400).json({ error: 'Geef een reden bij weigering van de ruiling' });
+      }
+
       const updated = await prisma.swapRequest.update({
         where: { id: swap.id },
-        data: { status: 'REJECTED', decidedById: req.person.id, decidedAt: new Date() },
+        data: {
+          status: 'REJECTED',
+          rejectReason: rejectReason || null,
+          decidedById: req.person.id,
+          decidedAt: new Date(),
+        },
         include: SWAP_INCLUDE,
       });
 
@@ -359,8 +480,28 @@ router.post(
         action: 'swap.reject',
         entity: 'SwapRequest',
         entityId: swap.id,
-        detail: asPeer ? 'counterparty' : 'committee',
+        detail: asPeer ? `counterparty: ${rejectReason}` : `committee: ${rejectReason || '-'}`,
       });
+
+      const reasonText = rejectReason ? ` Reden: ${rejectReason}` : '';
+      await createNotification({
+        personId: swap.requesterId,
+        type: 'SWAP_REJECTED',
+        title: 'Ruilverzoek geweigerd',
+        body: `${req.person.name} heeft je ruilverzoek geweigerd.${reasonText}`,
+        link: '/ruilen',
+        swapId: swap.id,
+      });
+      await notifyBarcommissie(
+        {
+          type: 'SWAP_INFO',
+          title: 'Ruilverzoek geweigerd',
+          body: `${req.person.name} weigerde ruil van ${swap.requester.name}.${reasonText}`,
+          link: '/beheer?tab=ruilen',
+          swapId: swap.id,
+        },
+        { excludeIds: [swap.requesterId, req.person.id] },
+      );
 
       res.json(mapSwap(updated));
     } catch (err) {
@@ -369,12 +510,13 @@ router.post(
   }),
 );
 
+/** Legacy: oude verzoeken die nog op barcommissie wachtten */
 router.post(
   '/:id/approve',
   requireAuth(async (req, res, next) => {
     try {
       if (!isAdminRole(req.person.role)) {
-        return res.status(403).json({ error: 'Alleen de barcommissie kan een ruil goedkeuren' });
+        return res.status(403).json({ error: 'Alleen de barcommissie kan een legacy-ruil goedkeuren' });
       }
 
       const swap = await prisma.swapRequest.findUnique({
@@ -383,7 +525,9 @@ router.post(
       });
       if (!swap) return res.status(404).json({ error: 'Ruilverzoek niet gevonden' });
       if (swap.status !== 'PENDING_COMMITTEE') {
-        return res.status(400).json({ error: 'Dit verzoek wacht nog niet op de barcommissie' });
+        return res.status(400).json({
+          error: 'Nieuwe ruilverzoeken worden direct na wederzijds akkoord doorgevoerd',
+        });
       }
 
       const fromEnrollment = await loadEnrollment(swap.fromEnrollmentId);
@@ -405,50 +549,12 @@ router.post(
         });
       }
 
-      const fromPersonId = fromEnrollment.personId;
-      const toPersonId = toEnrollment.personId;
-      const fromMakeup = fromEnrollment.makeup;
-      const toMakeup = toEnrollment.makeup;
-      const fromName = fromEnrollment.person.name;
-      const toName = toEnrollment.person.name;
-
-      await prisma.$transaction(async (tx) => {
-        await tx.enrollment.update({
-          where: { id: fromEnrollment.id },
-          data: {
-            personId: toPersonId,
-            makeup: toMakeup,
-            reason: `Geruild met ${fromName}`,
-          },
-        });
-        await tx.enrollment.update({
-          where: { id: toEnrollment.id },
-          data: {
-            personId: fromPersonId,
-            makeup: fromMakeup,
-            reason: `Geruild met ${toName}`,
-          },
-        });
-        await tx.swapRequest.update({
-          where: { id: swap.id },
-          data: {
-            status: 'APPROVED',
-            matchBlockWarning: check.matchBlock,
-            decidedById: req.person.id,
-            decidedAt: new Date(),
-          },
-        });
+      const { fromName, toName } = await executeSwap(swap, {
+        actorId: req.person.id,
+        matchBlock: check.matchBlock,
+        ignoreMatchBlock: Boolean(req.body?.ignoreMatchBlock),
       });
 
-      if (req.body?.ignoreMatchBlock && check.matchBlock) {
-        await writeAudit({
-          actorId: req.person.id,
-          action: 'swap.match_block_override',
-          entity: 'SwapRequest',
-          entityId: swap.id,
-          detail: `${fromName} ↔ ${toName}`,
-        });
-      }
       await writeAudit({
         actorId: req.person.id,
         action: 'swap.approve',

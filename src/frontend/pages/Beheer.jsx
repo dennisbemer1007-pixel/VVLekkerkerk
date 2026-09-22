@@ -37,22 +37,6 @@ const OBLIGATIONS = [
   { value: 'VR18', label: 'VR18+ (min. 1× / 12 weken)' },
 ];
 
-const WEEKDAYS = [
-  { id: 1, label: 'Ma' },
-  { id: 2, label: 'Di' },
-  { id: 3, label: 'Wo' },
-  { id: 4, label: 'Do' },
-  { id: 5, label: 'Vr' },
-  { id: 6, label: 'Za' },
-  { id: 0, label: 'Zo' },
-];
-
-const SLOT_OPTS = [
-  { id: 'MORNING', label: 'Ochtend' },
-  { id: 'AFTERNOON', label: 'Middag' },
-  { id: 'EVENING', label: 'Late middag/avond' },
-];
-
 export default function Beheer({ mode = 'full' }) {
   const [searchParams] = useSearchParams();
   let tabs = TABS;
@@ -82,7 +66,7 @@ export default function Beheer({ mode = 'full' }) {
             ? 'Schrijf ouders of teamleden in voor een bardienst.'
             : mode === 'invite'
               ? 'Nodig ouders uit per e-mail. Zij maken zelf een account via de link.'
-              : 'Personen beheren, een planning voor een zelf gekozen periode maken (Beheer → Planning), en ruilverzoeken goedkeuren.'}
+              : 'Personen beheren en een planning voor een zelf gekozen periode maken (Beheer → Planning). Ruilverzoeken zie je via het notificatiebelletje.'}
         </p>
       </header>
 
@@ -342,52 +326,6 @@ function PersonenBeheer() {
           />
           Vrijgesteld (niet automatisch inplannen)
         </label>
-        <div className="sm:col-span-2 lg:col-span-3">
-          <p className="vvl-label mb-2">Kan niet op deze vaste weekdagen (voor automatische planning)</p>
-          <div className="flex flex-wrap gap-3">
-            {WEEKDAYS.map((d) => (
-              <label key={d.id} className="flex items-center gap-1 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={form.unavailableWeekdays.includes(d.id)}
-                  onChange={() => {
-                    const has = form.unavailableWeekdays.includes(d.id);
-                    setForm({
-                      ...form,
-                      unavailableWeekdays: has
-                        ? form.unavailableWeekdays.filter((x) => x !== d.id)
-                        : [...form.unavailableWeekdays, d.id],
-                    });
-                  }}
-                />
-                {d.label}
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="sm:col-span-2 lg:col-span-3">
-          <p className="vvl-label mb-2">Voorkeur dagdeel (alleen voor automatische planning, niet zichtbaar voor vrijwilligers)</p>
-          <div className="flex flex-wrap gap-3">
-            {SLOT_OPTS.map((s) => (
-              <label key={s.id} className="flex items-center gap-1 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={form.preferredSlots.includes(s.id)}
-                  onChange={() => {
-                    const has = form.preferredSlots.includes(s.id);
-                    setForm({
-                      ...form,
-                      preferredSlots: has
-                        ? form.preferredSlots.filter((x) => x !== s.id)
-                        : [...form.preferredSlots, s.id],
-                    });
-                  }}
-                />
-                {s.label}
-              </label>
-            ))}
-          </div>
-        </div>
         <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
           <button type="submit" className="vvl-btn-primary">
             {editId ? 'Opslaan' : 'Uitnodiging maken'}

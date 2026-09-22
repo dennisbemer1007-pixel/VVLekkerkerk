@@ -7,8 +7,8 @@ import { PAGE_HELP } from '../utils/pageHelp.js';
 
 const STATUS_LABEL = {
   PENDING_PEER: 'Wacht op de andere persoon',
-  PENDING_COMMITTEE: 'Wacht op de barcommissie',
-  APPROVED: 'Goedgekeurd',
+  PENDING_COMMITTEE: 'Wacht op de barcommissie (oud verzoek)',
+  APPROVED: 'Goedgekeurd — geruild',
   REJECTED: 'Afgewezen',
   CANCELLED: 'Ingetrokken',
 };
@@ -34,6 +34,8 @@ export default function Ruilen() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const load = useCallback(async () => {
     const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps()]);
@@ -93,7 +95,25 @@ export default function Ruilen() {
       setError('Kies jouw dienst en de dienst waarmee je wilt ruilen.');
       return;
     }
-    run(() => api.createSwap({ fromEnrollmentId: Number(fromId), toEnrollmentId: Number(toId) }), 'Ruilverzoek verstuurd. De andere persoon moet eerst akkoord geven.');
+    run(
+      () => api.createSwap({ fromEnrollmentId: Number(fromId), toEnrollmentId: Number(toId) }),
+      'Ruilverzoek verstuurd. De andere persoon krijgt een notificatie en moet akkoord geven.',
+    );
+  };
+
+  const confirmReject = (swapId) => {
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setError('Geef een reden bij weigering van de ruiling.');
+      return;
+    }
+    run(
+      () => api.rejectSwap(swapId, { reason }),
+      'Ruilverzoek afgewezen. De aanvrager krijgt een notificatie.',
+    ).then(() => {
+      setRejectingId(null);
+      setRejectReason('');
+    });
   };
 
   return (
@@ -102,7 +122,8 @@ export default function Ruilen() {
         <PageTitle {...PAGE_HELP.ruilen}>Ruilen</PageTitle>
         <p className="mt-1 text-sm text-gray-700">
           Ingelogd als <strong>{user?.name}</strong>. Je ruilt twee bestaande persoonlijke diensten.
-          Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator.
+          Na akkoord van de andere persoon is de ruiling direct doorgevoerd. Er ontstaat geen open
+          plek. Teamdiensten gaan via de teamcoördinator.
         </p>
       </header>
 
@@ -147,7 +168,7 @@ export default function Ruilen() {
             {toQuery ? ' (gefilterd)' : ''}
           </p>
         </div>
-        <button type="submit" className="vvl-btn" disabled={busy || !mine.length || !others.length}>
+        <button type="submit" className="vvl-btn-primary" disabled={busy || !mine.length || !others.length}>
           Ruilverzoek sturen
         </button>
         {!mine.length ? (
@@ -171,25 +192,39 @@ export default function Ruilen() {
               </p>
               <p className="text-sm text-gray-700">{serviceLabel(swap.fromEnrollment)}</p>
               <p className="text-sm text-gray-700">{serviceLabel(swap.toEnrollment)}</p>
+              {swap.rejectReason ? (
+                <p className="text-sm text-red-800">Reden weigering: {swap.rejectReason}</p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {asCounterparty && swap.status === 'PENDING_PEER' ? (
                   <>
                     <button
                       type="button"
-                      className="vvl-btn text-xs"
+                      className="vvl-btn-primary text-xs"
                       disabled={busy}
-                      onClick={() => run(() => api.acceptSwap(swap.id), 'Je hebt akkoord gegeven. Nu de barcommissie.')}
+                      onClick={() =>
+                        run(
+                          (ignoreMatchBlock) => api.acceptSwap(swap.id, { ignoreMatchBlock }),
+                          'Akkoord gegeven. De ruiling is doorgevoerd.',
+                        )
+                      }
                     >
                       Akkoord
                     </button>
-                    <button
-                      type="button"
-                      className="vvl-btn-outline text-xs"
-                      disabled={busy}
-                      onClick={() => run(() => api.rejectSwap(swap.id), 'Ruilverzoek afgewezen.')}
-                    >
-                      Weigeren
-                    </button>
+                    {rejectingId === swap.id ? null : (
+                      <button
+                        type="button"
+                        className="vvl-btn-outline text-xs"
+                        disabled={busy}
+                        onClick={() => {
+                          setRejectingId(swap.id);
+                          setRejectReason('');
+                          setError('');
+                        }}
+                      >
+                        Weigeren
+                      </button>
+                    )}
                   </>
                 ) : null}
                 {(asRequester || asCounterparty) && ['PENDING_PEER', 'PENDING_COMMITTEE'].includes(swap.status) ? (
@@ -203,6 +238,42 @@ export default function Ruilen() {
                   </button>
                 ) : null}
               </div>
+              {asCounterparty && swap.status === 'PENDING_PEER' && rejectingId === swap.id ? (
+                <div className="space-y-2 border-t border-vvl-border pt-3">
+                  <label className="vvl-label" htmlFor={`reject-${swap.id}`}>
+                    Reden voor weigering
+                  </label>
+                  <textarea
+                    id={`reject-${swap.id}`}
+                    className="vvl-input min-h-[80px]"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Leg kort uit waarom je niet wilt ruilen"
+                    maxLength={500}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="vvl-btn-primary text-xs"
+                      disabled={busy}
+                      onClick={() => confirmReject(swap.id)}
+                    >
+                      Weigering versturen
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      disabled={busy}
+                      onClick={() => {
+                        setRejectingId(null);
+                        setRejectReason('');
+                      }}
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </article>
           );
         })}

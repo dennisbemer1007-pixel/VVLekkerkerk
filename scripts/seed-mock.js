@@ -35,6 +35,7 @@ async function applyTeamFunctions(team) {
 
 async function clearDemoData(adminId) {
   await prisma.swapRequest.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.enrollment.deleteMany();
   try {
     await prisma.serviceTeamDuty.deleteMany();

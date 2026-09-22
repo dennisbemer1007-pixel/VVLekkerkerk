@@ -3,18 +3,19 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Voor de barcommissie staan hier een snelle link naar de 4-stappenplanning, plus vier controles: open diensten, niet-ingevulde verplichtingen, inhaaldiensten en waarom iemand niet is ingepland.',
+      'Dit is je startscherm. Voor de barcommissie staan hier een snelle link naar de 4-stappenplanning, plus controles op open diensten en openstaande verplichtingen.',
     actions: [
       'Barplanning maken: open Beheer → Planning (4 stappen)',
       'Klik op een controlekaart om de concrete lijst te zien',
-      'Ruilverzoeken na wederzijds akkoord keur je goed via Beheer → Ruilen',
+      'Ruilverzoeken volg je via het notificatiebelletje rechtsboven',
     ],
   },
   inschrijven: {
     purpose:
       'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
     actions: [
-      'Filter op komende diensten, open diensten, deze week, vandaag of jouw diensten',
+      'Filter op komende diensten of jouw diensten',
+      'Klik een dienst open of dicht voor de namen',
       'Schrijf je in op een dienst met nog plek',
       'Schrijf je uit zolang de vrijwilligersfase open is (niet na officieel maken)',
     ],
@@ -41,11 +42,11 @@ export const PAGE_HELP = {
   },
   ruilen: {
     purpose:
-      'Ruil twee bestaande persoonlijke diensten. Beide personen moeten akkoord zijn, daarna keurt de barcommissie goed. Er ontstaat geen open plek.',
+      'Ruil twee bestaande persoonlijke diensten. Zodra de andere persoon akkoord geeft, is de ruiling direct doorgevoerd. Er ontstaat geen open plek.',
     actions: [
       'Kies jouw komende dienst en de dienst van iemand anders',
-      'Wacht tot de andere persoon akkoord geeft',
-      'De barcommissie keurt daarna goed of af',
+      'Stuur het verzoek — de ander krijgt een notificatie',
+      'Bij akkoord wordt meteen geruild; bij weigering kan een reden worden meegegeven',
     ],
   },
   beheer: {
@@ -61,11 +62,10 @@ export const PAGE_HELP = {
   },
   beheerRuilen: {
     purpose:
-      'Goedkeuren of afwijzen van ruilverzoeken nadat beide personen akkoord zijn. Vrijwilligers sturen verzoeken via hun eigen Ruilen-tabblad.',
+      'Overzicht van recente ruilverzoeken. Nieuwe ruilingen worden door vrijwilligers onderling afgehandeld; je ziet ze ook in het notificatiebelletje.',
     actions: [
-      'Bekijk openstaande verzoeken ter goedkeuring',
-      'Keur goed of wijs af',
-      'Let op een eventuele wedstrijdblokkade (bewust overrulen mag)',
+      'Bekijk recente verzoeken en hun status',
+      'Eventuele oude verzoeken die nog op barcommissie wachtten kun je hier afronden',
     ],
   },
   beheerPersonen: {

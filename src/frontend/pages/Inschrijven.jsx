@@ -29,14 +29,17 @@ export default function Inschrijven() {
 
   useEffect(() => {
     const q = searchParams.get('filter');
-    if (q !== null && q !== filter) setFilter(q);
+    if (q === 'mine') setFilter('mine');
+    else if (q !== null && q !== '') setFilter('');
   }, [searchParams]);
+
+  useEffect(() => {
+    if (filter && filter !== 'mine' && filter !== '') setFilter('');
+  }, [filter]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  const handleInschrijven = async (serviceId, mode) => {
     if (mode === 'expand') {
       setOpenId((id) => (id === serviceId ? null : serviceId));
       return;
