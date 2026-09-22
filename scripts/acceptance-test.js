@@ -191,6 +191,52 @@ async function main() {
       String(propose.status),
     ),
   );
+  const periodEnd = propose.json?.period?.to ? new Date(propose.json.period.to) : null;
+  const far = new Date();
+  far.setMonth(far.getMonth() + 8);
+  const farService = await req('/api/services', {
+    method: 'POST',
+    token: admin,
+    body: {
+      date: far.toISOString().slice(0, 10),
+      time: '10:00 - 12:00',
+      required: 2,
+      type: 'BAR',
+      note: 'Buiten planning',
+    },
+  });
+  const lisaUpcoming = await req('/api/services', { token: lisa });
+  const seenBeyond = (lisaUpcoming.json || []).filter(
+    (s) => periodEnd && new Date(s.date).getTime() > periodEnd.getTime(),
+  );
+  mark(
+    record(
+      'vrijwilliger ziet geen diensten na planningsdatum',
+      farService.status === 201 &&
+        Boolean(periodEnd) &&
+        Array.isArray(lisaUpcoming.json) &&
+        seenBeyond.length === 0,
+      seenBeyond.length
+        ? seenBeyond.map((s) => String(s.date).slice(0, 10)).join(',')
+        : String(farService.status),
+    ),
+  );
+  if (farService.json?.id && lisaMe.json?.id) {
+    const farEnroll = await req('/api/enrollments', {
+      method: 'POST',
+      token: lisa,
+      body: { serviceId: farService.json.id, personId: lisaMe.json.id },
+    });
+    mark(
+      record(
+        'vrijwilliger kan niet inschrijven na planningsdatum',
+        farEnroll.status === 403,
+        `${farEnroll.status} ${farEnroll.json?.error || ''}`,
+      ),
+    );
+  } else {
+    mark(record('vrijwilliger kan niet inschrijven na planningsdatum', false, 'geen dienst of lisa-id'));
+  }
   const afterPropose = await req('/api/services', { token: admin });
   const morningDuty = (afterPropose.json || []).find(
     (s) =>
@@ -370,6 +416,45 @@ async function main() {
   }
   const after = await req('/api/planning/round', { token: admin });
   mark(record('officieel teruggezet na test', after.json?.official === false));
+
+  const shortTo = new Date();
+  shortTo.setDate(shortTo.getDate() + 14);
+  const shortened = await req('/api/planning/sync', {
+    method: 'POST',
+    token: admin,
+    body: {
+      from: new Date().toISOString().slice(0, 10),
+      to: shortTo.toISOString().slice(0, 10),
+    },
+  });
+  const shortEnd = shortened.json?.period?.to ? new Date(shortened.json.period.to) : null;
+  const afterShort = await req('/api/services?allDates=true&activeOnly=false', { token: admin });
+  const leftoverAuto = (afterShort.json || []).filter(
+    (s) =>
+      s.origin === 'AUTO' &&
+      !s.locked &&
+      shortEnd &&
+      new Date(s.date).getTime() > shortEnd.getTime() &&
+      !(s.enrollments || []).length,
+  );
+  mark(
+    record(
+      'lege diensten na nieuwe einddatum verdwijnen',
+      shortened.status === 201 && leftoverAuto.length === 0,
+      leftoverAuto.length ? `${leftoverAuto.length} over` : String(shortened.status),
+    ),
+  );
+  const lisaAfterShort = await req('/api/services', { token: lisa });
+  const lisaBeyondShort = (lisaAfterShort.json || []).filter(
+    (s) => shortEnd && new Date(s.date).getTime() > shortEnd.getTime(),
+  );
+  mark(
+    record(
+      'vrijwilliger stopt bij nieuwe einddatum',
+      Array.isArray(lisaAfterShort.json) && lisaBeyondShort.length === 0,
+      lisaBeyondShort.map((s) => String(s.date).slice(0, 10)).join(','),
+    ),
+  );
 
   console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
   process.exit(ok ? 0 : 1);

@@ -17,6 +17,7 @@ export default function Inschrijven() {
   const [msg, setMsg] = useState('');
   const [openId, setOpenId] = useState(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [planningUntil, setPlanningUntil] = useState('');
 
   const load = useCallback(() => {
     const params = { filter: filter || undefined };
@@ -40,6 +41,22 @@ export default function Inschrijven() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    api
+      .getPlanningRound()
+      .then((round) => {
+        if (!round?.toDate) return;
+        setPlanningUntil(
+          new Date(round.toDate).toLocaleDateString('nl-NL', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const handleInschrijven = async (serviceId, mode) => {
     if (mode === 'expand') {
@@ -110,8 +127,13 @@ export default function Inschrijven() {
       <header>
         <PageTitle {...PAGE_HELP.inschrijven}>Inschrijven</PageTitle>
         <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Standaard zie je alle komende diensten —
-          ook die waarop je al staat. Klik op een regel voor de namen, of schrijf je direct in.
+          Ingelogd als <strong>{user?.name}</strong>. Je ziet de diensten van de huidige planning
+          {planningUntil ? (
+            <>
+              , tot en met <strong>{planningUntil}</strong>
+            </>
+          ) : null}
+          . Ook diensten waarop je al staat. Klik op een regel voor de namen, of schrijf je direct in.
         </p>
       </header>
 

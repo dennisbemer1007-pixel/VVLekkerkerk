@@ -49,3 +49,23 @@ export async function periodFromRound(prisma, fallbackNow = new Date()) {
 export function periodJson(period) {
   return { from: toIsoDate(period.from), to: toIsoDate(period.to) };
 }
+
+/** True als de dienstkalenderdag binnen de planningsronde valt (van t/m tot). */
+export function isWithinPlanningPeriod(date, period) {
+  const t = new Date(date).getTime();
+  if (Number.isNaN(t) || !period?.from || !period?.to) return false;
+  return t >= period.from.getTime() && t <= period.to.getTime();
+}
+
+/**
+ * Snij een diensten-datumfilter af op de planningsperiode.
+ * Zonder bestaand filter is het resultaat precies de periode.
+ * Een latere ondergrens (bijv. vandaag) blijft staan; een latere bovengrens wordt ingekort.
+ */
+export function clampServiceDateFilter(dateFilter, period) {
+  const fromMs = period.from.getTime();
+  const toMs = period.to.getTime();
+  const gteMs = Math.max(fromMs, dateFilter?.gte ? new Date(dateFilter.gte).getTime() : fromMs);
+  const lteMs = Math.min(toMs, dateFilter?.lte ? new Date(dateFilter.lte).getTime() : toMs);
+  return { gte: new Date(gteMs), lte: new Date(lteMs) };
+}
