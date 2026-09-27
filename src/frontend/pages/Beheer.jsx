@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import {
   SERVICE_TYPE_LABEL,
@@ -38,10 +39,15 @@ const OBLIGATIONS = [
 ];
 
 export default function Beheer({ mode = 'full' }) {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   let tabs = TABS;
   if (mode === 'teams') tabs = TABS.filter((t) => t.id === 'teams');
   if (mode === 'invite') tabs = [{ id: 'personen', label: 'Uitnodigen' }];
+
+  // Admin heeft dezelfde pagina’s al in de topnavigatie.
+  const tabsInTopNav =
+    mode === 'full' && (user?.role === 'Admin' || user?.role === 'Bestuur');
 
   const tabFromUrl = searchParams.get('tab');
   const initialTab = tabs.some((t) => t.id === tabFromUrl) ? tabFromUrl : tabs[0]?.id || 'personen';
@@ -55,7 +61,13 @@ export default function Beheer({ mode = 'full' }) {
 
   const help = helpForBeheerTab(tab, mode);
   const title =
-    mode === 'teams' ? 'Mijn team' : mode === 'invite' ? 'Ouders uitnodigen' : 'Beheer';
+    mode === 'teams'
+      ? 'Mijn team'
+      : mode === 'invite'
+        ? 'Ouders uitnodigen'
+        : tabsInTopNav
+          ? tabs.find((t) => t.id === tab)?.label || 'Beheer'
+          : 'Beheer';
 
   return (
     <div className="space-y-6">
@@ -66,11 +78,11 @@ export default function Beheer({ mode = 'full' }) {
             ? 'Schrijf ouders of teamleden in voor een bardienst.'
             : mode === 'invite'
               ? 'Nodig ouders uit per e-mail. Zij maken zelf een account via de link.'
-              : 'Personen beheren en een planning voor een zelf gekozen periode maken (Beheer → Planning). Ruilverzoeken zie je via het notificatiebelletje.'}
+              : 'Personen beheren en een planning voor een zelf gekozen periode maken. Ruilverzoeken zie je via het notificatiebelletje.'}
         </p>
       </header>
 
-      {tabs.length > 1 ? (
+      {tabs.length > 1 && !tabsInTopNav ? (
         <div className="flex flex-wrap gap-2 border-b border-vvl-border pb-3">
           {tabs.map((t) => (
             <button

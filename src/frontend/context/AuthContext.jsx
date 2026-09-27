@@ -5,6 +5,8 @@ const AuthContext = createContext(null);
 
 export function homePathForUser(user) {
   const features = user?.access?.can || [];
+  // Admin opent direct Beheer (tabbladen zitten in de topnavigatie).
+  if (user?.role === 'Admin' || user?.role === 'Bestuur') return '/beheer?tab=personen';
   if (features.includes('dashboard')) return '/';
   if (features.includes('teams')) return '/teams';
   if (features.includes('inschrijven')) return '/inschrijven';

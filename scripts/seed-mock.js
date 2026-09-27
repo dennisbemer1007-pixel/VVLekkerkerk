@@ -124,10 +124,12 @@ async function main() {
     where: { id: teamJO15.id },
     data: { coordinatorId: coordinator.id },
   });
-  await prisma.team.update({
-    where: { id: teamJO13.id },
-    data: { coordinatorId: coordinator.id },
-  });
+  if (teamJO13.coordinatorId === coordinator.id) {
+    await prisma.team.update({
+      where: { id: teamJO13.id },
+      data: { coordinatorId: null },
+    });
+  }
 
   const extraMorningTeams = [];
   for (const name of ['O10-2', 'O12-3', 'O8-2JM', 'O9-3']) {

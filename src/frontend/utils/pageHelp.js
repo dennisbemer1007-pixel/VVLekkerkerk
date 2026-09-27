@@ -3,10 +3,10 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Voor de barcommissie staan hier een snelle link naar de 4-stappenplanning, plus controles op open diensten en openstaande verplichtingen.',
+      'Dit is je startscherm. Voor de barcommissie staan hier controles op open diensten en openstaande verplichtingen.',
     actions: [
-      'Barplanning maken: open Beheer → Planning (4 stappen)',
       'Klik op een controlekaart om de concrete lijst te zien',
+      'Planning en beheer open je via het menu',
       'Ruilverzoeken volg je via het notificatiebelletje rechtsboven',
     ],
   },
@@ -29,7 +29,7 @@ export const PAGE_HELP = {
       'Bekijk alle diensten in de gekozen planningsperiode',
       'Filter op open of jouw diensten',
       'Als beheerder: diensten bijwerken vanuit regels en thuiswedstrijden',
-      'Download Excel, clubhuis-PDF (deze week) of het rooster-PDF van de periode',
+      'Download Excel of het rooster-PDF van de periode',
     ],
   },
   voorkeuren: {
