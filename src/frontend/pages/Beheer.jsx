@@ -1699,9 +1699,10 @@ function PlanningBeheer() {
       <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
         <p className="text-sm text-gray-700">
           Dit zet het rooster vast, zodat de lijst in de kantine hetzelfde blijft als in de app.
-          Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven en niet meer ruilen.
-          De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam
-          zetten. Accounts krijgen de mail “de planning is klaar” als de mailserver aanstaat.
+          Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven. Onderling ruilen
+          blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De
+          bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen de mail “de
+          planning is klaar” als de mailserver aanstaat.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1711,7 +1712,7 @@ function PlanningBeheer() {
             onClick={() => {
               if (
                 !window.confirm(
-                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna niet meer zelf wijzigen of ruilen. De barcommissie nog wel. Doorgaan?',
+                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna niet meer zelf in- of uitschrijven. Onderling ruilen blijft mogelijk als beide akkoord zijn. De barcommissie en de bardienstcoördinator (voor teamdiensten) kunnen nog wijzigen. Doorgaan?',
                 )
               ) {
                 return;

@@ -66,7 +66,7 @@ E-mail **2 dagen voor** een ingeplande dienst, alleen als SMTP aanstaat. Geen pu
 Beheer past vier teksten aan: uitnodiging, bevestiging bij inplannen (zelf of door de app, met datum en tijd), herinnering twee dagen van tevoren, en “planning klaar” bij officieel maken. Placeholders: `{naam}`, `{datum}`, `{tijd}`, `{dienst}`, `{link}`. Zonder SMTP wordt er niets verstuurd.
 
 ### Publiceren als officieel
-Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Reden: het rooster aan de muur moet hetzelfde blijven als in de app. Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven en niet meer ruilen. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen dan de mail “planning klaar” als SMTP aanstaat.
+Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** vergrendeld (`Service.locked`, ronde `OFFICIAL`). Reden: het rooster aan de muur moet hetzelfde blijven als in de app. Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven. Onderling ruilen van twee persoonlijke diensten blijft mogelijk zodra beide personen akkoord zijn; teamdiensten en diensten in het verleden blijven uitgesloten. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen dan de mail “planning klaar” als SMTP aanstaat.
 
 ### Seizoen
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.

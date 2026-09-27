@@ -121,9 +121,9 @@ export default function Ruilen() {
       <header>
         <PageTitle {...PAGE_HELP.ruilen}>Ruilen</PageTitle>
         <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Je ruilt twee bestaande persoonlijke diensten.
-          Na akkoord van de andere persoon is de ruiling direct doorgevoerd. Er ontstaat geen open
-          plek. Teamdiensten gaan via de teamcoördinator.
+          Ingelogd als <strong>{user?.name}</strong>. Je ruilt twee bestaande persoonlijke diensten,
+          ook als het rooster al officieel is. Na akkoord van de andere persoon is de ruiling direct
+          doorgevoerd. Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator.
         </p>
       </header>
 
