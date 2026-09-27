@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>html,body{width:390px;height:844px;margin:0;overflow:hidden}</style>
+</head>
+<body class="flex h-[844px] w-[390px] flex-col bg-[#f5f5f5] font-sans text-black antialiased">
+  <header class="shrink-0 bg-black text-white">
+    <div class="flex h-12 items-center gap-2 px-4">
+      <img src="../../../src/frontend/public/logo.png" alt="" class="h-8 w-8 object-contain" />
+      <p class="text-sm font-black uppercase tracking-wide">V.V. Lekkerkerk</p>
+    </div>
+    <div class="h-1 bg-[#c9a227]"></div>
+  </header>
+
+  <main class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-5">
+    <p class="text-[32px] font-black leading-none">Zo 27 sep</p>
+    <p class="mt-1 text-xl font-semibold">13:00 – 16:00</p>
+
+    <div class="mt-6 flex flex-col gap-3">
+      <button class="flex h-16 w-full items-center justify-center gap-2 rounded-full border-4 border-black bg-white text-lg font-black">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12.5 10 17.5 19 7"/></svg>
+        Erik Hofman
+      </button>
+      <button class="h-16 w-full rounded-full border-2 border-[#cccccc] bg-white text-lg font-black text-neutral-700">Noa Visser</button>
+      <button class="h-16 w-full rounded-full border-2 border-[#cccccc] bg-white text-lg font-black text-neutral-700">Kevin de Boer</button>
+    </div>
+
+    <button class="mt-auto h-16 w-full rounded-full bg-black text-xl font-black text-white">Zet Erik</button>
+  </main>
+</body>
+</html>
