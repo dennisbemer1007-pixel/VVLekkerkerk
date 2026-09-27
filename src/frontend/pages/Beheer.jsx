@@ -1714,7 +1714,8 @@ function PlanningBeheer() {
           Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven. Onderling ruilen
           blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De
           bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen de mail “de
-          planning is klaar” als de mailserver aanstaat.
+          planning is klaar” als de mailserver aanstaat. Officieel maken kun je later weer
+          terugdraaien.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1737,6 +1738,29 @@ function PlanningBeheer() {
           >
             4. Maak officieel
           </button>
+          {isOfficial ? (
+            <button
+              type="button"
+              className="vvl-btn-outline"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Officieel terugdraaien ontgrendelt de diensten weer. Vrijwilligers mogen dan opnieuw in- en uitschrijven. Doorgaan?',
+                  )
+                ) {
+                  return;
+                }
+                run(
+                  () => api.unmarkPlanningOfficial(periodPayload()),
+                  (r) =>
+                    `Officieel teruggedraaid — ${r.unlocked} dienst(en) ontgrendeld. Vrijwilligersfase is weer open.`,
+                );
+              }}
+            >
+              Officieel terugdraaien
+            </button>
+          ) : null}
           <button
             type="button"
             className="vvl-btn-outline"
@@ -1755,7 +1779,9 @@ function PlanningBeheer() {
           </button>
         </div>
         {isOfficial ? (
-          <p className="text-sm font-semibold text-emerald-900">Dit rooster is officieel.</p>
+          <p className="text-sm font-semibold text-emerald-900">
+            Dit rooster is officieel. Met “Officieel terugdraaien” zet je de vergrendeling weer uit.
+          </p>
         ) : null}
       </PlanningStep>
 

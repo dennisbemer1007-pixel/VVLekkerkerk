@@ -273,6 +273,8 @@ export const api = {
   erasePersonContact: (id) => json(`/persons/${id}/erase-contact`, { method: 'POST', body: '{}' }),
   markPlanningOfficial: (data) =>
     json('/planning/official', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  unmarkPlanningOfficial: (data) =>
+    json('/planning/unofficial', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   sendDutyReminders: () => json('/planning/remind', { method: 'POST', body: '{}' }),
   downloadPlanningExcel: async (params = {}) => {
     const headers = {};
