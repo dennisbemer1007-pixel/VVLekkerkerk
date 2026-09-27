@@ -88,7 +88,7 @@ export function defaultServiceRuleSeed() {
       startTime: '12:00',
       endTime: '16:30',
       type: 'BAR',
-      required: 2,
+      required: 3,
       slot: 'AFTERNOON',
       conditionType: 'ALWAYS',
       teamDuty: true,

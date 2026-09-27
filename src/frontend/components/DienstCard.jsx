@@ -57,6 +57,15 @@ export default function DienstCard({
     .filter(Boolean)
     .join(', ');
   const teamOnlyLeft = Boolean(capacity) && capacity.personalOpen <= 0 && capacity.teamOpen > 0;
+  const unnamedTeamSpots = teamDuties
+    .map((d) => {
+      const named = (dienst.enrollments || []).filter(
+        (e) => e.kind === 'TEAM' && Number(e.forTeamId || e.forTeam?.id) === Number(d.teamId) && !e.noShow,
+      ).length;
+      const left = Math.max(0, Number(d.reserved || 0) - named);
+      return left > 0 ? { id: d.id || d.teamId, name: d.team?.name || 'Team', left } : null;
+    })
+    .filter(Boolean);
   const canSelfEnroll =
     showActions &&
     !inactive &&
@@ -184,9 +193,17 @@ export default function DienstCard({
 
       {dienst.note ? <p className="text-sm text-gray-600">{dienst.note}</p> : null}
 
-      {dienst.enrollments?.length > 0 ? (
+      {dienst.enrollments?.length > 0 || unnamedTeamSpots.length > 0 ? (
         <ul className="space-y-1 border-t border-vvl-border pt-3 text-sm">
-          {dienst.enrollments.map((e) => {
+          {unnamedTeamSpots.map((spot) => (
+            <li key={`team-${spot.id}`} className="font-semibold">
+              {spot.name}
+              <span className="block text-xs font-normal text-gray-600">
+                Teamdienst · {spot.left} plek{spot.left === 1 ? '' : 'ken'} gereserveerd, nog zonder naam
+              </span>
+            </li>
+          ))}
+          {dienst.enrollments?.map((e) => {
             const reason = displayReason(e.reason, adminMode);
             return (
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">

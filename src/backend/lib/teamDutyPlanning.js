@@ -12,7 +12,7 @@ export const TEAM_DUTY_RESERVED = {
 /** Fallback vrije plekken naast teamdiensten (alleen nog voor labels/defaults). */
 export const TEAM_DUTY_PERSONAL_MIN = {
   MORNING: 1,
-  SECOND: 0,
+  SECOND: 1,
   LAST: 1,
 };
 
@@ -244,6 +244,14 @@ export function serviceCapacity(service) {
   };
 }
 
+/**
+ * Teamplekken tellen meteen als bezet: het team vult die dienst, ook zonder naam.
+ * Een genoemde ouder zit ín die reservering en telt niet nog een keer mee.
+ */
+export function occupiedSlots(capacity) {
+  return capacity.personalEnrolled + Math.max(capacity.teamEnrolled, capacity.teamReserved);
+}
+
 export function teamDutyOpenForTeam(service, teamId) {
   const duty = (service?.teamDuties || []).find((d) => d.teamId === Number(teamId));
   if (!duty) return 0;
@@ -257,6 +265,7 @@ export function friendlyEnrollmentReason(source, { makeup = false, obligation } 
   if (source === 'SELF') return 'Zelf ingeschreven';
   if (source === 'TEAM') return 'Ingevuld door de bardienstcoördinator';
   if (source === 'ADMIN') return 'Ingepland door de barcommissie';
+  if (source === 'GUARDIAN') return 'Ingeschreven door ouder';
   if (source === 'AUTO') {
     if (makeup) return 'Automatisch ingepland: openstaande inhaaldienst.';
     if (obligation === 'VR18') {

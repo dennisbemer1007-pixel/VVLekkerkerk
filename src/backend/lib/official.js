@@ -1,10 +1,13 @@
 import prisma from './prisma.js';
 import { resolvePlanningPeriod, periodFromRound } from './planningPeriod.js';
+import { notifyPlanningReady } from './mail.js';
 
 export const OFFICIAL_DECISION =
-  'Na “officieel maken” is de planning van de gekozen periode vast: diensten in de ronde worden vergrendeld. Alleen barcommissie/admin mag daarna nog inschrijven of uitschrijven. Bardienstcoördinatoren vullen teamdiensten vóór dit moment.';
+  'Officieel maken zet het rooster vast voor de kantine: vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven en niet meer ruilen. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Wie een account heeft, krijgt dan de mail “planning klaar” als SMTP aanstaat.';
 
 export async function markPlanningOfficial({ from, to, weeks } = {}) {
+  const before = await prisma.planningRound.findUnique({ where: { id: 1 } });
+  const wasOfficial = Boolean(before?.official);
   const period = from || to
     ? resolvePlanningPeriod({ from, to, weeks })
     : await periodFromRound(prisma);
@@ -33,7 +36,8 @@ export async function markPlanningOfficial({ from, to, weeks } = {}) {
       official: true,
     },
   });
-  return { locked: locked.count, round, period };
+  const mail = wasOfficial ? { sent: 0, skipped: true } : await notifyPlanningReady();
+  return { locked: locked.count, round, period, mail };
 }
 
 export async function planningIsOfficial() {

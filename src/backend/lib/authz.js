@@ -1,10 +1,10 @@
 import prisma from './prisma.js';
 import { isAdminRole } from './roles.js';
 
-/** Teams waar deze persoon coördinator van is, plus eigen teamId. */
+/** Teams waarvan deze persoon op het team als bardienstcoördinator staat. Eigen lidmaatschap telt niet mee. */
 export async function teamIdsForActor(actor) {
   const ids = new Set();
-  if (actor.teamId) ids.add(actor.teamId);
+  if (!actor?.id) return ids;
   const coordinated = await prisma.team.findMany({
     where: { coordinatorId: actor.id },
     select: { id: true },
