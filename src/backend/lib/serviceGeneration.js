@@ -8,6 +8,7 @@ import {
   serviceKey,
   startTimeFromService,
 } from './serviceRuleLogic.js';
+import { startOfDay } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import {
   eligibleTeamDutyCandidates,
@@ -250,6 +251,21 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     const key = serviceKey(service.date, service.type, startTimeFromService(service));
     if (needed.has(key)) continue;
     if (service.origin !== 'AUTO') continue;
+    await prisma.service.delete({ where: { id: service.id } });
+    removed += 1;
+  }
+
+  // Lege automatische diensten buiten de nieuwe periode blijven anders inschrijfbaar.
+  const outside = await prisma.service.findMany({
+    where: {
+      origin: 'AUTO',
+      locked: false,
+      OR: [{ date: { gt: end } }, { date: { gte: startOfDay(new Date()), lt: start } }],
+    },
+    select: { id: true, enrollments: { select: { id: true } } },
+  });
+  for (const service of outside) {
+    if (service.enrollments.length) continue;
     await prisma.service.delete({ where: { id: service.id } });
     removed += 1;
   }
