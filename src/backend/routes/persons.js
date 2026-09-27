@@ -22,9 +22,20 @@ import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { personTemplateSheets, personExportRowsSheets } from '../lib/personsXlsx.js';
 import { getClubSettings } from '../lib/season.js';
+import { normalizeAbsenceRange } from '../lib/absences.js';
 
 const router = Router();
 const PHOTO_ROLES = [...ADMIN_ROLES, 'Teamcoördinator'];
+
+function publicAbsence(absence) {
+  return {
+    id: absence.id,
+    personId: absence.personId,
+    fromDate: absence.fromDate,
+    toDate: absence.toDate,
+    note: absence.note || '',
+  };
+}
 
 function preferenceFieldsFromBody(body) {
   const data = {};
@@ -93,6 +104,93 @@ router.put(
         include: { team: true },
       });
       res.json(publicPerson(person, { includeContact: true }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Eigen afwezigheden (alleen lezen; wijzigen gaat via de barcommissie/admin) */
+router.get(
+  '/me/absences',
+  requireAuth(async (req, res, next) => {
+    try {
+      const absences = await prisma.personAbsence.findMany({
+        where: { personId: req.person.id },
+        orderBy: { fromDate: 'asc' },
+      });
+      res.json(absences.map(publicAbsence));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Afwezigheden van een persoon (alleen barcommissie/admin) */
+router.get(
+  '/:id/absences',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const personId = Number(req.params.id);
+      const absences = await prisma.personAbsence.findMany({
+        where: { personId },
+        orderBy: { fromDate: 'asc' },
+      });
+      res.json(absences.map(publicAbsence));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Afwezigheidsperiode toevoegen (alleen barcommissie/admin) */
+router.post(
+  '/:id/absences',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const personId = Number(req.params.id);
+      const existing = await prisma.person.findUnique({ where: { id: personId } });
+      if (!existing) return res.status(404).json({ error: 'Persoon niet gevonden' });
+
+      const { fromDate, toDate } = normalizeAbsenceRange(req.body || {});
+      const note = String(req.body?.note || '').trim().slice(0, 200);
+      const absence = await prisma.personAbsence.create({
+        data: { personId, fromDate, toDate, note },
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.absence.create',
+        entity: 'Person',
+        entityId: personId,
+        detail: `${existing.name}: afwezig ${fromDate.toISOString().slice(0, 10)} t/m ${toDate.toISOString().slice(0, 10)}`,
+      });
+      res.status(201).json(publicAbsence(absence));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Afwezigheidsperiode verwijderen (alleen barcommissie/admin) */
+router.delete(
+  '/:id/absences/:absenceId',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const personId = Number(req.params.id);
+      const absenceId = Number(req.params.absenceId);
+      const existing = await prisma.personAbsence.findUnique({ where: { id: absenceId } });
+      if (!existing || existing.personId !== personId) {
+        return res.status(404).json({ error: 'Afwezigheid niet gevonden' });
+      }
+      await prisma.personAbsence.delete({ where: { id: absenceId } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.absence.delete',
+        entity: 'Person',
+        entityId: personId,
+        detail: `afwezigheid verwijderd (${absenceId})`,
+      });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

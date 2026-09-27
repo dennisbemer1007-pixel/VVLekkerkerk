@@ -56,6 +56,10 @@ import {
   slotCellText,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
+import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
+import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
+import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
+import { matchTemplateSheets, MATCH_TEMPLATE_HEADERS } from '../src/backend/lib/matchesXlsx.js';
 
 let pass = 0;
 let fail = 0;
@@ -724,6 +728,51 @@ assert(
 assert(
   'dag na de planning telt niet mee',
   isWithinPlanningPeriod(new Date('2026-10-14T00:00:00'), volunteerBounds) === false,
+);
+
+const absencePeriod = normalizeAbsenceRange({ fromDate: '2026-10-05', toDate: '2026-10-12' });
+assert(
+  'afwezigheid: normaliseert van/tot',
+  toIsoDate(absencePeriod.fromDate) === '2026-10-05' && toIsoDate(absencePeriod.toDate) === '2026-10-12',
+);
+assert(
+  'afwezigheid: binnen periode is afwezig',
+  isAbsentOn([absencePeriod], new Date('2026-10-08T09:00:00')) === true,
+);
+assert(
+  'afwezigheid: buiten periode niet afwezig',
+  isAbsentOn([absencePeriod], new Date('2026-10-13T09:00:00')) === false,
+);
+assert(
+  'afwezigheid: einddatum vóór begindatum wordt afgewezen',
+  (() => {
+    try {
+      normalizeAbsenceRange({ fromDate: '2026-10-12', toDate: '2026-10-05' });
+      return false;
+    } catch (e) {
+      return e.status === 400;
+    }
+  })(),
+);
+assert(
+  'skipReasonForPerson: afwezigheid geeft eigen reden',
+  skipReasonForPerson({ obligation: 'FULL', exempted: false }, 1, {
+    hadOverlap: false,
+    hadEligible: false,
+    exempted: false,
+    hadAbsence: true,
+  }) === 'Afwezig in de betreffende periode.',
+);
+
+assert(
+  'personTeamIds bevat primaire teamId ook zonder membership',
+  personTeamIds({ teamId: 7, teamMemberships: [] }).includes(7),
+);
+
+assert(
+  'wedstrijdsjabloon heeft alleen KNVB-kolommen',
+  MATCH_TEMPLATE_HEADERS.join(';') === 'Datum;Tijd;Thuis;Uit;Wedstrijdnr.;Type;Spelniveau;Opmerkingen' &&
+    matchTemplateSheets()[0].rows.length === 0,
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

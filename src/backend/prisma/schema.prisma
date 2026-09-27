@@ -40,6 +40,7 @@ model Person {
   guardianId       Int?
   guardian         Person?      @relation("PersonGuardian", fields: [guardianId], references: [id])
   children         Person[]     @relation("PersonGuardian")
+  absences         PersonAbsence[]
   teamMemberships  PersonTeam[]
   enrollments      Enrollment[]
   coordinates      Team[]       @relation("TeamCoordinator")
@@ -50,6 +51,20 @@ model Person {
   notifications    Notification[]
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+}
+
+/** Afwezigheid (alleen barcommissie): persoon wordt niet automatisch ingepland in deze periode */
+model PersonAbsence {
+  id        Int      @id @default(autoincrement())
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  fromDate  DateTime
+  toDate    DateTime
+  note      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([personId, fromDate, toDate])
 }
 
 model Session {

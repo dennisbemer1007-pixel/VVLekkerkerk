@@ -7,6 +7,7 @@ import {
   personalEnrollmentCount,
   remainingObligation,
 } from './obligation.js';
+import { isAbsentOn } from './absences.js';
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
 import { writeAudit } from './audit.js';
 import { trySendScheduledConfirmation } from './mail.js';
@@ -23,9 +24,16 @@ function countsForPerson(person, windows) {
   };
 }
 
-export function skipReasonForPerson(person, remaining, { hadOverlap, hadEligible, exempted }) {
+export function skipReasonForPerson(
+  person,
+  remaining,
+  { hadOverlap, hadEligible, exempted, hadAbsence },
+) {
   if (exempted || person.exempted) return 'Persoon is vrijgesteld.';
   if (remaining <= 0) return null;
+  if (!hadEligible && hadAbsence && !hadOverlap) {
+    return 'Afwezig in de betreffende periode.';
+  }
   if (!hadEligible && hadOverlap) {
     return 'Geen geschikt moment beschikbaar vanwege wedstrijdblokkades.';
   }
@@ -75,6 +83,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       team: true,
       teamMemberships: { where: { active: true } },
       enrollments: { include: { service: true } },
+      absences: true,
     },
   });
 
@@ -94,6 +103,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       lastPersonalAt: lastPersonalAt(person.enrollments),
       hadOverlap: false,
       hadEligible: false,
+      hadAbsence: false,
     };
   });
 
@@ -114,6 +124,10 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       if (row.remaining <= 0) continue;
       if (already.has(person.id) || enrolledToday.has(`${person.id}:${dayIso}`)) continue;
       if (isUnavailableOn(person, service.date)) continue;
+      if (isAbsentOn(person.absences, service.date)) {
+        row.hadAbsence = true;
+        continue;
+      }
       const overlap = overlappingMatchBlocks(service, row.blocks);
       if (overlap.length) {
         row.hadOverlap = true;
