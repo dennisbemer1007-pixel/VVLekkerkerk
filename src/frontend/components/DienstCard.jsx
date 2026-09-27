@@ -26,6 +26,12 @@ function slotLabel(slot) {
   return null;
 }
 
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
 export default function DienstCard({
   dienst,
   onInschrijven,
@@ -34,10 +40,14 @@ export default function DienstCard({
   showActions = false,
   headerActions = null,
   adminMode = false,
+  /** Barcommissie mag zichzelf inschrijven ook bij officieel/gesloten rooster */
+  committeeOverride = false,
   compact = false,
   onAdminRemoveEnrollment,
   onNoShow,
   onClearNoShow,
+  /** Toon no-show alleen bij diensten in het verleden */
+  allowNoShow = false,
 }) {
   const enrolled = dienst.enrolled ?? dienst.enrollments?.length ?? 0;
   const required = dienst.required ?? 2;
@@ -66,6 +76,9 @@ export default function DienstCard({
       return left > 0 ? { id: d.id || d.teamId, name: d.team?.name || 'Team', left } : null;
     })
     .filter(Boolean);
+  const servicePast = startOfDay(new Date(dienst.date)) < startOfDay(new Date());
+  const showNoShow = Boolean(allowNoShow && servicePast);
+  const canOverride = adminMode || committeeOverride;
   const canSelfEnroll =
     showActions &&
     !inactive &&
@@ -73,14 +86,14 @@ export default function DienstCard({
     !myEnrollment &&
     status !== 'full' &&
     !teamOnlyLeft &&
-    !(isLocked && !adminMode);
+    !(isLocked && !canOverride);
 
   if (compact) {
     return (
       <article className="vvl-card flex flex-wrap items-center justify-between gap-2 py-3">
         <button
           type="button"
-          className="min-w-0 flex-1 text-left text-sm font-semibold"
+          className="min-h-[44px] min-w-0 flex-1 text-left text-sm font-semibold"
           onClick={() => onInschrijven?.(dienst.id, 'expand')}
         >
           {new Date(dienst.date).toLocaleDateString('nl-NL', {
@@ -108,7 +121,7 @@ export default function DienstCard({
           {canSelfEnroll ? (
             <button
               type="button"
-              className="vvl-btn-primary text-xs"
+              className="vvl-btn-primary min-h-[44px] text-xs"
               onClick={() => onInschrijven?.(dienst.id)}
             >
               Inschrijven
@@ -136,8 +149,6 @@ export default function DienstCard({
           <p className="text-xs font-bold uppercase tracking-wide text-vvl-accent">
             {type}
             {slot ? ` · ${slot}` : ''}
-            {dienst.kind === 'TEAM' ? ' · teamdienst' : ''}
-            {dienst.kind === 'MIXED' ? ' · team + vrijwillig' : ''}
           </p>
           <button
             type="button"
@@ -147,25 +158,12 @@ export default function DienstCard({
             <h3 className="font-heading text-lg font-black uppercase">{formatServiceDate(dienst.date)}</h3>
             <p className="text-sm font-semibold">{dienst.time}</p>
           </button>
-          {teamDuties.length ? (
-            <p className="text-xs text-gray-700">
-              Teamdienst:{' '}
-              {teamDuties
-                .map((d) => `${d.team?.name || 'team'} (${d.reserved} plek${d.reserved === 1 ? '' : 'ken'})`)
-                .join(', ')}
-              {capacity?.personalCapacity
-                ? ` · ${capacity.personalCapacity} plek${capacity.personalCapacity === 1 ? '' : 'ken'} voor vrijwilligers`
-                : ''}
-            </p>
-          ) : dienst.assignedTeam?.name ? (
-            <p className="text-xs text-gray-600">Team: {dienst.assignedTeam.name}</p>
-          ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {onInschrijven && !adminMode ? (
+          {onInschrijven && !adminMode && !committeeOverride ? (
             <button
               type="button"
-              className="vvl-btn-outline text-xs"
+              className="vvl-btn-outline min-h-[44px] text-xs"
               onClick={() => onInschrijven(dienst.id, 'expand')}
             >
               Inklappen
@@ -191,15 +189,13 @@ export default function DienstCard({
         {isLocked ? ' · officieel' : ''}
       </p>
 
-      {dienst.note ? <p className="text-sm text-gray-600">{dienst.note}</p> : null}
-
       {dienst.enrollments?.length > 0 || unnamedTeamSpots.length > 0 ? (
         <ul className="space-y-1 border-t border-vvl-border pt-3 text-sm">
           {unnamedTeamSpots.map((spot) => (
             <li key={`team-${spot.id}`} className="font-semibold">
               {spot.name}
               <span className="block text-xs font-normal text-gray-600">
-                Teamdienst · {spot.left} plek{spot.left === 1 ? '' : 'ken'} gereserveerd, nog zonder naam
+                {spot.left} plek{spot.left === 1 ? '' : 'ken'} zonder naam
               </span>
             </li>
           ))}
@@ -217,27 +213,29 @@ export default function DienstCard({
                   ) : null}
                 </span>
                 {adminMode && onAdminRemoveEnrollment ? (
-                  <span className="flex gap-2">
-                    {e.noShow ? (
-                      <button
-                        type="button"
-                        className="text-xs font-bold uppercase text-amber-800 hover:underline"
-                        onClick={() => onClearNoShow?.(e.id)}
-                      >
-                        No-show corrigeren
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-xs font-bold uppercase text-amber-800 hover:underline"
-                        onClick={() => onNoShow?.(e.id)}
-                      >
-                        No-show
-                      </button>
-                    )}
+                  <span className="flex flex-wrap gap-2">
+                    {showNoShow ? (
+                      e.noShow ? (
+                        <button
+                          type="button"
+                          className="min-h-[44px] text-xs font-bold uppercase text-amber-800 hover:underline"
+                          onClick={() => onClearNoShow?.(e.id)}
+                        >
+                          No-show corrigeren
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="min-h-[44px] text-xs font-bold uppercase text-amber-800 hover:underline"
+                          onClick={() => onNoShow?.(e.id)}
+                        >
+                          No-show
+                        </button>
+                      )
+                    ) : null}
                     <button
                       type="button"
-                      className="text-xs font-bold uppercase text-red-700 hover:underline"
+                      className="min-h-[44px] text-xs font-bold uppercase text-red-700 hover:underline"
                       onClick={() => onAdminRemoveEnrollment(e.id)}
                     >
                       Verwijder
@@ -252,14 +250,14 @@ export default function DienstCard({
         <p className="text-sm text-gray-500">Nog niemand ingeschreven.</p>
       )}
 
-      {showActions && !inactive && !isDraft && !(isLocked && !adminMode) ? (
+      {showActions && !inactive && !isDraft && !(isLocked && !canOverride) ? (
         <div className="pt-1">
           {!myPersonId ? (
             <p className="text-sm text-gray-600">Je moet ingelogd zijn om in te schrijven.</p>
           ) : myEnrollment ? (
             <button
               type="button"
-              className="vvl-btn-outline text-xs"
+              className="vvl-btn-outline min-h-[44px] text-xs"
               onClick={() => onUitschrijven?.(myEnrollment.id)}
             >
               Uitschrijven
@@ -268,12 +266,12 @@ export default function DienstCard({
             <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
           ) : capacity && capacity.personalOpen <= 0 && capacity.teamOpen > 0 ? (
             <p className="text-sm text-gray-700">
-              De open plekken zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.
+              De open plekken zijn voor het jeugdteam.
             </p>
           ) : (
             <button
               type="button"
-              className="vvl-btn-primary text-xs"
+              className="vvl-btn-primary min-h-[44px] text-xs"
               onClick={() => onInschrijven?.(dienst.id)}
             >
               Inschrijven
@@ -282,14 +280,8 @@ export default function DienstCard({
         </div>
       ) : null}
 
-      {isLocked && showActions && !adminMode ? (
-        <p className="text-xs text-gray-600">
-          Officieel rooster — alleen de barcommissie kan nog wijzigen.
-        </p>
-      ) : null}
-
-      {isDraft && showActions ? (
-        <p className="text-xs text-gray-600">Concept — eerst publiceren via Beheer → Planning.</p>
+      {isLocked && showActions && !canOverride ? (
+        <p className="text-xs text-gray-600">Officieel rooster — alleen de barcommissie kan nog wijzigen.</p>
       ) : null}
     </article>
   );

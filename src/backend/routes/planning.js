@@ -80,10 +80,15 @@ router.get(
       orderBy: { name: 'asc' },
     });
 
+    const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+
     const dutyStats = people.map((p) => {
       const last6 = personalEnrollmentCount(p.enrollments, sixWeeksAgo, endOfDay(now));
       const last12 = personalEnrollmentCount(p.enrollments, twelveWeeksAgo, endOfDay(now));
       const thisYear = personalEnrollmentCount(p.enrollments, yearStart, endOfDay(now));
+      const seasonStart = round?.fromDate ? startOfDay(round.fromDate) : yearStart;
+      const seasonEnd = round?.toDate ? endOfDay(round.toDate) : endOfDay(now);
+      const thisSeason = personalEnrollmentCount(p.enrollments, seasonStart, seasonEnd);
       const executed = executedCountForObligation(p, {
         count6w: last6,
         count12w: last12,
@@ -92,6 +97,7 @@ router.get(
       return {
         id: p.id,
         name: p.name,
+        role: p.role,
         team: p.team?.name ?? null,
         obligation: p.obligation,
         exempted: p.exempted,
@@ -100,6 +106,7 @@ router.get(
         barLast6Weeks: last6,
         barLast12Weeks: last12,
         barThisYear: thisYear,
+        barThisSeason: thisSeason,
         underQuota: underQuota(p, last6, thisYear, last12),
         stillNeeded: remainingObligation(p, executed),
       };
@@ -107,8 +114,8 @@ router.get(
 
     const controls = isAdminRole(req.person.role) ? await buildPlanningControls(now) : null;
 
-    let round = await prisma.planningRound.findUnique({ where: { id: 1 } });
     let notSelfEnrolled = [];
+    let noShowPeople = [];
     if (round?.fromDate && round?.toDate) {
       const roundServices = await prisma.service.findMany({
         where: {
@@ -132,6 +139,23 @@ router.get(
         .map((p) => ({
           id: p.id,
           name: p.name,
+          role: p.role,
+          team: p.team?.name ?? null,
+          obligation: p.obligation,
+        }));
+
+      const noShowRows = await prisma.enrollment.findMany({
+        where: { noShow: true },
+        select: { personId: true },
+        distinct: ['personId'],
+      });
+      const noShowIds = new Set(noShowRows.map((e) => e.personId));
+      noShowPeople = people
+        .filter((p) => noShowIds.has(p.id))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
           team: p.team?.name ?? null,
           obligation: p.obligation,
         }));
@@ -152,6 +176,7 @@ router.get(
         ? {
             dutyStats,
             notSelfEnrolled,
+            noShowPeople,
             planningRound: round,
             controls,
             pendingSwapCount,
