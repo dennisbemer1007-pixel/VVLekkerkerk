@@ -271,6 +271,31 @@ export const api = {
     return res.blob();
   },
   erasePersonContact: (id) => json(`/persons/${id}/erase-contact`, { method: 'POST', body: '{}' }),
+  deletePerson: (id) => json(`/persons/${id}`, { method: 'DELETE' }),
+  bulkInvitePersons: (personIds) =>
+    json('/persons/bulk-invite', { method: 'POST', body: JSON.stringify({ personIds }) }),
+  downloadPersonTemplateXlsx: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/template.xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Download mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
+  downloadPersonsExportXlsx: async (params = {}) => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/export.xlsx${qs(params)}`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Export mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   markPlanningOfficial: (data) =>
     json('/planning/official', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   unmarkPlanningOfficial: (data) =>

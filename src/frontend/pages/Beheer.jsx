@@ -112,8 +112,72 @@ export default function Beheer({ mode = 'full' }) {
   );
 }
 
+const ACCOUNT_FILTERS = [
+  { value: '', label: 'Alle' },
+  { value: 'yes', label: 'Wel account' },
+  { value: 'no', label: 'Geen account' },
+];
+
+function IconButton({ title, onClick, children, tone = 'default', type = 'button' }) {
+  const toneClass =
+    tone === 'danger'
+      ? 'text-red-800 border-red-300 hover:bg-red-50'
+      : tone === 'warn'
+        ? 'text-amber-800 border-amber-300 hover:bg-amber-50'
+        : 'border-vvl-border hover:bg-vvl-secondary';
+  return (
+    <button
+      type={type}
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border bg-white text-base ${toneClass}`}
+    >
+      {children}
+      <span className="sr-only">{title}</span>
+    </button>
+  );
+}
+
+function GuardianPicker({ persons, value, onChange, excludeId }) {
+  const [query, setQuery] = useState('');
+  const options = persons
+    .filter((p) => p.id !== excludeId)
+    .filter((p) => !query.trim() || p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .slice(0, 60);
+  const selected = persons.find((p) => String(p.id) === String(value));
+
+  return (
+    <div className="space-y-1">
+      <label className="vvl-label">Hoort bij (optioneel)</label>
+      <input
+        className="vvl-input"
+        placeholder="Zoek op naam om te koppelen…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <select className="vvl-input" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— Geen —</option>
+        {selected && !options.some((o) => o.id === selected.id) ? (
+          <option value={selected.id}>{selected.name}</option>
+        ) : null}
+        {options.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs text-gray-600">
+        Voor personen zonder eigen account (bijv. kinderen) die aan een ander account hangen.
+        E-mail is dan niet verplicht.
+      </p>
+    </div>
+  );
+}
+
 function PersonenBeheer() {
   const formRef = useRef(null);
+  const bulkRef = useRef(null);
   const [persons, setPersons] = useState([]);
   const [teams, setTeams] = useState([]);
   const [form, setForm] = useState({
@@ -124,6 +188,7 @@ function PersonenBeheer() {
     obligation: 'NONE',
     teamId: '',
     exempted: false,
+    guardianId: '',
     unavailableWeekdays: [],
     preferredSlots: [],
   });
@@ -131,10 +196,19 @@ function PersonenBeheer() {
   const [error, setError] = useState('');
   const [inviteResult, setInviteResult] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [pwPersonId, setPwPersonId] = useState(null);
-  const [pwValue, setPwValue] = useState('');
-  const [pwMsg, setPwMsg] = useState('');
   const [showNameless, setShowNameless] = useState(false);
+
+  // Kolomfilters
+  const [filterName, setFilterName] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [filterTeam, setFilterTeam] = useState('');
+  const [filterAccount, setFilterAccount] = useState('');
+
+  // Bulk-linkverzending
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
 
   const load = async (includeNameless = showNameless) => {
     setError('');
@@ -166,6 +240,7 @@ function PersonenBeheer() {
       obligation: 'NONE',
       teamId: '',
       exempted: false,
+      guardianId: '',
       unavailableWeekdays: [],
       preferredSlots: [],
     });
@@ -176,16 +251,24 @@ function PersonenBeheer() {
     setError('');
     setInviteResult(null);
     setCopied(false);
+    const email = form.email.trim();
+    if (!editId && !email && !form.guardianId) {
+      setError('Vul een e-mailadres in, of kies "Hoort bij".');
+      return;
+    }
     try {
       const data = {
         ...form,
         teamId: form.teamId || null,
+        guardianId: form.guardianId || null,
       };
       if (editId) {
         await api.updatePerson(editId, data);
-      } else {
+      } else if (email) {
         const res = await api.invitePerson(data);
         setInviteResult(res);
+      } else {
+        await api.createPerson(data);
       }
       resetForm();
       await load();
@@ -205,6 +288,7 @@ function PersonenBeheer() {
       obligation: p.obligation || (p.mandatoryBar ? 'FULL' : 'NONE'),
       teamId: p.teamId ? String(p.teamId) : '',
       exempted: Boolean(p.exempted),
+      guardianId: p.guardianId ? String(p.guardianId) : '',
       unavailableWeekdays: p.unavailableWeekdays || [],
       preferredSlots: p.preferredSlots || [],
     });
@@ -212,18 +296,28 @@ function PersonenBeheer() {
   };
 
   const toggleActive = async (p) => {
+    if (p.active && !window.confirm(`${p.name} deactiveren?`)) return;
     await api.updatePerson(p.id, { active: !p.active });
     await load();
   };
 
-  const resend = async (p) => {
+  const deletePerson = async (p) => {
+    if (!window.confirm(`${p.name} definitief verwijderen? Dit kan niet ongedaan gemaakt worden.`)) {
+      return;
+    }
     setError('');
     try {
-      const res = await api.resendInvite(p.id);
-      setInviteResult(res);
+      await api.deletePerson(p.id);
+      await load();
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const resend = async (p) => {
+    setSelectedIds([p.id]);
+    setBulkMsg('');
+    requestAnimationFrame(() => scrollToForm(bulkRef));
   };
 
   const copyLink = async () => {
@@ -232,17 +326,122 @@ function PersonenBeheer() {
     setCopied(true);
   };
 
-  const savePassword = async (e) => {
-    e.preventDefault();
-    setPwMsg('');
+  const filteredPersons = persons.filter((p) => {
+    if (filterName.trim() && !p.name.toLowerCase().includes(filterName.trim().toLowerCase())) {
+      return false;
+    }
+    if (filterRole && p.role !== filterRole) return false;
+    if (filterTeam) {
+      if (filterTeam === '__none__') {
+        if (p.teamId) return false;
+      } else if (String(p.teamId) !== filterTeam) {
+        return false;
+      }
+    }
+    if (filterAccount === 'yes' && !p.hasAccount) return false;
+    if (filterAccount === 'no' && p.hasAccount) return false;
+    return true;
+  });
+
+  const activeFilters = [
+    filterName.trim() ? { key: 'name', label: `Naam: “${filterName.trim()}”`, clear: () => setFilterName('') } : null,
+    filterRole ? { key: 'role', label: `Rol: ${filterRole}`, clear: () => setFilterRole('') } : null,
+    filterTeam
+      ? {
+          key: 'team',
+          label: `Team: ${filterTeam === '__none__' ? '— geen —' : teams.find((t) => String(t.id) === filterTeam)?.name || filterTeam}`,
+          clear: () => setFilterTeam(''),
+        }
+      : null,
+    filterAccount
+      ? {
+          key: 'account',
+          label: `Account: ${ACCOUNT_FILTERS.find((f) => f.value === filterAccount)?.label}`,
+          clear: () => setFilterAccount(''),
+        }
+      : null,
+  ].filter(Boolean);
+
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterRole('');
+    setFilterTeam('');
+    setFilterAccount('');
+  };
+
+  const selectablePersons = filteredPersons.filter((p) => p.email && !p.hasAccount);
+  const allSelected =
+    selectablePersons.length > 0 && selectablePersons.every((p) => selectedIds.includes(p.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds((ids) => ids.filter((id) => !selectablePersons.some((p) => p.id === id)));
+    } else {
+      setSelectedIds((ids) => [...new Set([...ids, ...selectablePersons.map((p) => p.id)])]);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  };
+
+  const sendBulkInvites = async () => {
+    if (!selectedIds.length) return;
+    setBulkBusy(true);
+    setBulkMsg('');
     setError('');
     try {
-      await api.setPersonPassword(pwPersonId, pwValue);
-      setPwMsg('Wachtwoord opgeslagen.');
-      setPwPersonId(null);
-      setPwValue('');
+      const res = await api.bulkInvitePersons(selectedIds);
+      const parts = [];
+      if (res.sent?.length) parts.push(`Verstuurd naar: ${res.sent.join(', ')}.`);
+      if (res.skippedNoEmail?.length) {
+        parts.push(`Overgeslagen (geen e-mail): ${res.skippedNoEmail.join(', ')}.`);
+      }
+      if (res.failed?.length) {
+        parts.push(
+          `Mislukt: ${res.failed.map((f) => `${f.name} (${f.reason})`).join(', ')}.`,
+        );
+      }
+      setBulkMsg(parts.join(' ') || 'Niets te versturen.');
+      setSelectedIds([]);
+      await load();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    setError('');
+    try {
+      const blob = await api.downloadPersonTemplateXlsx();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vvl-personen-sjabloon.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const downloadExport = async () => {
+    setExportBusy(true);
+    setError('');
+    try {
+      const blob = await api.downloadPersonsExportXlsx();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vvl-personen-export.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -254,10 +453,12 @@ function PersonenBeheer() {
         className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
-          {editId ? 'Persoon bewerken' : 'Uitnodigen per e-mail'}
+          {editId ? 'Persoon bewerken' : 'Persoon toevoegen'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin).
+          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin). Vul
+          e-mail in om een uitnodiging te versturen, of kies "Hoort bij" voor iemand zonder eigen
+          account (dan is e-mail niet verplicht).
         </p>
 
         <div>
@@ -270,13 +471,13 @@ function PersonenBeheer() {
           />
         </div>
         <div>
-          <label className="vvl-label">E-mail *</label>
+          <label className="vvl-label">E-mail {form.guardianId ? '' : '*'}</label>
           <input
             type="email"
             className="vvl-input"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
-            required={!editId}
+            required={!editId && !form.guardianId}
             disabled={Boolean(editId)}
           />
         </div>
@@ -331,6 +532,12 @@ function PersonenBeheer() {
             ))}
           </select>
         </div>
+        <GuardianPicker
+          persons={persons}
+          value={form.guardianId}
+          onChange={(v) => setForm({ ...form, guardianId: v })}
+          excludeId={editId}
+        />
         <label className="flex items-center gap-2 text-sm font-semibold">
           <input
             type="checkbox"
@@ -340,11 +547,11 @@ function PersonenBeheer() {
           Vrijgesteld (niet automatisch inplannen)
         </label>
         <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
-          <button type="submit" className="vvl-btn-primary">
-            {editId ? 'Opslaan' : 'Uitnodiging maken'}
+          <button type="submit" className="vvl-btn-primary min-h-[44px]">
+            {editId ? 'Opslaan' : 'Toevoegen / uitnodigen'}
           </button>
           {editId ? (
-            <button type="button" className="vvl-btn-outline" onClick={resetForm}>
+            <button type="button" className="vvl-btn-outline min-h-[44px]" onClick={resetForm}>
               Annuleren
             </button>
           ) : null}
@@ -374,151 +581,213 @@ function PersonenBeheer() {
             {inviteResult.inviteLink}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="vvl-btn-primary text-xs" onClick={copyLink}>
+            <button type="button" className="vvl-btn-primary text-xs min-h-[44px]" onClick={copyLink}>
               {copied ? 'Gekopieerd!' : 'Kopieer link'}
             </button>
-            <a href={inviteResult.mailto} className="vvl-btn-outline text-xs">
+            <a href={inviteResult.mailto} className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]">
               Open e-mailprogramma
             </a>
           </div>
         </div>
       ) : null}
 
-      {pwPersonId ? (
-        <form onSubmit={savePassword} className="vvl-card grid gap-3 sm:grid-cols-2">
-          <h3 className="sm:col-span-2 font-heading font-black uppercase">Wachtwoord instellen</h3>
-          <div className="sm:col-span-2">
-            <label className="vvl-label">Nieuw wachtwoord (min. 8 tekens)</label>
-            <input
-              type="password"
-              className="vvl-input"
-              value={pwValue}
-              onChange={(e) => setPwValue(e.target.value)}
-              minLength={8}
-              required
-            />
-          </div>
-          <div className="flex gap-2 sm:col-span-2">
-            <button type="submit" className="vvl-btn-primary text-xs">
-              Opslaan
-            </button>
-            <button
-              type="button"
-              className="vvl-btn-outline text-xs"
-              onClick={() => {
-                setPwPersonId(null);
-                setPwValue('');
-              }}
-            >
-              Annuleren
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {pwMsg ? <p className="text-sm text-emerald-800">{pwMsg}</p> : null}
-
       {error ? (
         <div className="space-y-2">
           <p className="text-sm text-red-700">{error}</p>
-          <button type="button" className="vvl-btn-outline text-xs" onClick={() => load()}>
+          <button type="button" className="vvl-btn-outline text-xs min-h-[44px]" onClick={() => load()}>
             Opnieuw laden
           </button>
         </div>
       ) : null}
 
+      <div className="vvl-card space-y-3">
+        <h2 className="font-heading text-base font-black uppercase">Filters</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="vvl-label">Naam</label>
+            <input
+              className="vvl-input"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              placeholder="Zoek op naam…"
+            />
+          </div>
+          <div>
+            <label className="vvl-label">Rol</label>
+            <select className="vvl-input" value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+              <option value="">Alle</option>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="vvl-label">Team</label>
+            <select className="vvl-input" value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}>
+              <option value="">Alle</option>
+              <option value="__none__">— geen team —</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="vvl-label">Account</label>
+            <select
+              className="vvl-input"
+              value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+            >
+              {ACCOUNT_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {activeFilters.length ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase text-gray-600">Actieve filters:</span>
+            {activeFilters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={f.clear}
+                className="inline-flex items-center gap-1 rounded-full border border-vvl-primary bg-vvl-secondary px-3 py-1 text-xs font-semibold"
+              >
+                {f.label} ✕
+              </button>
+            ))}
+            <button type="button" className="text-xs font-bold uppercase underline" onClick={clearAllFilters}>
+              Wis alle filters
+            </button>
+          </div>
+        ) : null}
+      </div>
+
       <div className="overflow-x-auto vvl-card p-0">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full text-sm">
           <thead className="bg-vvl-secondary text-xs font-bold uppercase">
             <tr>
+              <th className="p-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  disabled={!selectablePersons.length}
+                  title="Selecteer alle (met e-mail, zonder account)"
+                />
+              </th>
               <th className="p-3 text-left">Naam</th>
+              <th className="p-3 text-left">Rol</th>
+              <th className="p-3 text-left">Team</th>
+              <th className="p-3 text-left">Verplichting</th>
               <th className="p-3 text-left">E-mail</th>
               <th className="p-3 text-left">Telefoon</th>
-              <th className="p-3 text-left">Rol</th>
+              <th className="p-3 text-left">Hoort bij</th>
               <th className="p-3 text-left">Account</th>
-              <th className="p-3" />
+              <th className="p-3 text-left">Acties</th>
             </tr>
           </thead>
           <tbody>
-            {persons.map((p) => (
-              <tr key={p.id} className="border-t border-vvl-border">
+            {filteredPersons.map((p) => (
+              <tr key={p.id} className="border-t border-vvl-border align-top">
+                <td className="p-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(p.id)}
+                    disabled={!p.email || p.hasAccount}
+                    onChange={() => toggleSelect(p.id)}
+                    title={
+                      !p.email
+                        ? 'Geen e-mail'
+                        : p.hasAccount
+                          ? 'Heeft al een account'
+                          : 'Selecteer voor uitnodiging'
+                    }
+                  />
+                </td>
                 <td className="p-3 font-semibold">
                   {p.name}
-                  {p.obligation === 'FULL' ? ' *' : p.obligation === 'VR18' ? ' VR18+' : ''}
                   {p.exempted ? ' (vrijgesteld)' : ''}
+                  {!p.active ? ' (inactief)' : ''}
                   {p.personNumber ? (
                     <span className="block text-xs font-normal text-gray-500">{p.personNumber}</span>
                   ) : null}
                 </td>
+                <td className="p-3">{p.role}</td>
+                <td className="p-3">{p.team?.name || '—'}</td>
+                <td className="p-3">{p.obligationLabel}</td>
                 <td className="p-3">{p.email || '—'}</td>
                 <td className="p-3">{p.phone || '—'}</td>
+                <td className="p-3">{p.guardianName || '—'}</td>
                 <td className="p-3">
-                  {p.role}
-                  {p.team ? ` · ${p.team.name}` : ''}
+                  {p.hasAccount ? 'Wel' : p.invitePending ? 'Wel (uitnodiging open)' : 'Geen'}
                 </td>
                 <td className="p-3">
-                  {!p.active
-                    ? 'Inactief'
-                    : p.hasAccount
-                      ? 'Account actief'
-                      : p.invitePending
-                        ? 'Uitnodiging open'
-                        : 'Geen account'}
-                </td>
-                <td className="p-3 space-x-2 whitespace-nowrap">
-                  <button type="button" className="text-xs font-bold uppercase" onClick={() => startEdit(p)}>
-                    Bewerk
-                  </button>
-                  {p.hasAccount ? (
-                    <button
-                      type="button"
-                      className="text-xs font-bold uppercase"
-                      onClick={() => {
-                        setPwPersonId(p.id);
-                        setPwValue('');
-                        setPwMsg('');
-                      }}
+                  <div className="flex flex-wrap gap-1">
+                    <IconButton title={`${p.name} bewerken`} onClick={() => startEdit(p)}>
+                      ✏️
+                    </IconButton>
+                    {!p.hasAccount && p.email ? (
+                      <IconButton title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>
+                        ✉️
+                      </IconButton>
+                    ) : null}
+                    <IconButton
+                      title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`}
+                      tone="warn"
+                      onClick={() => toggleActive(p)}
                     >
-                      Wachtwoord
-                    </button>
-                  ) : null}
-                  {!p.hasAccount && p.email ? (
-                    <button type="button" className="text-xs font-bold uppercase" onClick={() => resend(p)}>
-                      Link opnieuw
-                    </button>
-                  ) : null}
-                  <button type="button" className="text-xs font-bold uppercase" onClick={() => toggleActive(p)}>
-                    {p.active ? 'Deactiveer' : 'Activeer'}
-                  </button>
-                  {!p.active && (p.email || p.phone) ? (
-                    <button
-                      type="button"
-                      className="text-xs font-bold uppercase text-red-800"
-                      onClick={async () => {
-                        if (!window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)) {
-                          return;
-                        }
-                        try {
-                          await api.erasePersonContact(p.id);
-                          await load();
-                        } catch (e) {
-                          setError(e.message);
-                        }
-                      }}
-                    >
-                      Wis contact
-                    </button>
-                  ) : null}
+                      {p.active ? '⛔' : '✅'}
+                    </IconButton>
+                    {!p.active && (p.email || p.phone) ? (
+                      <IconButton
+                        title={`Contact van ${p.name} wissen (AVG)`}
+                        tone="warn"
+                        onClick={async () => {
+                          if (
+                            !window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)
+                          ) {
+                            return;
+                          }
+                          try {
+                            await api.erasePersonContact(p.id);
+                            await load();
+                          } catch (e) {
+                            setError(e.message);
+                          }
+                        }}
+                      >
+                        🧹
+                      </IconButton>
+                    ) : null}
+                    <IconButton title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>
+                      🗑️
+                    </IconButton>
+                  </div>
                 </td>
               </tr>
             ))}
+            {filteredPersons.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="p-4 text-center text-sm text-gray-600">
+                  Geen personen gevonden met deze filters.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
       <p className="text-xs text-gray-600">
-        * = verplichte bardienst. Contactgegevens alleen hier (beheer) zichtbaar. Ouders die een
-        coördinator alleen op naam zet (zonder e-mail) staan hier niet, zodat iemand met een
-        account niet twee keer voorkomt. Die namen beheer je via Mijn team.
+        Contactgegevens alleen hier (beheer) zichtbaar. Ouders die een coördinator alleen op naam
+        zet (zonder e-mail) staan hier niet, zodat iemand met een account niet twee keer voorkomt.
+        Die namen beheer je via Mijn team.
       </p>
       <label className="flex items-center gap-2 text-sm font-semibold">
         <input
@@ -531,6 +800,70 @@ function PersonenBeheer() {
         />
         Toon ook namen zonder account
       </label>
+
+      <div ref={bulkRef} className="vvl-card space-y-3">
+        <h2 className="font-heading text-lg font-black uppercase">Uitnodigingslink versturen</h2>
+        <p className="text-sm text-gray-700">
+          Selecteer een of meer personen met e-mail zonder account (bovenaan de tabel of hieronder)
+          en verstuur de uitnodigingslink via de ingestelde mailtekst (Beheer → E-mail). Personen
+          zonder e-mail worden overgeslagen en na versturen apart gemeld.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold">{selectedIds.length} geselecteerd</span>
+          <button
+            type="button"
+            className="vvl-btn-outline text-xs min-h-[44px]"
+            onClick={toggleSelectAll}
+            disabled={!selectablePersons.length}
+          >
+            {allSelected ? 'Selecteer niets' : 'Selecteer alles (met e-mail, geen account)'}
+          </button>
+          <button
+            type="button"
+            className="vvl-btn-primary text-xs min-h-[44px]"
+            disabled={bulkBusy || !selectedIds.length}
+            onClick={sendBulkInvites}
+          >
+            {bulkBusy ? 'Versturen…' : 'Verstuur uitnodiging(en)'}
+          </button>
+        </div>
+        {selectedIds.length ? (
+          <ul className="flex flex-wrap gap-2 text-xs">
+            {selectedIds.map((id) => {
+              const p = persons.find((x) => x.id === id);
+              if (!p) return null;
+              return (
+                <li key={id} className="rounded-full border border-vvl-border px-3 py-1">
+                  {p.name}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {bulkMsg ? <p className="text-sm text-emerald-800">{bulkMsg}</p> : null}
+      </div>
+
+      <div className="vvl-card space-y-3">
+        <h2 className="font-heading text-lg font-black uppercase">Import / export (Excel)</h2>
+        <p className="text-sm text-gray-700">
+          Download het sjabloon voor de juiste kolommen en toegestane waarden, of exporteer alle
+          huidige personen in dezelfde structuur (her-importeerbaar).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="vvl-btn-outline text-xs min-h-[44px]" onClick={downloadTemplate}>
+            Template downloaden
+          </button>
+          <button
+            type="button"
+            className="vvl-btn-outline text-xs min-h-[44px]"
+            onClick={downloadExport}
+            disabled={exportBusy}
+          >
+            {exportBusy ? 'Exporteren…' : 'Exporteren'}
+          </button>
+        </div>
+      </div>
+
       <PersonImport onDone={() => load(showNameless)} />
     </section>
   );
@@ -565,14 +898,15 @@ function PersonImport({ onDone }) {
 
   return (
     <form onSubmit={submit} className="vvl-card space-y-3">
-      <h2 className="font-heading text-lg font-black uppercase">Personen importeren</h2>
+      <h2 className="font-heading text-lg font-black uppercase">Personen importeren (CSV)</h2>
       <p className="text-sm text-gray-700">
         CSV met kolommen <code>naam;email;telefoon;team;rol;verplichting</code>. Onbekende teams
-        worden niet aangemaakt. Verplichting: geen, verplicht of VR18.
+        worden niet aangemaakt. Verplichting: geen, verplicht of VR18. Liever Excel? Gebruik
+        hierboven "Template downloaden" en "Exporteren".
       </p>
       <button
         type="button"
-        className="vvl-btn-outline text-xs"
+        className="vvl-btn-outline text-xs min-h-[44px]"
         onClick={async () => {
           setError('');
           try {
@@ -605,7 +939,7 @@ function PersonImport({ onDone }) {
         />
         Uitnodigingsmail sturen als SMTP aanstaat
       </label>
-      <button type="submit" className="vvl-btn-outline w-fit" disabled={busy}>
+      <button type="submit" className="vvl-btn-outline w-fit min-h-[44px]" disabled={busy}>
         {busy ? 'Importeren…' : 'CSV importeren'}
       </button>
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}

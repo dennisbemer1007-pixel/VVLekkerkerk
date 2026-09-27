@@ -20,6 +20,7 @@ import { isNamelessRosterPerson } from '../lib/personMatch.js';
 import { trySendInviteEmail } from '../lib/mail.js';
 import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/privacy.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
+import { personTemplateSheets, personExportRowsSheets } from '../lib/personsXlsx.js';
 import { getClubSettings } from '../lib/season.js';
 
 const router = Router();
@@ -64,7 +65,7 @@ router.get(
       const includeNameless = req.query.includeNameless === 'true' && isAdmin;
       const persons = await prisma.person.findMany({
         where: includeInactive ? undefined : { active: true },
-        include: { team: true },
+        include: { team: true, guardian: true },
         orderBy: { name: 'asc' },
       });
       const visible = includeNameless
@@ -148,6 +149,60 @@ router.get(
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="voorbeeld-personen.csv"');
     res.send(`\uFEFF${PERSON_IMPORT_EXAMPLE}`);
+  }),
+);
+
+/** Sjabloon downloaden: headers + toegestane waarden per keuzeveld, geen data. */
+router.get(
+  '/template.xlsx',
+  requireRole(...ADMIN_ROLES)(async (_req, res, next) => {
+    try {
+      const teams = await prisma.team.findMany({ select: { name: true }, orderBy: { name: 'asc' } });
+      const buf = workbookToXlsx(personTemplateSheets(teams));
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="vvl-personen-sjabloon.xlsx"');
+      res.send(buf);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Alle personen exporteren als xlsx (zelfde structuur als het sjabloon, dus her-importeerbaar). */
+router.get(
+  '/export.xlsx',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const includeInactive = req.query.all === 'true';
+      const [persons, teams] = await Promise.all([
+        prisma.person.findMany({
+          where: includeInactive ? undefined : { active: true },
+          include: { team: true, guardian: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.team.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
+      ]);
+      const visible = persons.filter((p) => !isNamelessRosterPerson(p));
+      const buf = workbookToXlsx(personExportRowsSheets(visible, teams));
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.export.xlsx',
+        entity: 'Person',
+        entityId: req.person.id,
+        detail: `${visible.length} personen geëxporteerd`,
+      });
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="vvl-personen-export.xlsx"');
+      res.send(buf);
+    } catch (err) {
+      next(err);
+    }
   }),
 );
 
@@ -317,24 +372,93 @@ router.post(
   }),
 );
 
+/** Bulk: uitnodigingslink (opnieuw) versturen naar geselecteerde personen met e-mail. */
+router.post(
+  '/bulk-invite',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const ids = Array.isArray(req.body.personIds)
+        ? [...new Set(req.body.personIds.map(Number).filter(Boolean))]
+        : [];
+      if (!ids.length) {
+        return res.status(400).json({ error: 'Geen personen geselecteerd' });
+      }
+      let appUrl = '';
+      try {
+        appUrl = resolvePublicAppUrl();
+      } catch (err) {
+        return next(err);
+      }
+
+      const persons = await prisma.person.findMany({ where: { id: { in: ids } } });
+      const sent = [];
+      const failed = [];
+      const skippedNoEmail = [];
+
+      for (const person of persons) {
+        if (!person.email) {
+          skippedNoEmail.push(person.name);
+          continue;
+        }
+        if (person.passwordHash) {
+          failed.push({ name: person.name, reason: 'Heeft al een account' });
+          continue;
+        }
+        const token = createInviteToken();
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { inviteToken: token, inviteExpiresAt: inviteExpiry() },
+        });
+        const link = inviteLink(token, appUrl);
+        const mail = await trySendInviteEmail({ email: person.email, name: person.name, link });
+        if (mail.sent) sent.push(person.name);
+        else failed.push({ name: person.name, reason: mail.reason || 'Mail mislukt' });
+      }
+
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.bulk_invite',
+        entity: 'Person',
+        detail: `${sent.length} verstuurd, ${skippedNoEmail.length} zonder e-mail, ${failed.length} mislukt`,
+      });
+
+      res.json({ sent, failed, skippedNoEmail });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
 router.post(
   '/',
   requireRole(...ADMIN_ROLES)(async (req, res, next) => {
     try {
-      const { name, phone, role, teamId, email, exempted } = req.body;
+      const { name, phone, role, teamId, email, exempted, guardianId } = req.body;
       if (!name?.trim()) {
         return res.status(400).json({ error: 'Naam is verplicht' });
+      }
+      const cleanGuardianId = guardianId ? Number(guardianId) : null;
+      const cleanEmail = email?.trim().toLowerCase() || null;
+      if (!cleanEmail && !cleanGuardianId) {
+        return res.status(400).json({ error: 'Vul een e-mailadres in, of kies "Hoort bij"' });
+      }
+      if (cleanGuardianId) {
+        const guardian = await prisma.person.findUnique({ where: { id: cleanGuardianId } });
+        if (!guardian) {
+          return res.status(400).json({ error: '"Hoort bij"-persoon niet gevonden' });
+        }
       }
       const personNumber = await nextPersonNumber();
       const person = await prisma.person.create({
         data: {
           name: name.trim(),
           personNumber,
-          email: email?.trim().toLowerCase() || null,
+          email: cleanEmail,
           phone: phone?.trim() || null,
           role: normalizeRole(role, 'Vrijwilliger'),
           teamId: teamId ? Number(teamId) : null,
           exempted: Boolean(exempted),
+          guardianId: cleanGuardianId,
           ...preferenceFieldsFromBody(req.body),
         },
       });
@@ -346,7 +470,11 @@ router.post(
         entityId: person.id,
         detail: person.name,
       });
-      res.status(201).json(publicPerson(person, { viewerRole: req.person.role }));
+      const withGuardian = await prisma.person.findUnique({
+        where: { id: person.id },
+        include: { team: true, guardian: true },
+      });
+      res.status(201).json(publicPerson(withGuardian, { viewerRole: req.person.role }));
     } catch (err) {
       next(err);
     }
@@ -377,7 +505,31 @@ router.put(
         return res.json(publicPerson(person, { includeContact: true }));
       }
 
-      const { name, phone, role, active, teamId, email, exempted } = req.body;
+      const { name, phone, role, active, teamId, email, exempted, guardianId } = req.body;
+
+      let cleanGuardianId;
+      if (guardianId !== undefined) {
+        cleanGuardianId = guardianId ? Number(guardianId) : null;
+        if (cleanGuardianId === id) {
+          return res.status(400).json({ error: 'Iemand kan niet aan zichzelf "hoort bij" gekoppeld worden' });
+        }
+        if (cleanGuardianId) {
+          const guardian = await prisma.person.findUnique({ where: { id: cleanGuardianId } });
+          if (!guardian) {
+            return res.status(400).json({ error: '"Hoort bij"-persoon niet gevonden' });
+          }
+        }
+      }
+
+      if (email !== undefined) {
+        const cleanEmail = email?.trim().toLowerCase() || null;
+        const existing = await prisma.person.findUnique({ where: { id } });
+        const willHaveGuardian = cleanGuardianId !== undefined ? cleanGuardianId : existing?.guardianId;
+        if (!cleanEmail && !willHaveGuardian) {
+          return res.status(400).json({ error: 'Vul een e-mailadres in, of kies "Hoort bij"' });
+        }
+      }
+
       const data = {
         ...(name !== undefined && { name: name.trim() }),
         ...(email !== undefined && { email: email?.trim().toLowerCase() || null }),
@@ -385,6 +537,7 @@ router.put(
         ...(role !== undefined && { role: normalizeRole(role, 'Vrijwilliger') }),
         ...(exempted !== undefined && { exempted: Boolean(exempted) }),
         ...(teamId !== undefined && { teamId: teamId ? Number(teamId) : null }),
+        ...(guardianId !== undefined && { guardianId: cleanGuardianId }),
         ...preferenceFieldsFromBody(req.body),
       };
       if (active !== undefined) {
@@ -398,7 +551,7 @@ router.put(
       const person = await prisma.person.update({
         where: { id },
         data,
-        include: { team: true },
+        include: { team: true, guardian: true },
       });
       if (teamId) await syncPrimaryTeamMembership(person.id, Number(teamId));
       await writeAudit({
@@ -409,6 +562,52 @@ router.put(
         detail: person.name,
       });
       res.json(publicPerson(person, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+/** Persoon definitief verwijderen. Alleen mogelijk zonder rooster-historie (anders eerst deactiveren). */
+router.delete(
+  '/:id',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await prisma.person.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: { enrollments: true, children: true, coordinates: true },
+          },
+        },
+      });
+      if (!existing) return res.status(404).json({ error: 'Persoon niet gevonden' });
+      if (existing._count.enrollments > 0) {
+        return res.status(400).json({
+          error: 'Deze persoon heeft rooster-historie en kan niet verwijderd worden. Deactiveer in plaats daarvan.',
+        });
+      }
+      if (existing._count.children > 0) {
+        return res.status(400).json({
+          error: 'Deze persoon heeft nog personen die aan hen "hoort bij". Koppel die eerst los.',
+        });
+      }
+      if (existing._count.coordinates > 0) {
+        return res.status(400).json({
+          error: 'Deze persoon is teamcoördinator van een team. Wijzig dat eerst.',
+        });
+      }
+      await prisma.session.deleteMany({ where: { personId: id } });
+      await prisma.person.delete({ where: { id } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.delete',
+        entity: 'Person',
+        entityId: id,
+        detail: existing.name,
+      });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }
