@@ -126,6 +126,12 @@ export const api = {
     json(`/persons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateMyPreferences: (data) =>
     json('/persons/me/preferences', { method: 'PUT', body: JSON.stringify(data) }),
+  getMyAbsences: () => json('/persons/me/absences'),
+  getPersonAbsences: (personId) => json(`/persons/${personId}/absences`),
+  createPersonAbsence: (personId, data) =>
+    json(`/persons/${personId}/absences`, { method: 'POST', body: JSON.stringify(data) }),
+  deletePersonAbsence: (personId, absenceId) =>
+    json(`/persons/${personId}/absences/${absenceId}`, { method: 'DELETE' }),
   uploadPersonPhoto: async (id, file) => {
     const form = new FormData();
     form.append('photo', file);

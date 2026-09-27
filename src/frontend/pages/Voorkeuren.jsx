@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
+import { formatMatchDate } from '../utils/formatDate.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
 const WEEKDAYS = [
@@ -24,6 +25,7 @@ export default function Voorkeuren() {
   const { user, refresh } = useAuth();
   const [unavailable, setUnavailable] = useState([]);
   const [preferred, setPreferred] = useState([]);
+  const [absences, setAbsences] = useState([]);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -33,6 +35,10 @@ export default function Voorkeuren() {
     setUnavailable(user.unavailableWeekdays || []);
     setPreferred(user.preferredSlots || []);
   }, [user]);
+
+  useEffect(() => {
+    api.getMyAbsences().then(setAbsences).catch(() => {});
+  }, []);
 
   const toggleDay = (day) => {
     setUnavailable((prev) =>
@@ -127,6 +133,29 @@ export default function Voorkeuren() {
           {saving ? 'Opslaan…' : 'Opslaan'}
         </button>
       </form>
+
+      <section className="vvl-card space-y-3">
+        <h2 className="font-heading text-lg font-black uppercase">Mijn afwezigheid</h2>
+        <p className="text-sm text-gray-700">
+          Periodes waarin de barcommissie je niet automatisch inplant. Dit kun je zelf niet
+          wijzigen — vraag de barcommissie om een periode toe te voegen of te verwijderen.
+        </p>
+        {absences.length === 0 ? (
+          <p className="text-sm text-gray-600">Geen afwezigheidsperiodes geregistreerd.</p>
+        ) : (
+          <ul className="space-y-2">
+            {absences.map((a) => (
+              <li
+                key={a.id}
+                className="rounded-sm border border-vvl-border bg-vvl-muted p-3 text-sm"
+              >
+                {formatMatchDate(a.fromDate)} t/m {formatMatchDate(a.toDate)}
+                {a.note ? <span className="block text-gray-700">{a.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="vvl-card space-y-2">
         <h2 className="font-heading text-lg font-black uppercase">Jouw gegevens</h2>

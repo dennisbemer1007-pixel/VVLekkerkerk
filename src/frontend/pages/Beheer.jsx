@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
 import DienstCard from '../components/DienstCard.jsx';
@@ -172,6 +172,129 @@ function GuardianPicker({ persons, value, onChange, excludeId }) {
         E-mail is dan niet verplicht.
       </p>
     </div>
+  );
+}
+
+function PersonAbsencesEditor({ personId, personName }) {
+  const [absences, setAbsences] = useState([]);
+  const [form, setForm] = useState({ fromDate: '', toDate: '', note: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => {
+    api
+      .getPersonAbsences(personId)
+      .then(setAbsences)
+      .catch((e) => setError(e.message));
+  };
+
+  useEffect(() => {
+    setAbsences([]);
+    setError('');
+    if (personId) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personId]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.fromDate || !form.toDate) {
+      setError('Vul begin- en einddatum in.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.createPersonAbsence(personId, form);
+      setForm({ fromDate: '', toDate: '', note: '' });
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (absenceId) => {
+    if (!window.confirm('Deze afwezigheidsperiode verwijderen?')) return;
+    setError('');
+    try {
+      await api.deletePersonAbsence(personId, absenceId);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <section className="vvl-card space-y-4">
+      <h2 className="font-heading text-lg font-black uppercase">
+        Afwezigheid{personName ? ` — ${personName}` : ''}
+      </h2>
+      <p className="text-sm text-gray-700">
+        Periodes waarin deze persoon niet automatisch wordt ingepland (vakantie, langdurige
+        afwezigheid, etc.).
+      </p>
+
+      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label className="vvl-label">Van</label>
+          <input
+            type="date"
+            className="vvl-input min-h-[44px]"
+            value={form.fromDate}
+            onChange={(e) => setForm({ ...form, fromDate: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label className="vvl-label">Tot en met</label>
+          <input
+            type="date"
+            className="vvl-input min-h-[44px]"
+            value={form.toDate}
+            onChange={(e) => setForm({ ...form, toDate: e.target.value })}
+            required
+          />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-1">
+          <label className="vvl-label">Notitie (optioneel)</label>
+          <input
+            className="vvl-input min-h-[44px]"
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            placeholder="bijv. vakantie"
+          />
+        </div>
+        <div className="flex items-end lg:col-span-1">
+          <button type="submit" className="vvl-btn-primary min-h-[44px] w-full" disabled={busy}>
+            {busy ? 'Bezig…' : 'Toevoegen'}
+          </button>
+        </div>
+      </form>
+
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+
+      {absences.length === 0 ? (
+        <p className="text-sm text-gray-600">Geen afwezigheidsperiodes.</p>
+      ) : (
+        <ul className="space-y-2">
+          {absences.map((a) => (
+            <li
+              key={a.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-vvl-border p-3 text-sm"
+            >
+              <span>
+                {toDateInputValue(a.fromDate)} t/m {toDateInputValue(a.toDate)}
+                {a.note ? ` — ${a.note}` : ''}
+              </span>
+              <IconButton title="Verwijderen" tone="danger" onClick={() => remove(a.id)}>
+                🗑
+              </IconButton>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -557,6 +680,13 @@ function PersonenBeheer() {
           ) : null}
         </div>
       </form>
+
+      {editId ? (
+        <PersonAbsencesEditor
+          personId={editId}
+          personName={persons.find((p) => p.id === editId)?.name || ''}
+        />
+      ) : null}
 
       {inviteResult ? (
         <div className="vvl-card space-y-3 border-l-4 border-l-emerald-500">
@@ -1062,6 +1192,9 @@ function DienstenBeheer() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [enrollPick, setEnrollPick] = useState({});
+  const [personSearch, setPersonSearch] = useState({});
+  const [dateFrom, setDateFrom] = useState(todayInputValue());
+  const [dateTo, setDateTo] = useState('');
 
   const load = () =>
     Promise.all([
@@ -1077,6 +1210,19 @@ function DienstenBeheer() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredServices = useMemo(() => {
+    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+    return services.filter((s) => {
+      const d = new Date(s.date);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      // Standaard: alleen toekomstig (vanaf vandaag) als geen tot-filter en from = vandaag
+      if (!dateTo && dateFrom === todayInputValue() && d < from) return false;
+      return true;
+    });
+  }, [services, dateFrom, dateTo]);
 
   const reset = () => {
     setEditId(null);
@@ -1259,14 +1405,43 @@ function DienstenBeheer() {
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
+      <div className="vvl-card grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="vvl-label">Van</label>
+          <input
+            type="date"
+            className="vvl-input min-h-[44px]"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="vvl-label">Tot</label>
+          <input
+            type="date"
+            className="vvl-input min-h-[44px]"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        <p className="sm:col-span-2 text-xs text-gray-600">
+          Standaard vanaf vandaag. Leeg de tot-datum of zet van vroeger om oude diensten te zoeken.
+        </p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
-        {services.map((s) => {
+        {filteredServices.map((s) => {
           const enrolledIds = new Set((s.enrollments || []).map((e) => e.personId));
+          const search = (personSearch[s.id] || '').trim().toLowerCase();
+          const personOptions = persons
+            .filter((p) => !enrolledIds.has(p.id))
+            .filter((p) => !search || p.name.toLowerCase().includes(search));
           return (
             <div key={s.id} className="space-y-2">
               <DienstCard
                 dienst={s}
                 adminMode
+                allowNoShow
                 onAdminRemoveEnrollment={removeEnrollment}
                 onNoShow={async (id) => {
                   try {
@@ -1287,7 +1462,7 @@ function DienstenBeheer() {
                 headerActions={
                   <button
                     type="button"
-                    className="vvl-btn-outline text-xs"
+                    className="vvl-btn-outline min-h-[44px] text-xs"
                     onClick={() => startEdit(s)}
                   >
                     Bewerk
@@ -1296,28 +1471,34 @@ function DienstenBeheer() {
               />
               {!s.draft && s.active !== false ? (
                 <div className="vvl-card flex flex-wrap items-end gap-2 py-3">
-                  <div className="min-w-[180px] flex-1">
-                    <label className="vvl-label">Persoon toevoegen (beheer)</label>
+                  <div className="min-w-[180px] flex-1 space-y-2">
+                    <label className="vvl-label">Persoon toevoegen</label>
+                    <input
+                      className="vvl-input min-h-[44px]"
+                      placeholder="Zoek op naam…"
+                      value={personSearch[s.id] || ''}
+                      onChange={(e) =>
+                        setPersonSearch({ ...personSearch, [s.id]: e.target.value })
+                      }
+                    />
                     <select
-                      className="vvl-input"
+                      className="vvl-input min-h-[44px]"
                       value={enrollPick[s.id] || ''}
                       onChange={(e) =>
                         setEnrollPick({ ...enrollPick, [s.id]: e.target.value })
                       }
                     >
                       <option value="">— Kies —</option>
-                      {persons
-                        .filter((p) => !enrolledIds.has(p.id))
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
+                      {personOptions.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <button
                     type="button"
-                    className="vvl-btn-primary text-xs"
+                    className="vvl-btn-primary min-h-[44px] text-xs"
                     onClick={() => addPerson(s.id)}
                   >
                     Toevoegen
@@ -1327,6 +1508,11 @@ function DienstenBeheer() {
             </div>
           );
         })}
+        {filteredServices.length === 0 ? (
+          <p className="vvl-card text-sm text-gray-600 md:col-span-2">
+            Geen diensten in dit datumbereik.
+          </p>
+        ) : null}
       </div>
     </section>
   );
