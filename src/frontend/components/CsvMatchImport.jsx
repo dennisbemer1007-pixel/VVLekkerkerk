@@ -362,6 +362,26 @@ export default function CsvMatchImport({ onImported }) {
         >
           Voorbeeld laden
         </button>
+        <button
+          type="button"
+          className="vvl-btn-outline min-h-[44px] text-xs"
+          onClick={async () => {
+            setError('');
+            try {
+              const blob = await api.downloadMatchTemplateXlsx();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'vvl-wedstrijden-sjabloon.xlsx';
+              a.click();
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        >
+          Template downloaden
+        </button>
       </div>
 
       {showPaste ? (

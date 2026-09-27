@@ -158,6 +158,17 @@ export const api = {
   getMatches: () => json('/matches'),
   createMatch: (data) => json('/matches', { method: 'POST', body: JSON.stringify(data) }),
   deleteMatch: (id) => json(`/matches/${id}`, { method: 'DELETE' }),
+  downloadMatchTemplateXlsx: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/matches/template.xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Download mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   createEnrollment: (data) =>
     json('/enrollments', { method: 'POST', body: JSON.stringify(data) }),
   deleteEnrollment: (id) => json(`/enrollments/${id}`, { method: 'DELETE' }),
