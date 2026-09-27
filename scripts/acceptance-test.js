@@ -518,13 +518,47 @@ async function main() {
         ),
       );
     }
+
+    const undone = await req('/api/planning/unofficial', { method: 'POST', token: admin });
+    const roundAfterUndo = await req('/api/planning/round', { token: admin });
+    const stillLocked = await req('/api/services?allDates=true', { token: admin });
+    const lockedLeft = (stillLocked.json || []).filter((s) => s.locked).length;
+    mark(
+      record(
+        'officieel terugdraaien ontgrendelt',
+        undone.status === 200 &&
+          (undone.json?.unlocked ?? 0) >= 0 &&
+          roundAfterUndo.json?.official === false &&
+          lockedLeft === 0,
+        `${undone.status} unlocked=${undone.json?.unlocked} official=${roundAfterUndo.json?.official} lockedLeft=${lockedLeft}`,
+      ),
+    );
+    if (open && me.json?.id) {
+      const afterUndoEnroll = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: open.id, personId: me.json.id },
+      });
+      const blockedByOfficial =
+        afterUndoEnroll.status === 403 && /officieel/i.test(afterUndoEnroll.json?.error || '');
+      mark(
+        record(
+          'lisa mag weer na terugdraaien',
+          !blockedByOfficial,
+          `${afterUndoEnroll.status} ${afterUndoEnroll.json?.error || afterUndoEnroll.json?.kind || ''}`,
+        ),
+      );
+      if (afterUndoEnroll.status === 201 && afterUndoEnroll.json?.id) {
+        await req(`/api/enrollments/${afterUndoEnroll.json.id}`, { method: 'DELETE', token: admin });
+      }
+    }
   } finally {
     await prisma.service.updateMany({ data: { locked: false } });
     const restoreStatus =
       before.json?.status && before.json.status !== 'OFFICIAL' ? before.json.status : 'PUBLISHED';
     await prisma.planningRound.update({
       where: { id: 1 },
-      data: { official: false, status: restoreStatus },
+      data: { official: false, status: restoreStatus === 'PUBLISHED' ? 'VOLUNTEER_OPEN' : restoreStatus },
     });
     await prisma.$disconnect();
   }

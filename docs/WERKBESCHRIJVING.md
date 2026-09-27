@@ -105,7 +105,7 @@ Ga naar **Beheer → Planning**. Daar staan **4 genummerde stappen**:
 1. **Diensten aanmaken / bijwerken** — diensten uit regels, thuiswedstrijden en activiteiten (handmatige/vastgezette blijven staan). Zorg dat Wedstrijden en Dienstregels kloppen.
 2. **Concept publiceren** — vrijwilligers mogen inschrijven tot de deadline (optioneel: mail vrijwilligers).
 3. **Vul open plekken (verplicht)** — schrijft verplichte leden, VR18+ en inhaal **automatisch** in op open persoonlijke plekken (eerlijke volgorde FO §34). Teamdiensten vult de teamco via **Mijn team** vóór stap 4.
-4. **Maak officieel** — rooster vast voor de kantine. Vrijwilligers schrijven zich niet meer zelf in of uit. Onderling ruilen van twee persoonlijke diensten blijft mogelijk als beide akkoord zijn. Barcommissie kan nog wijzigen; de coördinator kan een teamdienst nog op naam zetten. Daarna print/Excel; herinneringen 2 dagen van tevoren als SMTP aanstaat.
+4. **Maak officieel** — rooster vast voor de kantine. Vrijwilligers schrijven zich niet meer zelf in of uit. Onderling ruilen van twee persoonlijke diensten blijft mogelijk als beide akkoord zijn. Barcommissie kan nog wijzigen; de coördinator kan een teamdienst nog op naam zetten. Officieel maken kan later worden teruggedraaid. Daarna print/Excel; herinneringen 2 dagen van tevoren als SMTP aanstaat.
 
 Status van de ronde staat bovenaan Beheer → Planning. Korte mailtekst voor testers: [MAIL-TOELICHTING-PLANNING.md](MAIL-TOELICHTING-PLANNING.md).
 

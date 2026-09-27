@@ -99,7 +99,7 @@ export const PAGE_HELP = {
       'Stap 1: Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)',
       'Stap 2: Concept publiceren (vrijwilligers mogen inschrijven tot de deadline)',
       'Stap 3: Vul open vrijwilligersplekken — teamplekken vult de bardienstcoördinator',
-      'Stap 4: Maak officieel (vergrendelt in- en uitschrijven; onderling ruilen blijft mogelijk; coördinator kan een teamdienst nog op naam zetten)',
+      'Stap 4: Maak officieel (vergrendelt in- en uitschrijven; onderling ruilen blijft mogelijk; coördinator kan een teamdienst nog op naam zetten). Mag later worden teruggedraaid',
     ],
   },
   beheerRegels: {

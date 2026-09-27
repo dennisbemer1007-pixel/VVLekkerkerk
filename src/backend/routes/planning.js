@@ -16,7 +16,7 @@ import { resolvePublicAppUrl } from '../lib/appUrl.js';
 import { fillMandatoryPersonal } from '../lib/autoFill.js';
 import { buildPlanningControls } from '../lib/planningControls.js';
 import { writeAudit } from '../lib/audit.js';
-import { markPlanningOfficial } from '../lib/official.js';
+import { markPlanningOfficial, unmarkPlanningOfficial } from '../lib/official.js';
 import { runDutyReminders } from '../lib/reminders.js';
 import { periodFromRound, periodJson, resolvePlanningPeriod } from '../lib/planningPeriod.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
@@ -412,6 +412,25 @@ router.post(
         entity: 'PlanningRound',
         entityId: 1,
         detail: `${result.locked} dienst(en) vergrendeld`,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/unofficial',
+  admin(async (req, res, next) => {
+    try {
+      const result = await unmarkPlanningOfficial(req.body ?? {});
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'planning.unofficial',
+        entity: 'PlanningRound',
+        entityId: 1,
+        detail: `${result.unlocked} dienst(en) ontgrendeld`,
       });
       res.json(result);
     } catch (err) {
