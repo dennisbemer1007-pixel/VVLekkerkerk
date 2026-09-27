@@ -2,6 +2,14 @@ import nodemailer from 'nodemailer';
 import prisma from './prisma.js';
 import { canonicalAccessRole } from './roles.js';
 import { sealSecret, unsealSecret } from './secrets.js';
+import { resolvePublicAppUrl } from './appUrl.js';
+import {
+  dienstLabel,
+  formatDutyDate,
+  renderMail,
+  resolveMailTemplates,
+  serializeMailTemplates,
+} from './mailTemplates.js';
 
 const DEFAULT_ID = 1;
 
@@ -35,6 +43,7 @@ export function publicMailSettings(settings) {
     fromName: settings.fromName,
     passwordSet: Boolean(settings.password),
     isReady: isMailReady(settings),
+    templates: resolveMailTemplates(settings.templates),
   };
 }
 
@@ -68,6 +77,9 @@ export async function saveMailSettings(input) {
   // Leeg wachtwoordveld = bestaand wachtwoord behouden
   if (input.password !== undefined && String(input.password).length > 0) {
     data.password = sealSecret(String(input.password));
+  }
+  if (input.templates !== undefined) {
+    data.templates = serializeMailTemplates(input.templates);
   }
 
   return prisma.mailSettings.upsert({
@@ -141,30 +153,9 @@ export async function verifyMailConnection(settingsOverride) {
   return true;
 }
 
-export function inviteEmailContent({ name, link }) {
-  const subject = 'Uitnodiging VVL Planning App';
-  const text = `Hoi ${name},
-
-Je bent uitgenodigd voor de VVL Planning App van V.V. Lekkerkerk.
-
-Maak je account aan via deze link:
-${link}
-
-De link is 14 dagen geldig.
-
-Groet,
-V.V. Lekkerkerk`;
-
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p>Je bent uitgenodigd voor de <strong>VVL Planning App</strong> van V.V. Lekkerkerk.</p>
-    <p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;font-weight:bold;border-radius:999px;">Account aanmaken</a></p>
-    <p>Of kopieer deze link:<br><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>
-    <p>De link is 14 dagen geldig.</p>
-    <p>Groet,<br>V.V. Lekkerkerk</p>
-  `;
-
-  return { subject, text, html };
+export function inviteEmailContent({ name, link, template }) {
+  const templates = resolveMailTemplates(template ? { invite: template } : null);
+  return renderMail(templates.invite, { naam: name, link });
 }
 
 function escapeHtml(s) {
@@ -175,19 +166,68 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+function safeAppUrl() {
+  try {
+    return resolvePublicAppUrl();
+  } catch {
+    return '';
+  }
+}
+
 export async function trySendInviteEmail({ email, name, link }) {
   const settings = await getMailSettings();
   if (!isMailReady(settings)) {
     return { sent: false, reason: 'not_configured' };
   }
   try {
-    const { subject, text, html } = inviteEmailContent({ name, link });
+    const templates = resolveMailTemplates(settings.templates);
+    const { subject, text, html } = inviteEmailContent({
+      name,
+      link,
+      template: templates.invite,
+    });
     await sendMail({ to: email, subject, text, html });
     return { sent: true };
   } catch (err) {
     console.error('[Mail] Uitnodiging versturen mislukt:', err.message);
     return { sent: false, reason: err.message };
   }
+}
+
+export async function trySendScheduledConfirmation({ person, service }) {
+  if (!person?.email || !service) return { sent: false, reason: 'no_email' };
+  const settings = await getMailSettings();
+  if (!isMailReady(settings)) return { sent: false, reason: 'not_configured' };
+  try {
+    const templates = resolveMailTemplates(settings.templates);
+    const content = renderMail(templates.scheduled, {
+      naam: person.name,
+      datum: formatDutyDate(service.date),
+      tijd: service.time || '',
+      dienst: dienstLabel(service.type),
+      link: safeAppUrl(),
+    });
+    await sendMail({ to: person.email, ...content });
+    return { sent: true };
+  } catch (err) {
+    console.error('[Mail] Bevestiging mislukt', person.id, err.message);
+    return { sent: false, reason: err.message };
+  }
+}
+
+export async function notifyPlanningReady() {
+  const settings = await getMailSettings();
+  if (!isMailReady(settings)) {
+    return { sent: 0, failed: 0, skipped: 0, reason: 'not_configured' };
+  }
+  const people = await prisma.person.findMany({
+    where: { active: true, email: { not: null }, passwordHash: { not: null } },
+  });
+  const templates = resolveMailTemplates(settings.templates);
+  const link = safeAppUrl();
+  return sendBulk(people, (person) =>
+    renderMail(templates.planningReady, { naam: person.name, link }),
+  );
 }
 
 export function passwordResetEmailContent({ name, link }) {

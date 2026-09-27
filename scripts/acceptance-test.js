@@ -191,6 +191,52 @@ async function main() {
       String(propose.status),
     ),
   );
+  const periodEnd = propose.json?.period?.to ? new Date(propose.json.period.to) : null;
+  const far = new Date();
+  far.setMonth(far.getMonth() + 8);
+  const farService = await req('/api/services', {
+    method: 'POST',
+    token: admin,
+    body: {
+      date: far.toISOString().slice(0, 10),
+      time: '10:00 - 12:00',
+      required: 2,
+      type: 'BAR',
+      note: 'Buiten planning',
+    },
+  });
+  const lisaUpcoming = await req('/api/services', { token: lisa });
+  const seenBeyond = (lisaUpcoming.json || []).filter(
+    (s) => periodEnd && new Date(s.date).getTime() > periodEnd.getTime(),
+  );
+  mark(
+    record(
+      'vrijwilliger ziet geen diensten na planningsdatum',
+      farService.status === 201 &&
+        Boolean(periodEnd) &&
+        Array.isArray(lisaUpcoming.json) &&
+        seenBeyond.length === 0,
+      seenBeyond.length
+        ? seenBeyond.map((s) => String(s.date).slice(0, 10)).join(',')
+        : String(farService.status),
+    ),
+  );
+  if (farService.json?.id && lisaMe.json?.id) {
+    const farEnroll = await req('/api/enrollments', {
+      method: 'POST',
+      token: lisa,
+      body: { serviceId: farService.json.id, personId: lisaMe.json.id },
+    });
+    mark(
+      record(
+        'vrijwilliger kan niet inschrijven na planningsdatum',
+        farEnroll.status === 403,
+        `${farEnroll.status} ${farEnroll.json?.error || ''}`,
+      ),
+    );
+  } else {
+    mark(record('vrijwilliger kan niet inschrijven na planningsdatum', false, 'geen dienst of lisa-id'));
+  }
   const afterPropose = await req('/api/services', { token: admin });
   const morningDuty = (afterPropose.json || []).find(
     (s) =>
@@ -211,18 +257,22 @@ async function main() {
         : 'geen teamdienst',
     ),
   );
-  const afternoonDuty = (afterPropose.json || []).find(
+  const afternoonDuties = (afterPropose.json || []).filter(
     (s) =>
       s.slot === 'AFTERNOON' &&
       s.type === 'BAR' &&
       (s.teamDuties || []).some((d) => /O15|JO15/i.test(d.team?.name || '')),
   );
+  const afternoonDuty =
+    afternoonDuties.find((s) => (s.capacity?.teamOpen ?? 0) > 0) || afternoonDuties[0];
   mark(
     record(
-      'zaterdag middag 2 teamplekken',
+      'zaterdag middag 2 team + 1 open',
       Boolean(afternoonDuty) &&
+        afternoonDuty.required === 3 &&
         (afternoonDuty.capacity?.teamReserved ?? 0) >= 2 &&
-        (afternoonDuty.capacity?.personalCapacity ?? 0) === 0,
+        (afternoonDuty.capacity?.personalCapacity ?? 0) === 1 &&
+        (afternoonDuty.enrolled ?? 0) >= (afternoonDuty.capacity?.teamReserved ?? 0),
       afternoonDuty
         ? `reserved ${afternoonDuty.capacity?.teamReserved} personal ${afternoonDuty.capacity?.personalCapacity}`
         : 'geen teamdienst',
@@ -256,8 +306,9 @@ async function main() {
     mark(
       record(
         'vrijwilliger geen teamplek',
-        lisaTeamSpot.status === 409,
-        String(lisaTeamSpot.status),
+        lisaTeamSpot.status === 409 ||
+          (lisaTeamSpot.status === 201 && lisaTeamSpot.json?.kind !== 'TEAM'),
+        `${lisaTeamSpot.status} ${lisaTeamSpot.json?.kind || lisaTeamSpot.json?.error || ''}`,
       ),
     );
   } else {
@@ -266,19 +317,37 @@ async function main() {
 
   const jo15 = (dash.json?.teams || []).find((t) => /O15|JO15/i.test(t.name));
   if (jo15 && afternoonDuty) {
+    const parentName = `Test Ouder ${Date.now()}`;
     const parent = await req(`/api/teams/${jo15.id}/parents`, {
       method: 'POST',
       token: sandra,
-      body: { name: 'Test Ouder Cheryl' },
+      body: { name: parentName },
     });
     mark(
       record(
         'coordinator ouder op naam',
-        parent.status === 201 && parent.json?.name === 'Test Ouder Cheryl' && parent.json?.hasAccount === false,
+        parent.status === 201 && parent.json?.name === parentName && parent.json?.hasAccount === false,
         String(parent.status),
       ),
     );
+    const again = await req(`/api/teams/${jo15.id}/parents`, {
+      method: 'POST',
+      token: sandra,
+      body: { name: parentName },
+    });
+    mark(
+      record(
+        'zelfde naam koppelt bestaand, geen tweede persoon',
+        again.status === 200 && again.json?.linked === true && again.json?.id === parent.json?.id,
+        `${again.status} ${again.json?.id || again.json?.error || ''}`,
+      ),
+    );
     if (parent.json?.id) {
+      for (const taken of afternoonDuty.enrollments || []) {
+        if (taken.kind === 'TEAM') {
+          await req(`/api/enrollments/${taken.id}`, { method: 'DELETE', token: admin });
+        }
+      }
       const fill = await req('/api/enrollments', {
         method: 'POST',
         token: sandra,
@@ -287,10 +356,29 @@ async function main() {
       mark(
         record(
           'coordinator vult teamplek',
-          fill.status === 201 && fill.json?.kind === 'TEAM',
-          `${fill.status} ${fill.json?.kind || fill.json?.error || ''}`,
+          fill.status === 201 &&
+            fill.json?.kind === 'TEAM' &&
+            /coördinator/i.test(fill.json?.reason || ''),
+          `${fill.status} ${fill.json?.kind || ''} ${fill.json?.reason || fill.json?.error || ''}`,
         ),
       );
+      const sandraMe = await req('/api/auth/me', { token: sandra });
+      if (sandraMe.json?.id) {
+        const selfFill = await req('/api/enrollments', {
+          method: 'POST',
+          token: sandra,
+          body: { serviceId: afternoonDuty.id, personId: sandraMe.json.id, forTeamId: jo15.id },
+        });
+        mark(
+          record(
+            'coordinator zichzelf telt als coördinator',
+            selfFill.status === 201 &&
+              selfFill.json?.kind === 'TEAM' &&
+              /coördinator/i.test(selfFill.json?.reason || ''),
+            `${selfFill.status} ${selfFill.json?.reason || selfFill.json?.error || ''}`,
+          ),
+        );
+      }
     } else {
       mark(record('coordinator vult teamplek', false, 'geen ouder-id'));
     }
@@ -358,6 +446,78 @@ async function main() {
         ),
       );
     }
+
+    const volunteerEmails = [
+      'lisa@vvl.demo',
+      'tom@vvl.demo',
+      'fatima@vvl.demo',
+      'peter@vvl.demo',
+      'anneke@vvl.demo',
+      'kevin@vvl.demo',
+      'noa@vvl.demo',
+      'erik@vvl.demo',
+    ];
+    const tokenByPersonId = {};
+    for (const email of volunteerEmails) {
+      const who = await req('/api/auth/me', { token: tokens[email] });
+      if (who.json?.id) tokenByPersonId[who.json.id] = tokens[email];
+    }
+    const openSwaps = await req('/api/swaps', { token: admin });
+    for (const pending of openSwaps.json || []) {
+      if (pending.status === 'PENDING_PEER' || pending.status === 'PENDING_COMMITTEE') {
+        await req(`/api/swaps/${pending.id}/cancel`, { method: 'POST', token: admin, body: {} });
+      }
+    }
+    const lockedServices = await req('/api/services?allDates=true', { token: admin });
+    const lockedServiceIds = new Set(
+      (lockedServices.json || []).filter((s) => s.locked).map((s) => s.id),
+    );
+    const candidates = await req('/api/swaps/candidates', { token: lisa });
+    const mineShift = (candidates.json?.mine || []).find((e) => lockedServiceIds.has(e.service?.id));
+    const otherShift = (candidates.json?.others || []).find(
+      (e) => lockedServiceIds.has(e.service?.id) && tokenByPersonId[e.person?.id],
+    );
+    if (!mineShift || !otherShift) {
+      mark(
+        record(
+          'ruil na officieel rooster',
+          false,
+          `mine ${candidates.json?.mine?.length ?? 0} other ${candidates.json?.others?.length ?? 0} locked ${lockedServiceIds.size}`,
+        ),
+      );
+    } else {
+      const created = await req('/api/swaps', {
+        method: 'POST',
+        token: lisa,
+        body: { fromEnrollmentId: mineShift.id, toEnrollmentId: otherShift.id },
+      });
+      let accepted = null;
+      if (created.status === 201 && created.json?.id) {
+        accepted = await req(`/api/swaps/${created.json.id}/accept`, {
+          method: 'POST',
+          token: tokenByPersonId[otherShift.person.id],
+          body: {},
+        });
+        if (accepted.status === 409 && accepted.json?.code === 'MATCH_BLOCK') {
+          accepted = await req(`/api/swaps/${created.json.id}/accept`, {
+            method: 'POST',
+            token: tokenByPersonId[otherShift.person.id],
+            body: { ignoreMatchBlock: true },
+          });
+        }
+      }
+      const afterSwap = await req('/api/swaps/candidates', { token: lisa });
+      const lisaTookOther = (afterSwap.json?.mine || []).some(
+        (e) => e.service?.id === otherShift.service.id,
+      );
+      mark(
+        record(
+          'ruil na officieel rooster',
+          created.status === 201 && accepted?.status === 200 && accepted.json?.status === 'APPROVED' && lisaTookOther,
+          `${created.status} ${accepted?.status || ''} ${accepted?.json?.status || accepted?.json?.error || created.json?.error || ''}`,
+        ),
+      );
+    }
   } finally {
     await prisma.service.updateMany({ data: { locked: false } });
     const restoreStatus =
@@ -370,6 +530,45 @@ async function main() {
   }
   const after = await req('/api/planning/round', { token: admin });
   mark(record('officieel teruggezet na test', after.json?.official === false));
+
+  const shortTo = new Date();
+  shortTo.setDate(shortTo.getDate() + 14);
+  const shortened = await req('/api/planning/sync', {
+    method: 'POST',
+    token: admin,
+    body: {
+      from: new Date().toISOString().slice(0, 10),
+      to: shortTo.toISOString().slice(0, 10),
+    },
+  });
+  const shortEnd = shortened.json?.period?.to ? new Date(shortened.json.period.to) : null;
+  const afterShort = await req('/api/services?allDates=true&activeOnly=false', { token: admin });
+  const leftoverAuto = (afterShort.json || []).filter(
+    (s) =>
+      s.origin === 'AUTO' &&
+      !s.locked &&
+      shortEnd &&
+      new Date(s.date).getTime() > shortEnd.getTime() &&
+      !(s.enrollments || []).length,
+  );
+  mark(
+    record(
+      'lege diensten na nieuwe einddatum verdwijnen',
+      shortened.status === 201 && leftoverAuto.length === 0,
+      leftoverAuto.length ? `${leftoverAuto.length} over` : String(shortened.status),
+    ),
+  );
+  const lisaAfterShort = await req('/api/services', { token: lisa });
+  const lisaBeyondShort = (lisaAfterShort.json || []).filter(
+    (s) => shortEnd && new Date(s.date).getTime() > shortEnd.getTime(),
+  );
+  mark(
+    record(
+      'vrijwilliger stopt bij nieuwe einddatum',
+      Array.isArray(lisaAfterShort.json) && lisaBeyondShort.length === 0,
+      lisaBeyondShort.map((s) => String(s.date).slice(0, 10)).join(','),
+    ),
+  );
 
   console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
   process.exit(ok ? 0 : 1);

@@ -37,11 +37,14 @@ function Protected({ children, feature }) {
 }
 
 function RoleHome() {
-  const { isLoggedIn, loading, can } = useAuth();
+  const { isLoggedIn, loading, can, user } = useAuth();
   if (loading) {
     return <p className="text-center text-sm text-gray-600">Laden…</p>;
   }
   if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (user?.role === 'Admin' || user?.role === 'Bestuur') {
+    return <Navigate to="/beheer?tab=personen" replace />;
+  }
   if (can('dashboard')) return <Dashboard />;
   if (can('inschrijven')) return <Navigate to="/inschrijven" replace />;
   if (can('beheer')) return <Navigate to="/beheer" replace />;

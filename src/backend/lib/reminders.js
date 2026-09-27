@@ -2,36 +2,27 @@ import prisma from './prisma.js';
 import { endOfDay, startOfDay } from './dates.js';
 import { isMailReady, sendMail, getMailSettings } from './mail.js';
 import { resolvePublicAppUrl } from './appUrl.js';
-import { serviceLocation } from './serviceHelpers.js';
+import { dienstLabel, formatDutyDate, renderMail, resolveMailTemplates } from './mailTemplates.js';
+
+export const REMINDER_DAYS_AHEAD = 2;
 
 export const REMINDER_DECISION =
-  'E-mailherinnering 1 dag voor een ingeplande dienst, alleen als SMTP aanstaat. Geen push/WhatsApp. Productie-server moet wakker blijven (geen Free-sleep) wil dit betrouwbaar lopen.';
+  'E-mailherinnering 2 dagen voor een ingeplande dienst, alleen als SMTP aanstaat. Geen push/WhatsApp. De tekst is aanpasbaar in Beheer → E-mail. Productie-server moet wakker blijven (geen Free-sleep) wil dit betrouwbaar lopen.';
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+export function reminderWindow(now = new Date()) {
+  const day = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + REMINDER_DAYS_AHEAD));
+  return { from: day, to: endOfDay(day) };
 }
 
-export function dutyReminderEmail({ name, dateText, time, typeLabel, appUrl }) {
-  const subject = `Herinnering dienst ${dateText}`;
-  const text = `Hoi ${name},
-
-Je staat morgen op de ${typeLabel} (${time}).
-
-Bekijk de planning: ${appUrl || 'de VVL Planning App'}
-
-Groet,
-V.V. Lekkerkerk`;
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p>Je staat <strong>morgen</strong> op de ${escapeHtml(typeLabel)} (${escapeHtml(time)}).</p>
-    <p><a href="${escapeHtml(appUrl || '#')}">Open de VVL Planning App</a></p>
-    <p>Groet,<br>V.V. Lekkerkerk</p>
-  `;
-  return { subject, text, html };
+export function dutyReminderEmail({ name, dateText, time, typeLabel, appUrl, template }) {
+  const templates = resolveMailTemplates(template ? { reminder: template } : null);
+  return renderMail(templates.reminder, {
+    naam: name,
+    datum: dateText,
+    tijd: time,
+    dienst: typeLabel,
+    link: appUrl || '',
+  });
 }
 
 let lastRunAt = 0;
@@ -49,8 +40,8 @@ export async function runDutyReminders({ now = new Date() } = {}) {
     return { sent: 0, failed: 0, skipped: 0, reason: 'not_configured' };
   }
 
-  const tomorrow = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
-  const to = endOfDay(tomorrow);
+  const { from, to } = reminderWindow(now);
+  const templates = resolveMailTemplates(settings.templates);
 
   const enrollments = await prisma.enrollment.findMany({
     where: {
@@ -59,7 +50,7 @@ export async function runDutyReminders({ now = new Date() } = {}) {
       service: {
         active: true,
         draft: false,
-        date: { gte: tomorrow, lte: to },
+        date: { gte: from, lte: to },
       },
       person: { active: true, email: { not: null } },
     },
@@ -82,18 +73,13 @@ export async function runDutyReminders({ now = new Date() } = {}) {
       continue;
     }
     try {
-      const dateText = new Date(enrollment.service.date).toLocaleDateString('nl-NL', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      });
-      const typeLabel = serviceLocation(enrollment.service.type) === 'Keuken' ? 'keukendienst' : 'bardienst';
       const content = dutyReminderEmail({
         name: enrollment.person.name,
-        dateText,
+        dateText: formatDutyDate(enrollment.service.date),
         time: enrollment.service.time,
-        typeLabel,
+        typeLabel: dienstLabel(enrollment.service.type),
         appUrl,
+        template: templates.reminder,
       });
       await sendMail({ to: enrollment.person.email, ...content });
       await prisma.enrollment.update({

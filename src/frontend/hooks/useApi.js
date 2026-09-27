@@ -112,7 +112,15 @@ export const api = {
   createService: (data) => json('/services', { method: 'POST', body: JSON.stringify(data) }),
   updateService: (id, data) =>
     json(`/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  getPersons: (all = false) => json(`/persons${all ? '?all=true' : ''}`),
+  getPersons: (all = false, { includeNameless = false } = {}) => {
+    const params = {};
+    if (all) params.all = 'true';
+    if (includeNameless) params.includeNameless = 'true';
+    return json(`/persons${qs(params)}`);
+  },
+  getMyChildren: () => json('/persons/me/children'),
+  addMyChild: (data) => json('/persons/me/children', { method: 'POST', body: JSON.stringify(data) }),
+  deleteMyChild: (id) => json(`/persons/me/children/${id}`, { method: 'DELETE' }),
   createPerson: (data) => json('/persons', { method: 'POST', body: JSON.stringify(data) }),
   updatePerson: (id, data) =>
     json(`/persons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -140,6 +148,7 @@ export const api = {
   createTeam: (data) => json('/teams', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id, data) =>
     json(`/teams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTeam: (id) => json(`/teams/${id}`, { method: 'DELETE' }),
   getMatches: () => json('/matches'),
   createMatch: (data) => json('/matches', { method: 'POST', body: JSON.stringify(data) }),
   deleteMatch: (id) => json(`/matches/${id}`, { method: 'DELETE' }),
@@ -227,11 +236,28 @@ export const api = {
   getTeamDashboard: () => json('/teams/dashboard'),
   addTeamParent: (teamId, data) =>
     json(`/teams/${teamId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
+  updateTeamParent: (teamId, personId, data) =>
+    json(`/teams/${teamId}/parents/${personId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTeamParent: (teamId, personId) =>
+    json(`/teams/${teamId}/parents/${personId}`, { method: 'DELETE' }),
+  reassignEnrollment: (id, data) =>
+    json(`/enrollments/${id}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
   getClubSettings: () => json('/settings/club'),
   rolloverSeason: (data) =>
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),
   importPersons: (data) => json('/persons/import', { method: 'POST', body: JSON.stringify(data) }),
+  downloadPersonCsvExample: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/import-example`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Download mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   exportMyData: () => json('/persons/me/export'),
   downloadMyDataExcel: async () => {
     const headers = {};

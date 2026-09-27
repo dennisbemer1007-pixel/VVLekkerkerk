@@ -7,8 +7,10 @@ import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
 import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../src/backend/lib/season.js';
-import { parsePersonCsv, validatePersonRows } from '../src/backend/lib/csvPersons.js';
-import { dutyReminderEmail } from '../src/backend/lib/reminders.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../src/backend/lib/csvPersons.js';
+import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
+import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
+import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
 import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
 import {
@@ -33,11 +35,18 @@ import {
 } from '../src/backend/lib/matchPlanning.js';
 import {
   eligibleTeamDutyCandidates,
+  occupiedSlots,
   recordTeamDutyStand,
   requiredForTeamDuties,
+  serviceCapacity,
   teamDutyAssignments,
 } from '../src/backend/lib/teamDutyPlanning.js';
-import { resolvePlanningPeriod } from '../src/backend/lib/planningPeriod.js';
+import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
+import {
+  clampServiceDateFilter,
+  isWithinPlanningPeriod,
+  resolvePlanningPeriod,
+} from '../src/backend/lib/planningPeriod.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
 import {
   SLOT_ROWS,
@@ -387,13 +396,16 @@ const lockedSwap = swapBlockers({
     personId: 2,
     kind: 'PERSONAL',
     noShow: false,
-    service: { active: true, draft: false, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
+    service: { active: true, draft: false, locked: true, date: new Date('2026-10-08'), enrollments: [{ personId: 2, id: 2 }] },
   },
   fromPerson: { blocks: [] },
   toPerson: { blocks: [] },
   now: new Date('2026-09-13'),
 });
-assert('ruil weigert officieel rooster', lockedSwap.ok === false);
+assert(
+  'ruil mag op officieel rooster',
+  lockedSwap.ok === true && lockedSwap.errors.length === 0,
+);
 
 assert(
   'unavailable Monday',
@@ -459,6 +471,24 @@ const reminder = dutyReminderEmail({
   appUrl: 'https://example.test',
 });
 assert('reminder subject has date', reminder.subject.includes('14 september'));
+assert('reminder is two days ahead', reminder.text.includes('twee dagen'));
+const window = reminderWindow(new Date('2026-09-22T15:00:00'));
+assert(
+  'reminder window is day plus two',
+  window.from.getDate() === 24 && window.to.getDate() === 24,
+);
+const filled = renderMail(resolveMailTemplates(null).scheduled, {
+  naam: 'Lisa',
+  datum: 'zaterdag 3 oktober',
+  tijd: '12:00 - 16:30',
+  dienst: 'bardienst',
+  link: 'https://example.test',
+});
+assert('scheduled mail has date and time', filled.text.includes('3 oktober') && filled.text.includes('12:00'));
+assert('voorbeeld csv heeft kolommen', PERSON_IMPORT_EXAMPLE.startsWith('naam;email;telefoon;team;rol;verplichting'));
+assert('naam normaliseren', normalizePersonName('José  van Dijk') === 'jose van dijk');
+assert('naamloos niet in beheer', isNamelessRosterPerson({ email: null, passwordHash: null }) === true);
+assert('account wel in beheer', isNamelessRosterPerson({ email: 'a@b.c', passwordHash: 'x' }) === false);
 
 const swapMail = swapCommitteeEmailContent({
   name: 'Mark',
@@ -620,6 +650,29 @@ assert(
   teamDutyAssignments(secondRule, [mo17Home, o12Home]).length === 1 &&
     teamDutyAssignments(secondRule, [mo17Home, o12Home])[0].team.id === 17,
 );
+const afternoonRule = defaultServiceRuleSeed().find((rule) => rule.name === 'Zaterdag bar tweede shift');
+assert(
+  'zaterdagmiddag is 3 plekken waarvan 2 team',
+  afternoonRule?.required === 3 && afternoonRule?.teamDutyReserved === 2,
+);
+const emptyAfternoon = serviceCapacity({
+  required: 3,
+  teamDuties: [{ teamId: 15, reserved: 2 }],
+  enrollments: [],
+});
+assert(
+  'teamplekken tellen als bezet zonder naam',
+  emptyAfternoon.personalCapacity === 1 && occupiedSlots(emptyAfternoon) === 2,
+);
+const namedParent = serviceCapacity({
+  required: 3,
+  teamDuties: [{ teamId: 15, reserved: 2 }],
+  enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
+});
+assert(
+  'genoemde ouder zit in de teamplekken',
+  occupiedSlots(namedParent) === 2 && namedParent.teamOpen === 1,
+);
 assert(
   'twee oudere teams thuis → middag blijft 2 plekken',
   requiredForTeamDuties(
@@ -637,6 +690,40 @@ assert(
 assert(
   'standaard einddatum tot 31 dec in september',
   defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2026-12-31',
+);
+
+const volunteerBounds = resolvePlanningPeriod({ from: '2026-09-19', to: '2026-10-13' });
+const upcomingWindow = clampServiceDateFilter(
+  { gte: new Date('2026-09-22T00:00:00') },
+  volunteerBounds,
+);
+assert(
+  'vrijwilliger plant niet voorbij de planningsdatum',
+  toIsoDate(upcomingWindow.gte) === '2026-09-22' && toIsoDate(upcomingWindow.lte) === '2026-10-13',
+);
+const farQuery = clampServiceDateFilter(
+  { gte: new Date('2026-09-22T00:00:00'), lte: new Date('2026-12-31T23:59:59') },
+  volunteerBounds,
+);
+assert(
+  'gevraagde einddatum wordt afgekapt op de planning',
+  toIsoDate(farQuery.lte) === '2026-10-13',
+);
+const beforeStart = clampServiceDateFilter(
+  { gte: new Date('2026-09-01T00:00:00') },
+  volunteerBounds,
+);
+assert(
+  'vrijwilliger plant niet voor de start van de planning',
+  toIsoDate(beforeStart.gte) === '2026-09-19',
+);
+assert(
+  'einddag van de planning telt nog mee',
+  isWithinPlanningPeriod(new Date('2026-10-13T12:00:00'), volunteerBounds) === true,
+);
+assert(
+  'dag na de planning telt niet mee',
+  isWithinPlanningPeriod(new Date('2026-10-14T00:00:00'), volunteerBounds) === false,
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

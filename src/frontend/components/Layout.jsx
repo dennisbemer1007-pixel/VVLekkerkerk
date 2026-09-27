@@ -1,22 +1,58 @@
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import NotificationBell from './NotificationBell.jsx';
+
+/** Beheer-pagina’s als topnavigatie voor Admin (zie schermafbeelding). */
+const ADMIN_BEHEER_TABS = [
+  { id: 'personen', label: 'Personen' },
+  { id: 'diensten', label: 'Diensten' },
+  { id: 'planning', label: 'Planning' },
+  { id: 'ruilen', label: 'Ruilen' },
+  { id: 'regels', label: 'Dienstregels' },
+  { id: 'activiteiten', label: 'Jaarplanning' },
+  { id: 'teams', label: 'Teams' },
+  { id: 'mail', label: 'E-mail' },
+  { id: 'club', label: 'Club' },
+];
+
+function isAdminRoleName(role) {
+  return role === 'Admin' || role === 'Bestuur';
+}
 
 export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout, can, isLoggedIn, homePath } = useAuth();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const adminNav = isLoggedIn && isAdminRoleName(user?.role);
 
-  const navItems = [
-    { to: '/', label: 'Dashboard', end: true, show: can('dashboard') },
-    { to: '/inschrijven', label: 'Inschrijven', show: can('inschrijven') },
-    { to: '/voorkeuren', label: 'Mijn voorkeuren', show: can('inschrijven') || can('ruilen') },
-    { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
-    { to: '/planning', label: 'Planning', show: can('planning') },
-    { to: '/wedstrijden', label: 'Wedstrijden', show: can('wedstrijden') },
-    { to: '/teams', label: 'Mijn team', show: can('teams') && !can('beheer') },
-    { to: '/beheer', label: 'Beheer', show: can('beheer') },
-  ].filter((i) => i.show);
+  const navItems = adminNav
+    ? [
+        ...ADMIN_BEHEER_TABS.map((t) => ({
+          to: `/beheer?tab=${t.id}`,
+          label: t.label,
+          beheerTab: t.id,
+        })),
+        { to: '/wedstrijden', label: 'Wedstrijden' },
+      ]
+    : [
+        { to: '/', label: 'Dashboard', end: true, show: can('dashboard') },
+        { to: '/inschrijven', label: 'Inschrijven', show: can('inschrijven') },
+        { to: '/voorkeuren', label: 'Mijn voorkeuren', show: can('inschrijven') || can('ruilen') },
+        { to: '/ruilen', label: 'Ruilen', show: can('ruilen') },
+        { to: '/planning', label: 'Planning', show: can('planning') },
+        { to: '/wedstrijden', label: 'Wedstrijden', show: can('wedstrijden') },
+        { to: '/teams', label: 'Mijn team', show: can('teams') && !can('beheer') },
+        { to: '/beheer', label: 'Beheer', show: can('beheer') },
+      ].filter((i) => i.show);
+
+  const activeBeheerTab = searchParams.get('tab') || 'personen';
+
+  const linkClass = (active) =>
+    `block px-4 py-3 text-sm font-bold uppercase tracking-wide transition md:px-5 ${
+      active ? 'bg-white text-vvl-primary' : 'text-white hover:bg-white/10'
+    }`;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -81,23 +117,38 @@ export default function Layout({ children }) {
         <nav
           className={`border-t border-vvl-border bg-vvl-primary md:block ${menuOpen ? 'block' : 'hidden'}`}
         >
-          <ul className="mx-auto flex max-w-6xl flex-col md:flex-row">
-            {navItems.map(({ to, label, end }) => (
-              <li key={to}>
-                <NavLink
-                  to={to}
-                  end={end}
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `block px-4 py-3 text-sm font-bold uppercase tracking-wide transition md:px-5 ${
-                      isActive ? 'bg-white text-vvl-primary' : 'text-white hover:bg-white/10'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              </li>
-            ))}
+          <ul className="mx-auto flex max-w-6xl flex-col md:flex-row md:flex-wrap">
+            {navItems.map((item) => {
+              const { to, label, end, beheerTab } = item;
+              if (beheerTab) {
+                const active =
+                  location.pathname === '/beheer' && activeBeheerTab === beheerTab;
+                return (
+                  <li key={to}>
+                    <Link
+                      to={to}
+                      onClick={() => setMenuOpen(false)}
+                      className={linkClass(active)}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={to}>
+                  <NavLink
+                    to={to}
+                    end={end}
+                    onClick={() => setMenuOpen(false)}
+                    className={({ isActive }) => linkClass(isActive)}
+                  >
+                    {label}
+                  </NavLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </header>

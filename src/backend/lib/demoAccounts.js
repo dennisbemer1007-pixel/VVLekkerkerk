@@ -20,8 +20,8 @@ export const DEMO_PEOPLE = [
     role: 'Teamcoördinator',
     phone: '06-11223344',
     team: 'JO15-1',
-    coordinate: ['JO15-1', 'JO13-2'],
-    note: 'Team JO15-1 en JO13-2',
+    coordinate: ['JO15-1'],
+    note: 'Team JO15-1',
   },
   {
     email: 'lisa@vvl.demo',
@@ -201,11 +201,18 @@ export async function ensureDemoAccounts() {
 
   const sandra = byEmail['sandra@vvl.demo'];
   if (sandra) {
-    for (const teamName of ['JO15-1', 'JO13-2']) {
-      if (teams[teamName]) {
+    if (teams['JO15-1']) {
+      await prisma.team.update({
+        where: { id: teams['JO15-1'].id },
+        data: { coordinatorId: sandra.id },
+      });
+    }
+    if (teams['JO13-2']) {
+      const jo13 = await prisma.team.findUnique({ where: { id: teams['JO13-2'].id } });
+      if (jo13?.coordinatorId === sandra.id) {
         await prisma.team.update({
-          where: { id: teams[teamName].id },
-          data: { coordinatorId: sandra.id },
+          where: { id: jo13.id },
+          data: { coordinatorId: null },
         });
       }
     }

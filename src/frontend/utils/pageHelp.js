@@ -3,20 +3,22 @@
 export const PAGE_HELP = {
   dashboard: {
     purpose:
-      'Dit is je startscherm. Voor de barcommissie staan hier een snelle link naar de 4-stappenplanning, plus controles op open diensten en openstaande verplichtingen.',
+      'Dit is je startscherm. Voor de barcommissie staan hier controles op open diensten en openstaande verplichtingen.',
     actions: [
-      'Barplanning maken: open Beheer → Planning (4 stappen)',
       'Klik op een controlekaart om de concrete lijst te zien',
+      'Planning en beheer open je via het menu',
       'Ruilverzoeken volg je via het notificatiebelletje rechtsboven',
     ],
   },
   inschrijven: {
     purpose:
-      'Hier schrijf je jezelf in of uit voor open bardiensten. Zo vullen we het rooster samen.',
+      'Hier schrijf je jezelf in of uit voor open bardiensten binnen de planning die de barcommissie heeft klaargezet. Een kind zonder e-mail schrijf je in vanuit jouw account.',
     actions: [
+      'Je ziet alleen diensten tot en met de einddatum van de planning',
       'Filter op komende diensten of jouw diensten',
       'Klik een dienst open of dicht voor de namen',
       'Schrijf je in op een dienst met nog plek',
+      'Voeg een kind zonder e-mail toe en kies dat kind bij “Inschrijven als”',
       'Schrijf je uit zolang de vrijwilligersfase open is (niet na officieel maken)',
     ],
   },
@@ -27,7 +29,7 @@ export const PAGE_HELP = {
       'Bekijk alle diensten in de gekozen planningsperiode',
       'Filter op open of jouw diensten',
       'Als beheerder: diensten bijwerken vanuit regels en thuiswedstrijden',
-      'Download Excel, clubhuis-PDF (deze week) of het rooster-PDF van de periode',
+      'Download Excel of het rooster-PDF van de periode',
     ],
   },
   voorkeuren: {
@@ -42,11 +44,12 @@ export const PAGE_HELP = {
   },
   ruilen: {
     purpose:
-      'Ruil twee bestaande persoonlijke diensten. Zodra de andere persoon akkoord geeft, is de ruiling direct doorgevoerd. Er ontstaat geen open plek.',
+      'Ruil twee bestaande persoonlijke diensten, ook nadat het rooster officieel is. Zodra de andere persoon akkoord geeft, is de ruiling direct doorgevoerd. Er ontstaat geen open plek.',
     actions: [
       'Kies jouw komende dienst en de dienst van iemand anders',
       'Stuur het verzoek — de ander krijgt een notificatie',
-      'Bij akkoord wordt meteen geruild; bij weigering kan een reden worden meegegeven',
+      'Bij akkoord wordt meteen geruild, ook op een officieel rooster',
+      'Bij weigering kan een reden worden meegegeven',
     ],
   },
   beheer: {
@@ -76,7 +79,8 @@ export const PAGE_HELP = {
       'Rol en verplichting (geen / verplicht / VR18+) instellen',
       'Team, bardienstcoördinator en teamdienst-shifts (ochtend / middag / avond)',
       'Account activeren of deactiveren',
-      'CSV importeren (naam;email;telefoon;team;rol;verplichting) — teams moeten al bestaan',
+      'CSV importeren (naam;email;telefoon;team;rol;verplichting) — download eerst het voorbeeldbestand. Teams moeten al bestaan',
+      'Namen zonder account (door een coördinator toegevoegd) staan niet in dit overzicht',
     ],
   },
   beheerDiensten: {
@@ -95,7 +99,7 @@ export const PAGE_HELP = {
       'Stap 1: Kies de periode en maak diensten aan (inclusief jeugd-teamdiensten)',
       'Stap 2: Concept publiceren (vrijwilligers mogen inschrijven tot de deadline)',
       'Stap 3: Vul open vrijwilligersplekken — teamplekken vult de bardienstcoördinator',
-      'Stap 4: Maak officieel (vergrendelt de gekozen periode)',
+      'Stap 4: Maak officieel (vergrendelt in- en uitschrijven; onderling ruilen blijft mogelijk; coördinator kan een teamdienst nog op naam zetten)',
     ],
   },
   beheerRegels: {
@@ -137,11 +141,12 @@ export const PAGE_HELP = {
   },
   beheerMail: {
     purpose:
-      'SMTP-mailserver aansluiten zodat uitnodigingen en planningsmails automatisch verstuurd worden.',
+      'SMTP-mailserver aansluiten en de teksten van uitnodiging, bevestiging, herinnering en “planning klaar” aanpassen.',
     actions: [
       'Host, poort en inloggegevens van je mailprovider invullen',
+      'Teksten wijzigen. Placeholders: {naam}, {datum}, {tijd}, {dienst}, {link}',
+      'Herinnering gaat twee dagen van tevoren de deur uit',
       'Testmail sturen om te controleren of het werkt',
-      'Zonder SMTP kun je uitnodigingslinks nog steeds kopiëren',
     ],
   },
   teams: {
@@ -149,8 +154,9 @@ export const PAGE_HELP = {
       'Jouw team(s): leden/ouders, hoe vaak ze al hebben gestaan, komende wedstrijden en teamdiensten. Vul ouders in op naam (geen e-mail nodig).',
     actions: [
       'Voeg een ouder toe met alleen de naam',
-      'Zie wie al heeft gestaan en hoe vaak',
-      'Zet een ouder op een open teamdienst-plek',
+      'Zie in de tabel hoe vaak iemand heeft gestaan',
+      'Wijzig of verwijder een ouder zonder account',
+      'Zet een ouder op een open teamdienst-plek, of wissel een ingevulde ouder',
     ],
   },
   beheerClub: {

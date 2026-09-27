@@ -50,22 +50,6 @@ export default function Dashboard() {
 
       {can('beheer') && summary ? (
         <section className="space-y-3">
-          <h2 className="font-heading text-xl font-black uppercase">Wat is nog niet geregeld?</h2>
-          <Link
-            to="/beheer?tab=planning"
-            className="vvl-card flex items-center justify-between border-l-4 border-l-vvl-primary transition hover:shadow-md"
-          >
-            <span>
-              <span className="block text-xs font-bold uppercase text-vvl-accent">
-                Barplanning maken
-              </span>
-              <span className="text-sm text-gray-600">
-                4 stappen: diensten aanmaken → publiceren → verplichte mensen automatisch
-                inschrijven → officieel
-              </span>
-            </span>
-            <span className="text-sm font-bold uppercase text-vvl-primary">Naar Planning →</span>
-          </Link>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -203,33 +187,20 @@ export default function Dashboard() {
         </Link>
       </section>
 
-      <section className="flex flex-wrap gap-2">
-        {can('inschrijven') ? (
-          <Link to="/inschrijven" className="vvl-btn-primary">
-            Inschrijven
-          </Link>
-        ) : null}
-        {can('planning') ? (
-          <Link to="/planning" className="vvl-btn-outline">
-            Planning &amp; PDF
-          </Link>
-        ) : null}
-        {can('wedstrijden') ? (
-          <Link to="/wedstrijden" className="vvl-btn-outline">
-            Wedstrijden
-          </Link>
-        ) : null}
-        {can('beheer') ? (
-          <Link to="/beheer" className="vvl-btn-outline">
-            Beheer
-          </Link>
-        ) : null}
+      {can('inschrijven') || (can('teams') && !can('beheer')) ? (
+        <section className="flex flex-wrap gap-2">
+          {can('inschrijven') ? (
+            <Link to="/inschrijven" className="vvl-btn-primary">
+              Inschrijven
+            </Link>
+          ) : null}
           {can('teams') && !can('beheer') ? (
             <Link to="/teams" className="vvl-btn-outline">
               Mijn team
             </Link>
           ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {can('beheer') && stats?.dutyStats ? (
         <section className="space-y-3">

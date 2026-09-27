@@ -17,6 +17,14 @@ export default function Inschrijven() {
   const [msg, setMsg] = useState('');
   const [openId, setOpenId] = useState(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [children, setChildren] = useState([]);
+  const [childName, setChildName] = useState('');
+  const [actAs, setActAs] = useState('');
+  const [planningUntil, setPlanningUntil] = useState('');
+
+  const loadChildren = useCallback(() => {
+    api.getMyChildren().then(setChildren).catch(() => setChildren([]));
+  }, []);
 
   const load = useCallback(() => {
     const params = { filter: filter || undefined };
@@ -39,7 +47,24 @@ export default function Inschrijven() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadChildren();
+  }, [load, loadChildren]);
+
+  useEffect(() => {
+    api
+      .getPlanningRound()
+      .then((round) => {
+        if (!round?.toDate) return;
+        setPlanningUntil(
+          new Date(round.toDate).toLocaleDateString('nl-NL', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const handleInschrijven = async (serviceId, mode) => {
     if (mode === 'expand') {
@@ -49,8 +74,10 @@ export default function Inschrijven() {
     setMsg('');
     setError('');
     try {
-      await api.createEnrollment({ serviceId, personId });
-      setMsg('Je bent ingeschreven. Bedankt!');
+      const targetId = Number(actAs) || personId;
+      await api.createEnrollment({ serviceId, personId: targetId });
+      const child = children.find((c) => c.id === targetId);
+      setMsg(child ? `${child.name} is ingeschreven.` : 'Je bent ingeschreven. Bedankt!');
       await load();
     } catch (e) {
       setError(e.message);
@@ -110,10 +137,93 @@ export default function Inschrijven() {
       <header>
         <PageTitle {...PAGE_HELP.inschrijven}>Inschrijven</PageTitle>
         <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Standaard zie je alle komende diensten —
-          ook die waarop je al staat. Klik op een regel voor de namen, of schrijf je direct in.
+          Ingelogd als <strong>{user?.name}</strong>. Je ziet de diensten van de huidige planning
+          {planningUntil ? (
+            <>
+              , tot en met <strong>{planningUntil}</strong>
+            </>
+          ) : null}
+          . Ook diensten waarop je al staat. Klik op een regel voor de namen, of schrijf je direct in.
         </p>
       </header>
+
+      <form
+        className="vvl-card space-y-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setError('');
+          setMsg('');
+          try {
+            const created = await api.addMyChild({ name: childName });
+            setChildName('');
+            setActAs(String(created.id));
+            setMsg(`${created.name} is toegevoegd. Je kunt dit kind nu inschrijven zonder e-mailadres.`);
+            await loadChildren();
+          } catch (err) {
+            setError(err.message);
+          }
+        }}
+      >
+        <h2 className="font-heading text-base font-black uppercase">Kind zonder e-mail</h2>
+        <p className="text-sm text-gray-700">
+          Een kind hoeft geen eigen account. Jij schrijft het kind in vanuit dit account. Het kind
+          komt niet op de personenlijst van de barcommissie.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[220px] flex-1">
+            <label className="vvl-label">Naam van het kind</label>
+            <input
+              className="vvl-input"
+              value={childName}
+              onChange={(e) => setChildName(e.target.value)}
+              placeholder="Voor- en achternaam"
+              required
+            />
+          </div>
+          <button type="submit" className="vvl-btn-primary">
+            Kind toevoegen
+          </button>
+        </div>
+        {children.length ? (
+          <div className="space-y-2">
+            <label className="vvl-label">Inschrijven als</label>
+            <select className="vvl-input max-w-md" value={actAs} onChange={(e) => setActAs(e.target.value)}>
+              <option value="">Mijzelf ({user?.name})</option>
+              {children.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <ul className="text-sm">
+              {children.map((c) => (
+                <li key={c.id} className="flex items-center gap-3">
+                  <span>{c.name}</span>
+                  <button
+                    type="button"
+                    className="text-xs font-bold uppercase text-red-800"
+                    onClick={async () => {
+                      if (!window.confirm(`${c.name} verwijderen?`)) return;
+                      setError('');
+                      try {
+                        await api.deleteMyChild(c.id);
+                        if (String(actAs) === String(c.id)) setActAs('');
+                        setMsg(`${c.name} is verwijderd.`);
+                        await loadChildren();
+                        await load();
+                      } catch (err) {
+                        setError(err.message);
+                      }
+                    }}
+                  >
+                    Verwijderen
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </form>
 
       <FilterChips value={filter} onChange={setFilter} showMine />
 
@@ -136,7 +246,7 @@ export default function Inschrijven() {
                   <DienstCard
                     key={s.id}
                     dienst={s}
-                    myPersonId={personId}
+                    myPersonId={Number(actAs) || personId}
                     showActions
                     onInschrijven={handleInschrijven}
                     onUitschrijven={handleUitschrijven}
@@ -145,7 +255,7 @@ export default function Inschrijven() {
                   <DienstCard
                     key={s.id}
                     dienst={s}
-                    myPersonId={personId}
+                    myPersonId={Number(actAs) || personId}
                     showActions
                     compact
                     onInschrijven={handleInschrijven}
