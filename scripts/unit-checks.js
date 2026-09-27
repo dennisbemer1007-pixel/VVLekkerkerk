@@ -60,6 +60,11 @@ import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.j
 import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
 import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
 import { matchTemplateSheets, MATCH_TEMPLATE_HEADERS } from '../src/backend/lib/matchesXlsx.js';
+import {
+  PERSON_TEMPLATE_HEADERS,
+  personTemplateSheets,
+  personExportRowsSheets,
+} from '../src/backend/lib/personsXlsx.js';
 
 let pass = 0;
 let fail = 0;
@@ -773,6 +778,53 @@ assert(
   'wedstrijdsjabloon heeft alleen KNVB-kolommen',
   MATCH_TEMPLATE_HEADERS.join(';') === 'Datum;Tijd;Thuis;Uit;Wedstrijdnr.;Type;Spelniveau;Opmerkingen' &&
     matchTemplateSheets()[0].rows.length === 0,
+);
+
+// Occupancy-tegels (punt 2): statusclassificatie
+function occupancyStatus(enrolled, required) {
+  if (enrolled >= required) return 'full';
+  if (enrolled === required - 1) return 'almost';
+  return 'open';
+}
+const tileServices = [
+  { enrolled: 2, required: 2 },
+  { enrolled: 1, required: 2 },
+  { enrolled: 0, required: 2 },
+  { enrolled: 3, required: 3 },
+];
+const tileFull = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'full');
+const tileAlmost = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'almost');
+assert('tegel Vol: aantal = gefilterde lijst', tileFull.length === 2);
+assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tileAlmost.length === 1);
+
+const personSheets = personTemplateSheets([{ name: 'JO11-1' }]);
+assert(
+  'personen template: 2 tabbladen (headers + waarden)',
+  personSheets.length === 2 &&
+    personSheets[0].headers.join(';') === PERSON_TEMPLATE_HEADERS.join(';') &&
+    personSheets[0].rows.length === 0 &&
+    personSheets[1].headers.includes('rol'),
+);
+const exportSheets = personExportRowsSheets(
+  [
+    {
+      name: 'Test',
+      email: 't@x.nl',
+      phone: '',
+      team: { name: 'JO11-1' },
+      role: 'Vrijwilliger',
+      obligation: 'NONE',
+      guardian: null,
+      exempted: false,
+    },
+  ],
+  [{ name: 'JO11-1' }],
+);
+assert(
+  'personen export:zelfde structuur als template',
+  exportSheets.length === 2 &&
+    exportSheets[0].headers.join(';') === PERSON_TEMPLATE_HEADERS.join(';') &&
+    exportSheets[0].rows.length === 1,
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);
