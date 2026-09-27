@@ -800,119 +800,128 @@ function PersonenBeheer() {
         ) : null}
       </div>
 
-      <div className="overflow-x-auto vvl-card p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-vvl-secondary text-xs font-bold uppercase">
-            <tr>
-              <th className="p-3 text-left">
+      <div className="space-y-2">
+        <div className="flex min-h-[44px] items-center gap-2 px-1 text-sm">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleSelectAll}
+            disabled={!selectablePersons.length}
+            title="Selecteer alle (met e-mail, zonder account)"
+          />
+          <span className="font-semibold">
+            {allSelected ? 'Deselecteer alles' : 'Selecteer alles (uitnodigen)'}
+          </span>
+        </div>
+        {filteredPersons.length === 0 ? (
+          <p className="vvl-card text-center text-sm text-gray-600">
+            Geen personen gevonden met deze filters.
+          </p>
+        ) : (
+          filteredPersons.map((p) => (
+            <article key={p.id} className="vvl-card space-y-2 py-3">
+              <div className="flex items-start gap-2">
                 <input
                   type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  disabled={!selectablePersons.length}
-                  title="Selecteer alle (met e-mail, zonder account)"
+                  className="mt-1"
+                  checked={selectedIds.includes(p.id)}
+                  disabled={!p.email || p.hasAccount}
+                  onChange={() => toggleSelect(p.id)}
+                  title={
+                    !p.email
+                      ? 'Geen e-mail'
+                      : p.hasAccount
+                        ? 'Heeft al een account'
+                        : 'Selecteer voor uitnodiging'
+                  }
                 />
-              </th>
-              <th className="p-3 text-left">Naam</th>
-              <th className="p-3 text-left">Rol</th>
-              <th className="p-3 text-left">Team</th>
-              <th className="p-3 text-left">Verplichting</th>
-              <th className="p-3 text-left">E-mail</th>
-              <th className="p-3 text-left">Telefoon</th>
-              <th className="p-3 text-left">Hoort bij</th>
-              <th className="p-3 text-left">Account</th>
-              <th className="p-3 text-left">Acties</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPersons.map((p) => (
-              <tr key={p.id} className="border-t border-vvl-border align-top">
-                <td className="p-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(p.id)}
-                    disabled={!p.email || p.hasAccount}
-                    onChange={() => toggleSelect(p.id)}
-                    title={
-                      !p.email
-                        ? 'Geen e-mail'
-                        : p.hasAccount
-                          ? 'Heeft al een account'
-                          : 'Selecteer voor uitnodiging'
-                    }
-                  />
-                </td>
-                <td className="p-3 font-semibold">
-                  {p.name}
-                  {p.exempted ? ' (vrijgesteld)' : ''}
-                  {!p.active ? ' (inactief)' : ''}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">
+                    {p.name}
+                    {p.exempted ? ' (vrijgesteld)' : ''}
+                    {!p.active ? ' (inactief)' : ''}
+                  </p>
                   {p.personNumber ? (
-                    <span className="block text-xs font-normal text-gray-500">{p.personNumber}</span>
+                    <p className="text-xs text-gray-500">{p.personNumber}</p>
                   ) : null}
-                </td>
-                <td className="p-3">{p.role}</td>
-                <td className="p-3">{p.team?.name || '—'}</td>
-                <td className="p-3">{p.obligationLabel}</td>
-                <td className="p-3">{p.email || '—'}</td>
-                <td className="p-3">{p.phone || '—'}</td>
-                <td className="p-3">{p.guardianName || '—'}</td>
-                <td className="p-3">
-                  {p.hasAccount ? 'Wel' : p.invitePending ? 'Wel (uitnodiging open)' : 'Geen'}
-                </td>
-                <td className="p-3">
-                  <div className="flex flex-wrap gap-1">
-                    <IconButton title={`${p.name} bewerken`} onClick={() => startEdit(p)}>
-                      ✏️
-                    </IconButton>
-                    {!p.hasAccount && p.email ? (
-                      <IconButton title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>
-                        ✉️
-                      </IconButton>
-                    ) : null}
-                    <IconButton
-                      title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`}
-                      tone="warn"
-                      onClick={() => toggleActive(p)}
-                    >
-                      {p.active ? '⛔' : '✅'}
-                    </IconButton>
-                    {!p.active && (p.email || p.phone) ? (
-                      <IconButton
-                        title={`Contact van ${p.name} wissen (AVG)`}
-                        tone="warn"
-                        onClick={async () => {
-                          if (
-                            !window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)
-                          ) {
-                            return;
-                          }
-                          try {
-                            await api.erasePersonContact(p.id);
-                            await load();
-                          } catch (e) {
-                            setError(e.message);
-                          }
-                        }}
-                      >
-                        🧹
-                      </IconButton>
-                    ) : null}
-                    <IconButton title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>
-                      🗑️
-                    </IconButton>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filteredPersons.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="p-4 text-center text-sm text-gray-600">
-                  Geen personen gevonden met deze filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Rol</dt>
+                      <dd>{p.role}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Team</dt>
+                      <dd>{p.team?.name || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Verplichting</dt>
+                      <dd>{p.obligationLabel}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Account</dt>
+                      <dd>
+                        {p.hasAccount ? 'Wel' : p.invitePending ? 'Uitnodiging open' : 'Geen'}
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="font-bold uppercase text-vvl-accent">E-mail</dt>
+                      <dd className="break-all">{p.email || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Telefoon</dt>
+                      <dd>{p.phone || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold uppercase text-vvl-accent">Hoort bij</dt>
+                      <dd>{p.guardianName || '—'}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 border-t border-vvl-border pt-2">
+                <IconButton title={`${p.name} bewerken`} onClick={() => startEdit(p)}>
+                  ✏️
+                </IconButton>
+                {!p.hasAccount && p.email ? (
+                  <IconButton title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>
+                    ✉️
+                  </IconButton>
+                ) : null}
+                <IconButton
+                  title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`}
+                  tone="warn"
+                  onClick={() => toggleActive(p)}
+                >
+                  {p.active ? '⛔' : '✅'}
+                </IconButton>
+                {!p.active && (p.email || p.phone) ? (
+                  <IconButton
+                    title={`Contact van ${p.name} wissen (AVG)`}
+                    tone="warn"
+                    onClick={async () => {
+                      if (
+                        !window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)
+                      ) {
+                        return;
+                      }
+                      try {
+                        await api.erasePersonContact(p.id);
+                        await load();
+                      } catch (e) {
+                        setError(e.message);
+                      }
+                    }}
+                  >
+                    🧹
+                  </IconButton>
+                ) : null}
+                <IconButton title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>
+                  🗑️
+                </IconButton>
+              </div>
+            </article>
+          ))
+        )}
       </div>
       <p className="text-xs text-gray-600">
         Contactgegevens alleen hier (beheer) zichtbaar. Ouders die een coördinator alleen op naam

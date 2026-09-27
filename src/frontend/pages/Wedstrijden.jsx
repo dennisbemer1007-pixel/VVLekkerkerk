@@ -160,8 +160,8 @@ export default function Wedstrijden() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      <div className="overflow-x-auto vvl-card p-0">
-        <table className="w-full min-w-[760px] text-sm">
+      <div className="vvl-card p-0">
+        <table className="w-full text-sm">
           <thead className="bg-vvl-secondary text-xs font-bold uppercase">
             <tr>
               <th className="p-3 text-left">Datum</th>
