@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { gold: '#c9a227' }, fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>html,body{width:390px;height:844px;margin:0;overflow:hidden}</style>
+</head>
+<body class="flex h-[844px] w-[390px] flex-col bg-[#f5f5f5] font-sans text-black antialiased">
+  <header class="shrink-0 bg-black text-white">
+    <div class="flex h-14 items-center justify-between px-3">
+      <div class="flex items-center gap-2">
+        <img src="../../src/frontend/public/logo.png" alt="" class="h-10 w-10 object-contain" />
+        <div class="leading-tight">
+          <p class="text-[13px] font-black uppercase tracking-wide">V.V. Lekkerkerk</p>
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-300">Barcommissie</p>
+        </div>
+      </div>
+      <p class="text-sm font-bold">Mark</p>
+    </div>
+    <div class="h-1 bg-gold"></div>
+  </header>
+
+  <main class="min-h-0 flex-1 space-y-2 overflow-hidden px-3 pb-2 pt-3">
+    <div class="flex items-end justify-between">
+      <div>
+        <p class="text-[11px] font-bold uppercase text-neutral-500">27 sep – 22 nov · niet officieel</p>
+        <h1 class="text-[22px] font-black leading-none">Open per weekend</h1>
+      </div>
+    </div>
+
+    <section class="rounded-md border border-[#cccccc] bg-white p-3 shadow-sm">
+      <div class="flex items-center justify-between">
+        <p class="text-sm font-black uppercase">Dit weekend</p>
+        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">1 open</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between gap-2">
+        <div>
+          <p class="font-black leading-tight">Zo 27 sep · bar</p>
+          <p class="text-xs text-neutral-600">13:00 – 16:00 · nog niemand</p>
+        </div>
+        <button class="h-11 shrink-0 rounded-full bg-black px-3 text-[11px] font-black uppercase text-white">Wijs toe</button>
+      </div>
+      <p class="mt-2 text-[11px] text-emerald-800">Ochtendbar en keuken: Lisa Bakker staat erop.</p>
+    </section>
+
+    <section class="rounded-md border border-[#cccccc] bg-white p-3 shadow-sm">
+      <div class="flex items-center justify-between">
+        <p class="text-sm font-black uppercase">3 – 4 oktober</p>
+        <span class="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase text-white">Veel gaten</span>
+      </div>
+      <ul class="mt-2 space-y-1.5 text-sm">
+        <li class="flex items-center justify-between">
+          <span>Za 07:30 bar <span class="text-neutral-500">Tom</span></span>
+          <span class="font-black text-red-700">2 open · JO11</span>
+        </li>
+        <li class="flex items-center justify-between">
+          <span>Za 10:00 keuken</span>
+          <span class="font-black text-red-700">leeg</span>
+        </li>
+        <li class="flex items-center justify-between">
+          <span>Za 12:00 bar JO15</span>
+          <span class="font-black text-[#6e5810]">Sandra · 2</span>
+        </li>
+        <li class="flex items-center justify-between">
+          <span>Za 13:00 keuken</span>
+          <span class="font-black text-red-700">2 open</span>
+        </li>
+        <li class="flex items-center justify-between">
+          <span>Zo 4 okt bar + keuken</span>
+          <span class="font-black text-red-700">2 diensten</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grid grid-cols-3 gap-1.5">
+      <div class="rounded-md bg-white p-2 text-center shadow-sm">
+        <p class="text-xl font-black leading-none">10</p>
+        <p class="text-[10px] font-bold uppercase text-neutral-500">Vol</p>
+      </div>
+      <div class="rounded-md bg-white p-2 text-center shadow-sm">
+        <p class="text-xl font-black leading-none">23%</p>
+        <p class="text-[10px] font-bold uppercase text-neutral-500">Bezet</p>
+      </div>
+      <div class="rounded-md bg-white p-2 text-center shadow-sm">
+        <p class="text-xl font-black leading-none">6</p>
+        <p class="text-[10px] font-bold uppercase text-neutral-500">Team open</p>
+      </div>
+    </section>
+
+    <div class="rounded-md border border-gold bg-white px-3 py-2 text-xs">
+      <strong>Niet officieel maken</strong> zolang Sandra de JO15- en JO13-plekken niet heeft gevuld.
+    </div>
+  </main>
+
+  <nav class="grid h-16 shrink-0 grid-cols-4 border-t border-[#cccccc] bg-white text-[10px] font-bold uppercase">
+    <div class="flex flex-col items-center justify-center font-black text-black">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Home
+    </div>
+    <div class="flex flex-col items-center justify-center text-neutral-400">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Toewijzen
+    </div>
+    <div class="flex flex-col items-center justify-center text-neutral-400">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+      Rooster
+    </div>
+    <div class="flex flex-col items-center justify-center text-neutral-400">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/></svg>
+      Officieel
+    </div>
+  </nav>
+</body>
+</html>

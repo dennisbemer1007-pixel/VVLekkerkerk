@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { gold: '#c9a227' }, fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>html,body{width:390px;height:844px;margin:0;overflow:hidden}</style>
+</head>
+<body class="flex h-[844px] w-[390px] flex-col bg-[#f5f5f5] font-sans text-black antialiased">
+  <header class="shrink-0 bg-black text-white">
+    <div class="flex h-14 items-center justify-between px-3">
+      <div class="flex items-center gap-2">
+        <img src="../../src/frontend/public/logo.png" alt="" class="h-10 w-10 object-contain" />
+        <div class="leading-tight">
+          <p class="text-[13px] font-black uppercase tracking-wide">V.V. Lekkerkerk</p>
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-300">Teamcoördinator</p>
+        </div>
+      </div>
+      <p class="text-sm font-bold">Sandra</p>
+    </div>
+    <div class="h-1 bg-gold"></div>
+  </header>
+
+  <main class="min-h-0 flex-1 space-y-2.5 overflow-hidden px-3 pb-2 pt-3">
+    <div class="flex items-end justify-between">
+      <div>
+        <p class="text-[11px] font-bold uppercase text-neutral-500">Seizoen 2026-2027</p>
+        <h1 class="text-[22px] font-black leading-none">Nog 6 namen</h1>
+      </div>
+      <p class="text-right text-[11px] font-semibold leading-tight text-neutral-600">JO15-1<br />JO13-2</p>
+    </div>
+
+    <section class="rounded-md border border-[#cccccc] bg-white p-3 shadow-sm">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="text-[11px] font-black uppercase text-[#6e5810]">Za 3 okt · JO15-1</p>
+          <p class="font-black leading-tight">Thuis vs VV Krimpen</p>
+          <p class="text-xs text-neutral-600">Aanvang 14:00</p>
+        </div>
+        <span class="rounded-full bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">3 open</span>
+      </div>
+      <ul class="mt-2 space-y-1 text-sm">
+        <li class="flex justify-between"><span>Bar 12:00 – 16:30</span><span class="font-black text-red-700">2 ouders</span></li>
+        <li class="flex justify-between"><span>Bar 16:30 – 19:30</span><span class="font-black text-red-700">1 ouder</span></li>
+      </ul>
+      <button class="mt-2 h-11 w-full rounded-full bg-black text-xs font-black uppercase tracking-wide text-white">Vul JO15 in</button>
+    </section>
+
+    <section class="rounded-md border border-[#cccccc] bg-white p-3 shadow-sm">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="text-[11px] font-black uppercase text-[#6e5810]">Za 10 okt · JO13-2</p>
+          <p class="font-black leading-tight">Thuis vs VV Ridderkerk</p>
+          <p class="text-xs text-neutral-600">Aanvang 14:00 · uit om 11:00 telt niet</p>
+        </div>
+        <span class="rounded-full bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">3 open</span>
+      </div>
+      <ul class="mt-2 space-y-1 text-sm">
+        <li class="flex justify-between"><span>Bar 12:00 – 16:30</span><span class="font-black text-red-700">2 ouders</span></li>
+        <li class="flex justify-between"><span>Bar 16:30 – 19:30</span><span class="font-black text-red-700">1 ouder</span></li>
+      </ul>
+      <button class="mt-2 h-11 w-full rounded-full border-2 border-black text-xs font-black uppercase tracking-wide">Vul JO13 in</button>
+    </section>
+
+    <section>
+      <h2 class="text-[11px] font-black uppercase tracking-wide text-neutral-500">Nog nooit op een teamdienst</h2>
+      <div class="mt-1.5 grid grid-cols-2 gap-1.5">
+        <div class="rounded-md border border-[#cccccc] bg-white px-2 py-1.5">
+          <p class="text-sm font-black leading-tight">Ouder Jansen</p>
+          <p class="text-[10px] font-bold uppercase text-red-700">0× · alleen naam</p>
+        </div>
+        <div class="rounded-md border border-[#cccccc] bg-white px-2 py-1.5">
+          <p class="text-sm font-black leading-tight">Nieuwe Ouder</p>
+          <p class="text-[10px] font-bold uppercase text-red-700">0× · alleen naam</p>
+        </div>
+        <div class="rounded-md border border-[#cccccc] bg-white px-2 py-1.5">
+          <p class="text-sm font-black leading-tight">Tom van Dam</p>
+          <p class="text-[10px] font-bold uppercase text-neutral-500">0× team · JO15</p>
+        </div>
+        <div class="rounded-md border border-[#cccccc] bg-white px-2 py-1.5">
+          <p class="text-sm font-black leading-tight">Fatima El Amrani</p>
+          <p class="text-[10px] font-bold uppercase text-neutral-500">0× team · JO13</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="grid h-16 shrink-0 grid-cols-3 border-t border-[#cccccc] bg-white">
+    <div class="flex flex-col items-center justify-center text-[10px] font-black uppercase text-black">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+      Teams
+    </div>
+    <div class="flex flex-col items-center justify-center text-[10px] font-bold uppercase text-neutral-400">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c1.2-2.6 3-4 6-4s4.8 1.4 6 4M14 19c.4-1.4 1.4-2.5 3-3 1.2.4 2 .9 2.6 1.6"/></svg>
+      Ouders
+    </div>
+    <div class="flex flex-col items-center justify-center text-[10px] font-bold uppercase text-neutral-400">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 19c1.5-3 3.8-4.5 7-4.5S17.5 16 19 19"/></svg>
+      Mijn
+    </div>
+  </nav>
+</body>
+</html>

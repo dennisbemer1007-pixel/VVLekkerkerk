@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { gold: '#c9a227' }, fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>html,body{width:390px;height:844px;margin:0;overflow:hidden}</style>
+</head>
+<body class="flex h-[844px] w-[390px] flex-col bg-[#f5f5f5] font-sans text-black antialiased">
+  <header class="shrink-0 bg-black text-white">
+    <div class="flex h-14 items-center gap-2 px-3">
+      <span class="text-lg font-black">‹</span>
+      <img src="../../src/frontend/public/logo.png" alt="" class="h-9 w-9 object-contain" />
+      <div class="leading-tight">
+        <p class="text-[13px] font-black uppercase tracking-wide">Plek toewijzen</p>
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-300">Barcommissie · Mark</p>
+      </div>
+    </div>
+    <div class="h-1 bg-gold"></div>
+  </header>
+
+  <main class="min-h-0 flex-1 space-y-2 overflow-hidden px-3 pb-2 pt-3">
+    <section class="rounded-md border border-[#cccccc] bg-white p-3">
+      <p class="text-[11px] font-black uppercase text-neutral-500">Open plek</p>
+      <p class="text-lg font-black leading-tight">Zondag 27 september</p>
+      <p class="font-semibold">Bar · 13:00 – 16:00</p>
+      <p class="text-xs text-red-700">1 van 1 nog leeg · persoonlijke plek</p>
+    </section>
+
+    <p class="text-[11px] font-black uppercase tracking-wide text-neutral-500">Wie kan deze middag?</p>
+
+    <button class="flex w-full items-center gap-3 rounded-md border-2 border-black bg-white p-3 text-left">
+      <span class="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-black text-white">EH</span>
+      <span class="min-w-0 flex-1">
+        <span class="block font-black">Erik Hofman</span>
+        <span class="block text-xs text-neutral-600">Geen team · eerstvolgende dienst 17 okt</span>
+      </span>
+    </button>
+
+    <button class="flex w-full items-center gap-3 rounded-md border border-[#cccccc] bg-white p-3 text-left">
+      <span class="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-black">NV</span>
+      <span class="min-w-0 flex-1">
+        <span class="block font-black">Noa Visser</span>
+        <span class="block text-xs text-neutral-600">Senioren · eerstvolgende 17 okt</span>
+      </span>
+    </button>
+
+    <button class="flex w-full items-center gap-3 rounded-md border border-[#cccccc] bg-white p-3 text-left">
+      <span class="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-black">KB</span>
+      <span class="min-w-0 flex-1">
+        <span class="block font-black">Kevin de Boer</span>
+        <span class="block text-xs text-neutral-600">JO11-1 · eerstvolgende 17 okt</span>
+      </span>
+    </button>
+
+    <p class="text-[11px] leading-snug text-neutral-500">Lisa staat vanmorgen al op de bar en in de keuken. Die staat hier niet bij.</p>
+  </main>
+
+  <div class="shrink-0 space-y-1.5 border-t border-[#cccccc] bg-white px-3 py-2">
+    <button class="h-12 w-full rounded-full bg-black text-sm font-black uppercase tracking-wide text-white">Zet Erik op deze bar</button>
+    <p class="text-center text-[10px] text-neutral-500">Hij krijgt een melding. Jij kunt het later nog wijzigen.</p>
+  </div>
+</body>
+</html>

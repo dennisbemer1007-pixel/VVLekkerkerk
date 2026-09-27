@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { gold: '#c9a227' }, fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>html,body{width:390px;height:844px;margin:0;overflow:hidden}</style>
+</head>
+<body class="flex h-[844px] w-[390px] flex-col bg-[#f5f5f5] font-sans text-black antialiased">
+  <header class="shrink-0 bg-black text-white">
+    <div class="flex h-14 items-center justify-between px-3">
+      <div class="flex items-center gap-2">
+        <img src="../../src/frontend/public/logo.png" alt="" class="h-10 w-10 object-contain" />
+        <div class="leading-tight">
+          <p class="text-[13px] font-black uppercase tracking-wide">V.V. Lekkerkerk</p>
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-300">Teamcoördinator</p>
+        </div>
+      </div>
+      <p class="text-sm font-bold">Sandra</p>
+    </div>
+    <div class="h-1 bg-gold"></div>
+  </header>
+
+  <main class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-6">
+    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gold">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.5 10 17l9-10"/></svg>
+    </div>
+    <h1 class="mt-4 text-center text-2xl font-black leading-tight">JO15 middag is vol</h1>
+    <p class="mt-1 text-center text-sm text-neutral-600">Twee ouders staan op de bardienst. Zij hoeven niets in de app te doen.</p>
+
+    <section class="mt-4 rounded-md border border-[#cccccc] bg-white p-4 shadow-sm">
+      <p class="text-[11px] font-black uppercase text-neutral-500">Za 3 oktober · bar 12:00 – 16:30</p>
+      <p class="mt-1 font-black">Thuis vs VV Krimpen</p>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li class="flex items-center justify-between border-b border-[#eeeeee] pb-2">
+          <span class="font-bold">Ouder Jansen</span>
+          <span class="text-xs font-black uppercase text-emerald-800">1× gestaan</span>
+        </li>
+        <li class="flex items-center justify-between">
+          <span class="font-bold">Nieuwe Ouder</span>
+          <span class="text-xs font-black uppercase text-emerald-800">1× gestaan</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="mt-3 rounded-md border border-gold bg-white p-3">
+      <p class="text-[11px] font-black uppercase text-neutral-600">Nog open dezelfde dag</p>
+      <p class="font-black">Bar 16:30 – 19:30 · 1 ouder</p>
+      <p class="text-xs text-neutral-600">Tom van Dam en Lisa Bakker hebben allebei nog 0 teamdiensten.</p>
+    </section>
+
+    <div class="mt-auto space-y-2">
+      <button class="h-12 w-full rounded-full bg-black text-sm font-black uppercase tracking-wide text-white">Volgende plek vullen</button>
+      <button class="h-12 w-full rounded-full border-2 border-black text-sm font-black uppercase tracking-wide">Terug naar mijn teams</button>
+    </div>
+  </main>
+</body>
+</html>
