@@ -213,7 +213,7 @@ Zie ook `/privacy` en [SECURITY.md](SECURITY.md).
 
 ## 10. Productie
 
-Zie [RENDER-DEMO.md](RENDER-DEMO.md) (Free = uitproberen) en [SECURITY.md](SECURITY.md).
+Zie [RENDER-DEMO.md](RENDER-DEMO.md) (Starter, vaste schijf, geen oefenaccounts) en [SECURITY.md](SECURITY.md).
 
 - Sterke `ADMIN_PASSWORD` (niet `admin123`)
 - Persistente schijf `DATA_DIR`
