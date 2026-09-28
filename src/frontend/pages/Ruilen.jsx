@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageTitle } from '../components/PageHelp.jsx';
+import { Link } from 'react-router-dom';
+import ListFilters from '../components/ListFilters.jsx';
+import MasterDetail from '../components/MasterDetail.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { formatServiceDate, SERVICE_TYPE_LABEL } from '../utils/formatDate.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
+import { withinDates } from '../utils/listFilter.js';
 
 const STATUS_LABEL = {
   PENDING_PEER: 'Wacht op de andere persoon',
@@ -23,7 +25,7 @@ function personName(enrollment) {
   return enrollment?.person?.name || 'Onbekend';
 }
 
-export default function Ruilen() {
+export default function Ruilen({ scope = 'mine', title = 'Ruilen', mode = 'list', basePath = '/ruilen' }) {
   const { user } = useAuth();
   const [mine, setMine] = useState([]);
   const [others, setOthers] = useState([]);
@@ -36,31 +38,42 @@ export default function Ruilen() {
   const [busy, setBusy] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+  const [status, setStatus] = useState('');
+  const [selectedId, setSelectedId] = useState(null);
 
   const load = useCallback(async () => {
-    const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps()]);
+    const params = {};
+    if (scope === 'mine') params.scope = 'mine';
+    if (filters.person.trim()) params.q = filters.person.trim();
+    if (filters.from) params.from = filters.from;
+    if (filters.to) params.to = filters.to;
+    const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps(params)]);
     setMine(candidates.mine || []);
     setOthers(candidates.others || []);
     setSwaps(list || []);
-  }, []);
+  }, [scope, filters]);
 
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
 
-  const pendingMine = useMemo(
-    () => swaps.filter((s) => ['PENDING_PEER', 'PENDING_COMMITTEE'].includes(s.status)),
-    [swaps],
+  const visibleSwaps = useMemo(
+    () => swaps.filter((s) => !status || s.status === status),
+    [swaps, status],
   );
 
   const filteredOthers = useMemo(() => {
-    const q = toQuery.trim().toLowerCase();
-    if (!q) return others;
+    const q = `${toQuery} ${filters.person}`.trim().toLowerCase();
     return others.filter((enrollment) => {
+      if (filters.from || filters.to) {
+        if (!withinDates(enrollment.service?.date, filters.from, filters.to)) return false;
+      }
+      if (!q) return true;
       const hay = `${personName(enrollment)} ${serviceLabel(enrollment)}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [others, toQuery]);
+  }, [others, toQuery, filters]);
 
   const run = async (fn, success) => {
     setBusy(true);
@@ -119,13 +132,23 @@ export default function Ruilen() {
   return (
     <div className="space-y-6">
       <header>
-        <PageTitle {...PAGE_HELP.ruilen}>Ruilen</PageTitle>
-        <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Je ruilt twee bestaande persoonlijke diensten,
-          ook als het rooster al officieel is. Na akkoord van de andere persoon is de ruiling direct
-          doorgevoerd. Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator.
-        </p>
+        <h1 className="font-heading text-xl font-black uppercase">{title}</h1>
       </header>
+      <ListFilters {...filters} onChange={setFilters}>
+        {mode === 'list' ? (
+          <label className="block min-w-0">
+            <span className="vvl-label">Status</span>
+            <select className="vvl-input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+              <option value="">Alle</option>
+              <option value="PENDING_PEER">Wacht op de ander</option>
+              <option value="PENDING_COMMITTEE">Wacht op de barcommissie</option>
+              <option value="APPROVED">Geruild</option>
+              <option value="REJECTED">Afgewezen</option>
+              <option value="CANCELLED">Ingetrokken</option>
+            </select>
+          </label>
+        ) : null}
+      </ListFilters>
 
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{msg}</p>
@@ -134,6 +157,17 @@ export default function Ruilen() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
+      {mode === 'list' ? (
+        <Link to={`${basePath}/nieuw`} className="vvl-btn-primary inline-flex">
+          Nieuw ruilverzoek
+        </Link>
+      ) : (
+        <Link to={basePath} className="vvl-btn-outline inline-flex text-xs">
+          Terug naar ruilen
+        </Link>
+      )}
+
+      {mode === 'new' ? (
       <form onSubmit={submit} className="vvl-card space-y-4">
         <h2 className="font-heading text-lg font-black uppercase">Nieuw ruilverzoek</h2>
         <div>
@@ -175,13 +209,38 @@ export default function Ruilen() {
           <p className="text-sm text-gray-600">Je hebt geen komende persoonlijke dienst om te ruilen.</p>
         ) : null}
       </form>
+      ) : null}
 
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-black uppercase">Jouw verzoeken</h2>
-        {pendingMine.length === 0 && swaps.length === 0 ? (
-          <p className="vvl-card text-sm text-gray-600">Nog geen ruilverzoeken.</p>
-        ) : null}
-        {(pendingMine.length ? pendingMine : swaps.slice(0, 8)).map((swap) => {
+      {mode === 'list' ? (
+      <MasterDetail
+        selected={selectedId}
+        onBack={() => setSelectedId(null)}
+        emptyDetail="Kies een ruilverzoek."
+        list={
+          visibleSwaps.length === 0 ? (
+            <p className="vvl-card text-sm text-gray-600">Nog geen ruilverzoeken.</p>
+          ) : (
+            <ul className="space-y-2">
+              {visibleSwaps.map((swap) => (
+                <li key={swap.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(swap.id)}
+                    className="min-h-11 w-full rounded-sm border border-vvl-border bg-white px-3 py-3 text-left"
+                  >
+                    <span className="block text-xs font-bold uppercase text-vvl-accent">
+                      {STATUS_LABEL[swap.status] || swap.status}
+                    </span>
+                    <span className="block text-sm">
+                      {swap.requester?.name} · {swap.counterparty?.name}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        detail={visibleSwaps.filter((swap) => swap.id === selectedId).map((swap) => {
           const asCounterparty = swap.counterpartyId === user?.id;
           const asRequester = swap.requesterId === user?.id;
           return (
@@ -277,7 +336,8 @@ export default function Ruilen() {
             </article>
           );
         })}
-      </section>
+      />
+      ) : null}
     </div>
   );
 }

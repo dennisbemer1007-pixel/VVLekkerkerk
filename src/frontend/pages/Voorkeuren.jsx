@@ -21,7 +21,7 @@ const SLOTS = [
   { id: 'EVENING', label: 'Late middag/avond' },
 ];
 
-export default function Voorkeuren() {
+export default function Voorkeuren({ embedded = false }) {
   const { user, refresh } = useAuth();
   const [unavailable, setUnavailable] = useState([]);
   const [preferred, setPreferred] = useState([]);
@@ -73,13 +73,16 @@ export default function Voorkeuren() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <PageTitle {...PAGE_HELP.voorkeuren}>Mijn voorkeuren</PageTitle>
-        <p className="mt-1 text-sm text-gray-700">
-          Geef aan wanneer je <strong>niet</strong> kunt staan, en welke dagdelen je voorkeur hebben.
-          De planning gebruikt dit bij het automatisch vullen van open plekken.
-        </p>
-      </header>
+      {embedded ? (
+        <h2 className="font-heading text-base font-black uppercase">Voorkeuren</h2>
+      ) : (
+        <header>
+          <PageTitle {...PAGE_HELP.voorkeuren}>Mijn voorkeuren</PageTitle>
+          <p className="mt-1 text-sm text-gray-700">
+            Geef aan wanneer je niet kunt staan, en welke dagdelen je voorkeur hebben.
+          </p>
+        </header>
+      )}
 
       <form onSubmit={save} className="vvl-card space-y-6">
         <div>
@@ -88,7 +91,7 @@ export default function Voorkeuren() {
           <ul className="grid gap-2 sm:grid-cols-2">
             {WEEKDAYS.map((d) => (
               <li key={d.id}>
-                <label className="flex items-center gap-2 text-sm font-semibold">
+                <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
                   <input
                     type="checkbox"
                     checked={unavailable.includes(d.id)}
@@ -109,7 +112,7 @@ export default function Voorkeuren() {
           <ul className="flex flex-wrap gap-4">
             {SLOTS.map((s) => (
               <li key={s.id}>
-                <label className="flex items-center gap-2 text-sm font-semibold">
+                <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
                   <input
                     type="checkbox"
                     checked={preferred.includes(s.id)}

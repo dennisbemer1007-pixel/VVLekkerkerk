@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import DienstCard from '../components/DienstCard.jsx';
-import { PageTitle } from '../components/PageHelp.jsx';
+import ListFilters from '../components/ListFilters.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { formatMatchDate, SERVICE_TYPE_LABEL } from '../utils/formatDate.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
+import { includesPerson, withinDates } from '../utils/listFilter.js';
 
 export default function TeamDashboard() {
   const { personId } = useAuth();
@@ -15,6 +15,11 @@ export default function TeamDashboard() {
   const [assign, setAssign] = useState({});
   const [edit, setEdit] = useState(null);
   const [replaceWith, setReplaceWith] = useState({});
+  const [section, setSection] = useState('diensten');
+  const [teamId, setTeamId] = useState('');
+  const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+  const [obligation, setObligation] = useState('');
+  const [venue, setVenue] = useState('');
 
   const OBLIGATION_SHORT = {
     NONE: '—',
@@ -124,12 +129,59 @@ export default function TeamDashboard() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <PageTitle {...PAGE_HELP.teams}>Mijn team</PageTitle>
-        <p className="mt-1 text-sm text-gray-700">
-          Seizoen {data?.seasonLabel || '—'}. Als bardienstcoördinator vul je de namen van ouders op
-          de teamdiensten. Ouders hoeven geen e-mail of account.
-        </p>
+      <header className="space-y-3">
+        <h1 className="font-heading text-xl font-black uppercase">Team</h1>
+        <p className="text-sm text-gray-700">Seizoen {data?.seasonLabel || '—'}</p>
+        {(data?.teams || []).length > 1 ? (
+          <label className="block">
+            <span className="vvl-label">Team</span>
+            <select className="vvl-input" value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Team">
+              <option value="">Alle teams</option>
+              {data.teams.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ['diensten', 'Teamdiensten'],
+            ['ouders', 'Ouders'],
+            ['wedstrijden', 'Wedstrijden'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={section === id ? 'vvl-btn-primary px-2 text-xs' : 'vvl-btn-outline px-2 text-xs'}
+              onClick={() => setSection(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ListFilters {...filters} onChange={setFilters} personLabel={section === 'wedstrijden' ? 'Tegenstander' : 'Persoon'}>
+          {section === 'ouders' ? (
+            <label className="block min-w-0">
+              <span className="vvl-label">Verplichting</span>
+              <select className="vvl-input" value={obligation} onChange={(e) => setObligation(e.target.value)} aria-label="Verplichting">
+                <option value="">Alle</option>
+                <option value="FULL">Verplicht</option>
+                <option value="VR18">VR18+</option>
+                <option value="NONE">Vrijwillig</option>
+              </select>
+            </label>
+          ) : null}
+          {section === 'wedstrijden' ? (
+            <label className="block min-w-0">
+              <span className="vvl-label">Thuis/uit</span>
+              <select className="vvl-input" value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="Thuis of uit">
+                <option value="">Alle</option>
+                <option value="home">Thuis</option>
+                <option value="away">Uit</option>
+              </select>
+            </label>
+          ) : null}
+        </ListFilters>
       </header>
 
       {msg ? (
@@ -144,9 +196,24 @@ export default function TeamDashboard() {
           Je bent nog niet gekoppeld als bardienstcoördinator. Vraag de barcommissie om je team in te stellen.
         </p>
       ) : (
-        (data.teams || []).map((team) => {
+        (data.teams || []).filter((team) => !teamId || String(team.id) === String(teamId)).map((team) => {
           const form = assign[team.id] || { serviceId: '', personId: '' };
-          const openTeamServices = (team.teamServices || []).filter((s) => (s.teamOpen ?? 0) > 0);
+          const members = (team.members || []).filter(
+            (m) => includesPerson(m.name, filters.person) && (!obligation || m.obligation === obligation),
+          );
+          const teamServices = (team.teamServices || []).filter((s) => {
+            if (!withinDates(s.date, filters.from, filters.to)) return false;
+            if (!filters.person.trim()) return true;
+            const names = (s.enrollments || []).map((e) => e.person?.name).join(' ');
+            return includesPerson(`${names} ${team.name}`, filters.person);
+          });
+          const openTeamServices = teamServices.filter((s) => (s.teamOpen ?? 0) > 0);
+          const matches = (team.upcomingMatches || []).filter((m) => {
+            if (!withinDates(m.date, filters.from, filters.to)) return false;
+            if (venue === 'home' && !m.home) return false;
+            if (venue === 'away' && m.home) return false;
+            return includesPerson(`${m.opponent || ''} ${team.name}`, filters.person);
+          });
           return (
             <section key={team.id} className="vvl-card space-y-4">
               <div>
@@ -157,10 +224,39 @@ export default function TeamDashboard() {
                 </p>
               </div>
 
-              <div>
+              <div className={section === 'ouders' ? '' : 'hidden'}>
                 <h3 className="text-xs font-bold uppercase text-vvl-accent">Ouders</h3>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full min-w-[720px] text-sm">
+                <ul className="mt-2 space-y-2 md:hidden">
+                  {members.map((m) => (
+                    <li key={m.id} className="rounded-sm border border-vvl-border p-3 text-sm">
+                      <p className="font-semibold">{m.name}</p>
+                      <p className="text-xs text-gray-600">
+                        {OBLIGATION_SHORT[m.obligation] || '—'} · 6 wkn {m.stood6w ?? m.barLast6Weeks ?? 0} · jaar{' '}
+                        {m.stoodYear ?? m.barThisYear ?? 0}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" className="vvl-btn-outline text-xs" onClick={() => setEdit({ id: m.id, name: m.name })}>
+                          Wijzigen
+                        </button>
+                        {!m.hasAccount && !m.email ? (
+                          <button type="button" className="vvl-btn-outline text-xs" onClick={() => removeParent(team, m)}>
+                            Verwijderen
+                          </button>
+                        ) : null}
+                      </div>
+                      {edit?.id === m.id ? (
+                        <div className="mt-2 flex gap-2">
+                          <input className="vvl-input" value={edit.name} onChange={(e) => setEdit({ id: m.id, name: e.target.value })} />
+                          <button type="button" className="vvl-btn-primary text-xs" onClick={() => saveParent(team.id)}>
+                            Opslaan
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 hidden md:block">
+                  <table className="w-full text-sm">
                     <thead className="bg-vvl-secondary text-xs font-bold uppercase">
                       <tr>
                         <th className="p-3 text-left">Naam</th>
@@ -173,7 +269,7 @@ export default function TeamDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {team.members.map((m) => (
+                      {members.map((m) => (
                         <tr key={m.id} className="border-t border-vvl-border">
                           <td className="p-3 font-semibold">
                             {edit?.id === m.id ? (
@@ -192,39 +288,23 @@ export default function TeamDashboard() {
                           <td className="p-3 text-right">{m.stoodYear ?? m.barThisYear ?? 0}</td>
                           <td className="p-3 text-right">{m.teamDutyCount || 0}</td>
                           <td className="p-3">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-nowrap gap-2">
                               {edit?.id === m.id ? (
                                 <>
-                                  <button
-                                    type="button"
-                                    className="text-xs font-bold uppercase text-vvl-primary hover:underline"
-                                    onClick={() => saveParent(team.id)}
-                                  >
+                                  <button type="button" className="vvl-btn-primary px-3 text-xs" onClick={() => saveParent(team.id)}>
                                     Opslaan
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="text-xs font-bold uppercase text-gray-600 hover:underline"
-                                    onClick={() => setEdit(null)}
-                                  >
+                                  <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => setEdit(null)}>
                                     Annuleren
                                   </button>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  className="text-xs font-bold uppercase text-vvl-primary hover:underline"
-                                  onClick={() => setEdit({ id: m.id, name: m.name })}
-                                >
+                                <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => setEdit({ id: m.id, name: m.name })}>
                                   Wijzigen
                                 </button>
                               )}
                               {!m.hasAccount && !m.email ? (
-                                <button
-                                  type="button"
-                                  className="text-xs font-bold uppercase text-red-800 hover:underline"
-                                  onClick={() => removeParent(team, m)}
-                                >
+                                <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => removeParent(team, m)}>
                                   Verwijderen
                                 </button>
                               ) : null}
@@ -246,9 +326,9 @@ export default function TeamDashboard() {
                   e.preventDefault();
                   addParent(team.id);
                 }}
-                className="flex flex-wrap items-end gap-2"
+                className={`flex flex-wrap items-end gap-2 ${section === 'ouders' ? '' : 'hidden'}`}
               >
-                <div className="min-w-[220px] flex-1">
+                <div className="min-w-0 flex-1">
                   <label className="vvl-label">Ouder toevoegen (alleen naam)</label>
                   <input
                     className="vvl-input"
@@ -262,21 +342,25 @@ export default function TeamDashboard() {
                 </button>
               </form>
 
-              {team.upcomingMatches.length ? (
+              {section === 'wedstrijden' ? (
                 <div>
                   <h3 className="text-xs font-bold uppercase text-vvl-accent">Komende wedstrijden</h3>
+                  {matches.length === 0 ? (
+                    <p className="mt-1 text-sm text-gray-600">Geen wedstrijden voor dit filter.</p>
+                  ) : (
                   <ul className="mt-1 text-sm text-gray-700">
-                    {team.upcomingMatches.map((m) => (
+                    {matches.map((m) => (
                       <li key={m.id}>
                         {formatMatchDate(m.date)} {m.time || ''} · {m.home ? 'thuis' : 'uit'} vs{' '}
                         {m.opponent || '—'}
                       </li>
                     ))}
                   </ul>
+                  )}
                 </div>
               ) : null}
 
-              {openTeamServices.length ? (
+              {section === 'diensten' && openTeamServices.length ? (
                 <form onSubmit={(e) => fillSpot(team, e)} className="grid gap-3 sm:grid-cols-2">
                   <h3 className="sm:col-span-2 font-heading text-base font-black uppercase">
                     Ouder op teamdienst zetten
@@ -318,16 +402,16 @@ export default function TeamDashboard() {
                     Naam invullen
                   </button>
                 </form>
-              ) : (
+              ) : section === 'diensten' ? (
                 <p className="text-sm text-gray-600">
                   Geen open teamdienst-plekken in deze planningsperiode. Die ontstaan automatisch als
                   dit team thuis speelt.
                 </p>
-              )}
+              ) : null}
 
-              {team.teamServices.length ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {team.teamServices.map((s) => {
+              {section === 'diensten' && teamServices.length ? (
+                <div className="grid gap-3 md:grid-cols-1">
+                  {teamServices.map((s) => {
                     const named = (s.enrollments || []).filter(
                       (e) => e.kind === 'TEAM' && Number(e.forTeamId || e.forTeam?.id) === Number(team.id),
                     );

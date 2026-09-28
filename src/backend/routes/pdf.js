@@ -3,7 +3,7 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { getPersonFromRequest } from '../lib/auth.js';
-import { renderPlanningRoster } from '../lib/pdfRoster.js';
+import { renderPlanningRoster, servicesForRoster } from '../lib/pdfRoster.js';
 import { planningIsOfficial } from '../lib/official.js';
 
 const router = Router();
@@ -65,7 +65,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
     const doc = new PDFDocument({ margin: 24, size: 'A4', layout: 'landscape' });
     doc.pipe(res);
     renderPlanningRoster(doc, {
-      services,
+      services: servicesForRoster(services),
       from,
       to,
       official,

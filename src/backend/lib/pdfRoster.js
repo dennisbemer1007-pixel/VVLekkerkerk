@@ -43,6 +43,16 @@ export function servicesForSlotRow(services, row) {
   );
 }
 
+/** Alleen actieve, niet-concept diensten waarop iemand met een naam staat. */
+export function servicesForRoster(services) {
+  return (services || []).filter((service) => {
+    if (!service || service.active === false || service.draft === true) return false;
+    return (service.enrollments || []).some((enrollment) =>
+      Boolean(String(enrollment?.person?.name || enrollment?.personName || '').trim()),
+    );
+  });
+}
+
 export function namesOnly(service) {
   const names = (service?.enrollments || []).map((e) => e.person?.name).filter(Boolean);
   return names;

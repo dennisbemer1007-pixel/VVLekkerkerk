@@ -23,6 +23,11 @@ import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { personTemplateSheets, personExportRowsSheets } from '../lib/personsXlsx.js';
 import { getClubSettings } from '../lib/season.js';
 import { normalizeAbsenceRange } from '../lib/absences.js';
+import { endOfDay, startOfDay } from '../lib/dates.js';
+import { queryText } from '../lib/listFilters.js';
+import { personRowsFromObjects } from '../lib/csvPersons.js';
+import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
+import { importPersonRows } from '../lib/personImport.js';
 
 const router = Router();
 const PHOTO_ROLES = [...ADMIN_ROLES, 'Teamcoördinator'];
@@ -79,9 +84,28 @@ router.get(
         include: { team: true, guardian: true },
         orderBy: { name: 'asc' },
       });
-      const visible = includeNameless
+      let visible = includeNameless
         ? persons
         : persons.filter((p) => !isNamelessRosterPerson(p));
+      const q = queryText(req.query);
+      if (q) {
+        visible = visible.filter(
+          (p) =>
+            String(p.name || '').toLowerCase().includes(q) ||
+            String(p.email || '').toLowerCase().includes(q),
+        );
+      }
+      if (req.query.from || req.query.to) {
+        const date = {};
+        if (req.query.from) date.gte = startOfDay(new Date(req.query.from));
+        if (req.query.to) date.lte = endOfDay(new Date(req.query.to));
+        const duties = await prisma.enrollment.findMany({
+          where: { service: { date } },
+          select: { personId: true },
+        });
+        const ids = new Set(duties.map((d) => d.personId));
+        visible = visible.filter((p) => ids.has(p.id));
+      }
       res.json(visible.map((p) => publicPerson(p, { viewerRole: req.person.role })));
     } catch (err) {
       next(err);
@@ -379,6 +403,67 @@ router.delete(
   }),
 );
 
+async function runPersonImport(req, res, next, rows) {
+  const teams = await prisma.team.findMany({ select: { id: true, name: true } });
+  const validated = validatePersonRows(rows, { teams });
+  if (!validated.ok) {
+    return res.status(400).json({
+      error: 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.',
+      invalidRows: validated.invalidRows,
+      unknownTeams: validated.unknownTeams,
+    });
+  }
+
+  const sendInvites = Boolean(req.body.sendInvites);
+  let appUrl = '';
+  if (sendInvites) {
+    try {
+      appUrl = resolvePublicAppUrl();
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  const result = await importPersonRows({
+    rows: validated.rows,
+    sendInvites,
+    actorId: req.person.id,
+    appUrl,
+  });
+  await writeAudit({
+    actorId: req.person.id,
+    action: 'person.import',
+    entity: 'Person',
+    detail: `${result.created} nieuw, ${result.updated} bijgewerkt, ${result.linked} gekoppeld (${result.seasonLabel})`,
+  });
+  res.json({
+    created: result.created,
+    updated: result.updated,
+    linked: result.linked,
+    unlinked: result.unlinked,
+    invites: result.invites,
+    seasonLabel: result.seasonLabel,
+  });
+}
+
+router.post(
+  '/import.xlsx',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      if (!req.body?.xlsxBase64) {
+        return res.status(400).json({ error: 'Geen Excel-bestand ontvangen' });
+      }
+      const buf = Buffer.from(String(req.body.xlsxBase64).replace(/^data:.*base64,/, ''), 'base64');
+      const objects = xlsxToObjects(buf);
+      const rows = personRowsFromObjects(objects);
+      if (!rows.length) return res.status(400).json({ error: 'Geen datarijen in het Excel-bestand' });
+      await runPersonImport(req, res, next, rows);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
 router.post(
   '/import',
   requireRole(...ADMIN_ROLES)(async (req, res, next) => {
@@ -387,83 +472,7 @@ router.post(
       if (parsed.headerError) {
         return res.status(400).json({ error: parsed.headerError });
       }
-      const teams = await prisma.team.findMany({ select: { id: true, name: true } });
-      const validated = validatePersonRows(parsed.rows, { teams });
-      if (!validated.ok) {
-        return res.status(400).json({
-          error: 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.',
-          invalidRows: validated.invalidRows,
-          unknownTeams: validated.unknownTeams,
-        });
-      }
-
-      const sendInvites = Boolean(req.body.sendInvites);
-      let appUrl = '';
-      if (sendInvites) {
-        try {
-          appUrl = resolvePublicAppUrl();
-        } catch (err) {
-          return next(err);
-        }
-      }
-
-      const settings = await getClubSettings();
-      let created = 0;
-      let updated = 0;
-      const invites = [];
-
-      for (const row of validated.rows) {
-        const existing = row.email
-          ? await prisma.person.findUnique({ where: { email: row.email } })
-          : null;
-        if (existing) {
-          await prisma.person.update({
-            where: { id: existing.id },
-            data: {
-              name: row.name,
-              phone: row.phone,
-              role: row.role,
-              obligation: row.obligation,
-              teamId: row.teamId,
-            },
-          });
-          if (row.teamId) await syncPrimaryTeamMembership(existing.id, row.teamId, prisma);
-          updated += 1;
-          continue;
-        }
-
-        const personNumber = await nextPersonNumber();
-        const inviteToken = sendInvites && row.email ? createInviteToken() : null;
-        const person = await prisma.person.create({
-          data: {
-            name: row.name,
-            email: row.email,
-            phone: row.phone,
-            role: row.role,
-            obligation: row.obligation,
-            teamId: row.teamId,
-            personNumber,
-            inviteToken,
-            inviteExpiresAt: inviteToken ? inviteExpiry() : null,
-          },
-        });
-        if (row.teamId) await syncPrimaryTeamMembership(person.id, row.teamId, prisma);
-        created += 1;
-        if (inviteToken && row.email) {
-          const link = inviteLink(inviteToken, appUrl);
-          const mail = await trySendInviteEmail({ email: row.email, name: row.name, link });
-          invites.push({ email: row.email, sent: mail.sent });
-        }
-      }
-
-      await writeAudit({
-        actorId: req.person.id,
-        action: 'person.import',
-        entity: 'Person',
-        detail: `${created} nieuw, ${updated} bijgewerkt (${settings.seasonLabel})`,
-      });
-
-      res.json({ created, updated, invites, seasonLabel: settings.seasonLabel });
+      await runPersonImport(req, res, next, parsed.rows);
     } catch (err) {
       next(err);
     }

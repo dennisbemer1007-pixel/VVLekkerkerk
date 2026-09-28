@@ -15,6 +15,7 @@ import {
 import { defaultTeamFunctions } from '../lib/teamFunctions.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { matchTemplateSheets } from '../lib/matchesXlsx.js';
+import { dateInQuery, queryText } from '../lib/listFilters.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -34,9 +35,40 @@ router.get(
       if (!person) {
         return res.status(401).json({ error: 'Je bent niet ingelogd' });
       }
-      const matches = await prisma.match.findMany({
+      let matches = await prisma.match.findMany({
         include: { team: true },
         orderBy: [{ date: 'asc' }, { id: 'asc' }],
+      });
+      const q = queryText(req.query);
+      let teamIdsForPerson = null;
+      if (req.query.personId) {
+        const who = await prisma.person.findUnique({
+          where: { id: Number(req.query.personId) },
+          include: { teamMemberships: { where: { active: true } } },
+        });
+        teamIdsForPerson = new Set(
+          [who?.teamId, ...(who?.teamMemberships || []).map((m) => m.teamId)].filter(Boolean),
+        );
+      }
+      let nameTeamIds = null;
+      if (q) {
+        const people = await prisma.person.findMany({
+          select: { name: true, teamId: true },
+        });
+        nameTeamIds = new Set(
+          people
+            .filter((p) => p.teamId && String(p.name || '').toLowerCase().includes(q))
+            .map((p) => p.teamId),
+        );
+      }
+      matches = matches.filter((m) => {
+        if ((req.query.from || req.query.to) && !dateInQuery(m.date, req.query)) return false;
+        if (teamIdsForPerson && !teamIdsForPerson.has(m.teamId)) return false;
+        if (q) {
+          const hay = `${m.opponent || ''} ${m.team?.name || ''}`.toLowerCase();
+          if (!hay.includes(q) && !nameTeamIds?.has(m.teamId)) return false;
+        }
+        return true;
       });
       res.json(matches);
     } catch (err) {

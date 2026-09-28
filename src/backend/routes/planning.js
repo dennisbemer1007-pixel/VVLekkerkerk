@@ -20,6 +20,7 @@ import { markPlanningOfficial, unmarkPlanningOfficial } from '../lib/official.js
 import { runDutyReminders } from '../lib/reminders.js';
 import { periodFromRound, periodJson, resolvePlanningPeriod } from '../lib/planningPeriod.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
+import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -231,6 +232,7 @@ router.get(
       if (from) where.date.gte = startOfDay(new Date(from));
       if (to) where.date.lte = endOfDay(new Date(to));
     }
+    if (from || to) where.date = tightenDate(where.date, { from, to });
 
     let services = await prisma.service.findMany({
       where,
@@ -250,6 +252,12 @@ router.get(
       }
       services = services.filter((s) =>
         s.enrollments.some((e) => e.personId === pid),
+      );
+    }
+    const q = queryText(req.query);
+    if (q) {
+      services = services.filter((s) =>
+        (s.enrollments || []).some((e) => includesText(e.person?.name, q)),
       );
     }
 

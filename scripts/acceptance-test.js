@@ -1,3 +1,6 @@
+import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
+import { personExportRowsSheets } from '../src/backend/lib/personsXlsx.js';
+
 /**
  * Acceptatie + regressie (draaiende app nodig).
  * Run: npm run test:accept
@@ -868,6 +871,209 @@ async function main() {
         Array.isArray(stats.json?.dutyStats) &&
         stats.json.dutyStats.every((p) => typeof p.barThisSeason === 'number' || typeof p.barThisYear === 'number'),
       `noshow=${stats.json?.noShowPeople?.length} duty=${stats.json?.dutyStats?.length}`,
+    ),
+  );
+
+  const farRange = await req('/api/services?from=2099-01-01&to=2099-01-02', { token: lisa });
+  mark(record('filter diensten op datum', farRange.status === 200 && Array.isArray(farRange.json) && farRange.json.length === 0));
+
+  const nobody = await req('/api/services?q=zzz-geen-persoon', { token: lisa });
+  mark(
+    record(
+      'filter diensten op persoon',
+      nobody.status === 200 && Array.isArray(nobody.json) && nobody.json.length === 0,
+    ),
+  );
+
+  const mySwaps = await req('/api/swaps?scope=mine', { token: markTok });
+  const markId = markMe.json?.id;
+  mark(
+    record(
+      'mijn ruilen toont alleen eigen verzoeken',
+      mySwaps.status === 200 &&
+        Array.isArray(mySwaps.json) &&
+        mySwaps.json.every((s) => s.requesterId === markId || s.counterpartyId === markId),
+      String(mySwaps.status),
+    ),
+  );
+
+  const rosterQ = await req('/api/planning?q=zzz-geen-persoon&from=2099-01-01&to=2099-01-02', {
+    token: markTok,
+  });
+  mark(
+    record(
+      'filter rooster op persoon en datum',
+      rosterQ.status === 200 && Array.isArray(rosterQ.json?.services) && rosterQ.json.services.length === 0,
+    ),
+  );
+
+  const peopleOnDay = await req('/api/persons?from=2099-03-01&to=2099-03-02&q=zzz', { token: markTok });
+  mark(
+    record(
+      'filter mensen op persoon en datum',
+      peopleOnDay.status === 200 && Array.isArray(peopleOnDay.json) && peopleOnDay.json.length === 0,
+    ),
+  );
+
+  const matchFilter = await req('/api/matches?from=2099-04-01&to=2099-04-02&q=zzz', { token: markTok });
+  mark(
+    record(
+      'filter wedstrijden op persoon en datum',
+      matchFilter.status === 200 && Array.isArray(matchFilter.json) && matchFilter.json.length === 0,
+    ),
+  );
+
+  const stamp = Date.now();
+  const xlsxBuf = workbookToXlsx(
+    personExportRowsSheets(
+      [
+        {
+          name: `Import Kind ${stamp}`,
+          email: `kind.${stamp}@vvl.demo`,
+          phone: '0699999999',
+          team: null,
+          role: 'Vrijwilliger',
+          obligation: 'NONE',
+          guardian: { email: 'mark@vvl.demo' },
+          exempted: false,
+        },
+      ],
+      [],
+    ),
+  );
+  const imported = await req('/api/persons/import.xlsx', {
+    method: 'POST',
+    token: markTok,
+    body: { xlsxBase64: xlsxBuf.toString('base64') },
+  });
+  const listed = await req(`/api/persons?all=true&q=${encodeURIComponent(`kind.${stamp}`)}`, { token: markTok });
+  const importedPerson = (listed.json || []).find((p) => p.email === `kind.${stamp}@vvl.demo`);
+  mark(
+    record(
+      'xlsx-import roundtrip met hoort bij',
+      imported.status === 200 &&
+        imported.json?.created === 1 &&
+        imported.json?.linked === 1 &&
+        importedPerson?.guardianId === markId,
+      `${imported.status} ${JSON.stringify(imported.json || {}).slice(0, 180)}`,
+    ),
+  );
+  if (importedPerson?.id) {
+    await req(`/api/persons/${importedPerson.id}`, { method: 'DELETE', token: markTok });
+  }
+
+  {
+    const childName = `Kind Uitschrijven ${Date.now()}`;
+    const child = await req('/api/persons/me/children', {
+      method: 'POST',
+      token: lisa,
+      body: { name: childName },
+    });
+    const visible = await req('/api/services', { token: lisa });
+    const candidates = (Array.isArray(visible.json) ? visible.json : []).filter(
+      (service) => !service.locked && (service.capacity?.personalOpen ?? 0) > 0,
+    );
+    let enrolled = null;
+    let usedService = null;
+    for (const service of candidates) {
+      const attempt = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: service.id, personId: child.json?.id },
+      });
+      if (attempt.status === 201) {
+        enrolled = attempt;
+        usedService = service;
+        break;
+      }
+    }
+    const mine = usedService
+      ? await req(`/api/services?filter=mine&personId=${lisaMe.json.id}`, { token: lisa })
+      : null;
+    const onMine = (mine?.json || []).find((service) => service.id === usedService?.id);
+    const childRow = (onMine?.enrollments || []).find((row) => row.personId === child.json?.id);
+    mark(
+      record(
+        'ouder schrijft kind in',
+        child.status === 201 &&
+          enrolled?.status === 201 &&
+          enrolled.json?.personId === child.json?.id &&
+          Boolean(childRow),
+        `${child.status} ${enrolled?.status || 'geen dienst'} ${enrolled?.json?.error || ''}`,
+      ),
+    );
+    if (enrolled?.json?.id) {
+      const removed = await req(`/api/enrollments/${enrolled.json.id}`, { method: 'DELETE', token: lisa });
+      const after = await req(`/api/services?filter=mine&personId=${lisaMe.json.id}`, { token: lisa });
+      const still = (after.json || [])
+        .flatMap((service) => service.enrollments || [])
+        .some((row) => row.id === enrolled.json.id);
+      mark(
+        record(
+          'ouder schrijft kind uit',
+          removed.status === 204 && still === false,
+          `${removed.status} ${removed.json?.error || ''}`,
+        ),
+      );
+    } else {
+      mark(record('ouder schrijft kind uit', false, 'geen inschrijving'));
+    }
+    if (child.json?.id) {
+      await req(`/api/persons/me/children/${child.json.id}`, { method: 'DELETE', token: lisa });
+    }
+  }
+
+  const servicesBeforeReset = await req('/api/services', { token: admin });
+  const serviceCountBefore = Array.isArray(servicesBeforeReset.json) ? servicesBeforeReset.json.length : -1;
+  const wipeDenied = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: lisa,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen vrijwilliger 403', wipeDenied.status === 403, String(wipeDenied.status)));
+  const wipeTeam = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: sandra,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen teamcoördinator 403', wipeTeam.status === 403, String(wipeTeam.status)));
+  const wipeBar = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: markTok,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen barcommissie 403', wipeBar.status === 403, String(wipeBar.status)));
+  const wipePreviewDenied = await req('/api/settings/opschonen', { token: markTok });
+  mark(record('opschonen voorbeeld barcommissie 403', wipePreviewDenied.status === 403));
+  const wipePreview = await req('/api/settings/opschonen', { token: admin });
+  mark(
+    record(
+      'opschonen voorbeeld admin',
+      wipePreview.status === 200 &&
+        Array.isArray(wipePreview.json?.wissen) &&
+        Array.isArray(wipePreview.json?.blijft) &&
+        wipePreview.json.wissen.some((row) => row.key === 'diensten') &&
+        wipePreview.json.blijft.some((row) => row.key === 'teams'),
+      String(wipePreview.status),
+    ),
+  );
+  const wipeBad = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: admin,
+    body: { confirm: 'wissen' },
+  });
+  const wipeEmpty = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: admin,
+    body: {},
+  });
+  const servicesAfterReset = await req('/api/services', { token: admin });
+  const serviceCountAfter = Array.isArray(servicesAfterReset.json) ? servicesAfterReset.json.length : -2;
+  mark(
+    record(
+      'opschonen zonder juist woord doet niets',
+      wipeBad.status === 400 && wipeEmpty.status === 400 && serviceCountAfter === serviceCountBefore && serviceCountBefore >= 0,
+      `${wipeBad.status}/${wipeEmpty.status} diensten ${serviceCountBefore}→${serviceCountAfter}`,
     ),
   );
 

@@ -8,6 +8,7 @@ import { writeAudit } from '../lib/audit.js';
 import { PENDING_SWAP_STATUSES, swapBlockers } from '../lib/swapRules.js';
 import { pendingForEnrollment, pendingForPerson } from '../lib/swapQueries.js';
 import { createNotification, notifyBarcommissie } from '../lib/notifications.js';
+import { dateInQuery, includesText, queryText } from '../lib/listFilters.js';
 
 const router = Router();
 
@@ -198,11 +199,30 @@ router.get(
           }
         : { OR: [{ requesterId: me }, { counterpartyId: me }] };
 
-      const swaps = await prisma.swapRequest.findMany({
+      let swaps = await prisma.swapRequest.findMany({
         where,
         include: SWAP_INCLUDE,
         orderBy: { createdAt: 'desc' },
       });
+      if (req.query.scope === 'mine') {
+        swaps = swaps.filter((s) => s.requesterId === me || s.counterpartyId === me);
+      }
+      const q = queryText(req.query);
+      if (q) {
+        swaps = swaps.filter(
+          (s) =>
+            includesText(s.requester?.name, q) ||
+            includesText(s.counterparty?.name, q) ||
+            includesText(s.fromEnrollment?.person?.name, q) ||
+            includesText(s.toEnrollment?.person?.name, q),
+        );
+      }
+      if (req.query.from || req.query.to) {
+        swaps = swaps.filter((s) => {
+          const dates = [s.fromEnrollment?.service?.date, s.toEnrollment?.service?.date].filter(Boolean);
+          return dates.some((d) => dateInQuery(d, req.query));
+        });
+      }
       res.json(swaps.map(mapSwap));
     } catch (err) {
       next(err);

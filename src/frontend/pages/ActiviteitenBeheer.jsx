@@ -266,7 +266,7 @@ export default function ActiviteitenBeheer() {
                 </button>
                 <button
                   type="button"
-                  className="text-xs font-bold uppercase text-red-700"
+                  className="vvl-btn-outline text-xs"
                   onClick={async () => {
                     await api.deleteActivity(a.id);
                     await load();

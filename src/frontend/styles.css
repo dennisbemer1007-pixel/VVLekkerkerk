@@ -5,6 +5,12 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    @apply max-w-full overflow-x-hidden;
+  }
+
   body {
     @apply bg-vvl-muted text-vvl-primary antialiased;
   }
@@ -12,15 +18,15 @@
 
 @layer components {
   .vvl-btn-primary {
-    @apply inline-flex items-center justify-center rounded-full border-2 border-vvl-primary bg-vvl-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-vvl-primary bg-vvl-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
   }
 
   .vvl-btn-outline {
-    @apply inline-flex items-center justify-center rounded-full border-2 border-vvl-primary bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-vvl-primary transition hover:bg-vvl-primary hover:text-white;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-vvl-primary bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-vvl-primary transition hover:bg-vvl-primary hover:text-white;
   }
 
   .vvl-btn-outline-light {
-    @apply inline-flex items-center justify-center rounded-full border-2 border-white bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-white bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
   }
 
   .vvl-card {
@@ -28,7 +34,7 @@
   }
 
   .vvl-input {
-    @apply w-full rounded-sm border border-vvl-border bg-white px-3 py-2 text-sm outline-none ring-vvl-primary focus:ring-2;
+    @apply min-h-11 w-full rounded-sm border border-vvl-border bg-white px-3 py-2 text-sm outline-none ring-vvl-primary focus:ring-2;
   }
 
   .vvl-label {

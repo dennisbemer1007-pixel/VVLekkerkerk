@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
+import DesktopOnly from '../components/DesktopOnly.jsx';
+import NlDateInput from '../components/NlDateInput.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -38,16 +40,15 @@ const OBLIGATIONS = [
   { value: 'VR18', label: 'VR18+ (min. 1× / 12 weken)' },
 ];
 
-export default function Beheer({ mode = 'full' }) {
+export default function Beheer({ mode = 'full', onlyTab = '' }) {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   let tabs = TABS;
+  if (onlyTab) tabs = TABS.filter((t) => t.id === onlyTab);
   if (mode === 'teams') tabs = TABS.filter((t) => t.id === 'teams');
   if (mode === 'invite') tabs = [{ id: 'personen', label: 'Uitnodigen' }];
 
-  // Admin heeft dezelfde pagina’s al in de topnavigatie.
-  const tabsInTopNav =
-    mode === 'full' && (user?.role === 'Admin' || user?.role === 'Bestuur');
+  const tabsInTopNav = false;
 
   const tabFromUrl = searchParams.get('tab');
   const initialTab = tabs.some((t) => t.id === tabFromUrl) ? tabFromUrl : tabs[0]?.id || 'personen';
@@ -61,13 +62,15 @@ export default function Beheer({ mode = 'full' }) {
 
   const help = helpForBeheerTab(tab, mode);
   const title =
-    mode === 'teams'
-      ? 'Mijn team'
-      : mode === 'invite'
-        ? 'Ouders uitnodigen'
-        : tabsInTopNav
-          ? tabs.find((t) => t.id === tab)?.label || 'Beheer'
-          : 'Beheer';
+    onlyTab === 'personen'
+      ? 'Mensen'
+      : mode === 'teams'
+        ? 'Mijn team'
+        : mode === 'invite'
+          ? 'Ouders uitnodigen'
+          : tabsInTopNav
+            ? tabs.find((t) => t.id === tab)?.label || 'Beheer'
+            : 'Beheer';
 
   return (
     <div className="space-y-6">
@@ -89,7 +92,7 @@ export default function Beheer({ mode = 'full' }) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`rounded-full px-4 py-2 text-xs font-bold uppercase ${
+              className={`min-h-11 rounded-full px-4 py-2 text-xs font-bold uppercase ${
                 tab === t.id ? 'bg-vvl-primary text-white' : 'bg-white border border-vvl-primary'
               }`}
             >
@@ -118,20 +121,21 @@ const ACCOUNT_FILTERS = [
   { value: 'no', label: 'Geen account' },
 ];
 
-function IconButton({ title, onClick, children, tone = 'default', type = 'button' }) {
+function IconButton({ title, onClick, children, tone = 'default', type = 'button', size = 'md' }) {
   const toneClass =
     tone === 'danger'
       ? 'text-red-800 border-red-300 hover:bg-red-50'
       : tone === 'warn'
         ? 'text-amber-800 border-amber-300 hover:bg-amber-50'
         : 'border-vvl-border hover:bg-vvl-secondary';
+  const box = size === 'sm' ? 'h-8 w-8 text-sm' : 'h-11 w-11 text-base';
   return (
     <button
       type={type}
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border bg-white text-base ${toneClass}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-sm border bg-white ${box} ${toneClass}`}
     >
       {children}
       <span className="sr-only">{title}</span>
@@ -326,18 +330,22 @@ function PersonenBeheer() {
   const [filterRole, setFilterRole] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
 
   // Bulk-linkverzending
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
+  const [seasonCounts, setSeasonCounts] = useState({});
+  const [showExtraCols, setShowExtraCols] = useState(false);
 
   const load = async (includeNameless = showNameless) => {
     setError('');
     const errors = [];
     try {
-      setPersons(await api.getPersons(true, { includeNameless }));
+      setPersons(await api.getPersons(true, { includeNameless, from: filterFrom, to: filterTo }));
     } catch (e) {
       errors.push(`Personen: ${e.message}`);
     }
@@ -346,12 +354,20 @@ function PersonenBeheer() {
     } catch (e) {
       errors.push(`Teams: ${e.message}`);
     }
+    try {
+      const stats = await api.getStats();
+      const map = {};
+      for (const row of stats?.dutyStats || []) map[row.id] = row.barThisSeason ?? row.barThisYear ?? 0;
+      setSeasonCounts(map);
+    } catch {
+      setSeasonCounts({});
+    }
     if (errors.length) setError(errors.join(' '));
   };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [filterFrom, filterTo]);
 
   const resetForm = () => {
     setEditId(null);
@@ -490,6 +506,8 @@ function PersonenBeheer() {
     setFilterRole('');
     setFilterTeam('');
     setFilterAccount('');
+    setFilterFrom('');
+    setFilterTo('');
   };
 
   const selectablePersons = filteredPersons.filter((p) => p.email && !p.hasAccount);
@@ -569,16 +587,16 @@ function PersonenBeheer() {
   };
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(22rem,32rem)] md:items-start md:gap-4 md:space-y-0">
       <form
         ref={formRef}
         onSubmit={submit}
-        className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="vvl-card grid gap-3 sm:grid-cols-2 md:sticky md:top-4 md:col-start-2 md:row-start-1 lg:grid-cols-1"
       >
-        <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
+        <h2 className="sm:col-span-2 font-heading text-lg font-black uppercase lg:col-span-1">
           {editId ? 'Persoon bewerken' : 'Persoon toevoegen'}
         </h2>
-        <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
+        <p className="text-sm text-gray-700 sm:col-span-2 lg:col-span-1">
           E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin). Vul
           e-mail in om een uitnodiging te versturen, of kies "Hoort bij" voor iemand zonder eigen
           account (dan is e-mail niet verplicht).
@@ -669,7 +687,7 @@ function PersonenBeheer() {
           />
           Vrijgesteld (niet automatisch inplannen)
         </label>
-        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
+        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-1">
           <button type="submit" className="vvl-btn-primary min-h-[44px]">
             {editId ? 'Opslaan' : 'Toevoegen / uitnodigen'}
           </button>
@@ -682,14 +700,16 @@ function PersonenBeheer() {
       </form>
 
       {editId ? (
-        <PersonAbsencesEditor
-          personId={editId}
-          personName={persons.find((p) => p.id === editId)?.name || ''}
-        />
+        <div className="md:col-start-2">
+          <PersonAbsencesEditor
+            personId={editId}
+            personName={persons.find((p) => p.id === editId)?.name || ''}
+          />
+        </div>
       ) : null}
 
       {inviteResult ? (
-        <div className="vvl-card space-y-3 border-l-4 border-l-emerald-500">
+        <div className="vvl-card space-y-3 border-l-4 border-l-emerald-500 md:col-start-2">
           <h3 className="font-heading text-lg font-black uppercase">Uitnodiging klaar</h3>
           {inviteResult.emailSent ? (
             <p className="text-sm text-emerald-800">
@@ -730,8 +750,14 @@ function PersonenBeheer() {
         </div>
       ) : null}
 
+      <div className="space-y-4 md:col-start-1 md:row-start-1">
       <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-base font-black uppercase">Filters</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-heading text-base font-black uppercase">Filters</h2>
+          <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => setShowExtraCols((v) => !v)}>
+            {showExtraCols ? 'Minder kolommen' : 'Meer kolommen'}
+          </button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="vvl-label">Naam</label>
@@ -766,6 +792,14 @@ function PersonenBeheer() {
             </select>
           </div>
           <div>
+            <label className="vvl-label">Van</label>
+            <NlDateInput value={filterFrom} onChange={setFilterFrom} ariaLabel="Van" />
+          </div>
+          <div>
+            <label className="vvl-label">Tot</label>
+            <NlDateInput value={filterTo} onChange={setFilterTo} ariaLabel="Tot" />
+          </div>
+          <div>
             <label className="vvl-label">Account</label>
             <select
               className="vvl-input"
@@ -793,14 +827,135 @@ function PersonenBeheer() {
                 {f.label} ✕
               </button>
             ))}
-            <button type="button" className="text-xs font-bold uppercase underline" onClick={clearAllFilters}>
+            <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={clearAllFilters}>
               Wis alle filters
             </button>
           </div>
         ) : null}
       </div>
 
-      <div className="space-y-2">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[48rem] text-sm">
+          <thead className="bg-black text-left text-white">
+            <tr>
+              <th className="p-2">
+                <input type="checkbox" className="h-5 w-5" checked={allSelected} onChange={toggleSelectAll} aria-label="Selecteer alles" />
+              </th>
+              <th className="p-2 font-bold">Naam</th>
+              <th className="p-2 font-bold">E-mail</th>
+              {showExtraCols ? <th className="p-2 font-bold">Telefoon</th> : null}
+              <th className="p-2 font-bold">Rol</th>
+              <th className="p-2 font-bold">Team</th>
+              <th className="p-2 font-bold">Verplichting</th>
+              {showExtraCols ? <th className="p-2 font-bold">Hoort bij</th> : null}
+              {showExtraCols ? <th className="p-2 font-bold">Vrijgesteld</th> : null}
+              <th className="p-2 font-bold">Seizoen</th>
+              <th className="p-2 font-bold">Account</th>
+              <th className="p-2 font-bold"> </th>
+            </tr>
+            <tr className="bg-white text-black">
+              <th />
+              <th className="p-1">
+                <input className="vvl-input" value={filterName} onChange={(e) => setFilterName(e.target.value)} aria-label="Filter naam" />
+              </th>
+              <th />
+              {showExtraCols ? <th /> : null}
+              <th className="p-1">
+                <select className="vvl-input" value={filterRole} onChange={(e) => setFilterRole(e.target.value)} aria-label="Filter rol">
+                  <option value="">Alle</option>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </th>
+              <th className="p-1">
+                <select className="vvl-input" value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)} aria-label="Filter team">
+                  <option value="">Alle</option>
+                  <option value="__none__">Geen</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </th>
+              <th />
+              {showExtraCols ? <th /> : null}
+              {showExtraCols ? <th /> : null}
+              <th />
+              <th className="p-1">
+                <select className="vvl-input" value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)} aria-label="Filter account">
+                  {ACCOUNT_FILTERS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              </th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPersons.map((p) => (
+              <tr
+                key={p.id}
+                className="cursor-pointer border-t border-vvl-border hover:bg-vvl-muted"
+                onClick={() => startEdit(p)}
+              >
+                <td className="whitespace-nowrap p-2">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5"
+                    checked={selectedIds.includes(p.id)}
+                    disabled={!p.email || p.hasAccount}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => toggleSelect(p.id)}
+                    aria-label={`Selecteer ${p.name}`}
+                  />
+                </td>
+                <td className="whitespace-nowrap p-2 font-semibold">{p.name}{!p.active ? ' (inactief)' : ''}</td>
+                <td className="whitespace-nowrap p-2">{p.email || '—'}</td>
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.phone || '—'}</td> : null}
+                <td className="whitespace-nowrap p-2">{p.role}</td>
+                <td className="whitespace-nowrap p-2">{p.team?.name || '—'}</td>
+                <td className="whitespace-nowrap p-2">{p.obligationLabel}</td>
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.guardianName || '—'}</td> : null}
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.exempted ? 'ja' : 'nee'}</td> : null}
+                <td className="whitespace-nowrap p-2 text-right">{seasonCounts[p.id] ?? '—'}</td>
+                <td className="whitespace-nowrap p-2">{p.hasAccount ? 'Wel' : p.invitePending ? 'Uitnodiging' : 'Geen'}</td>
+                <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-nowrap gap-1">
+                    <IconButton size="sm" title={`${p.name} bewerken`} onClick={() => startEdit(p)}>✏️</IconButton>
+                    {!p.hasAccount && p.email ? (
+                      <IconButton size="sm" title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
+                    ) : null}
+                    <IconButton size="sm" title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`} tone="warn" onClick={() => toggleActive(p)}>
+                      {p.active ? '⛔' : '✅'}
+                    </IconButton>
+                    {!p.active && (p.email || p.phone) ? (
+                      <IconButton
+                        size="sm"
+                        title={`Contact van ${p.name} wissen (AVG)`}
+                        tone="warn"
+                        onClick={async () => {
+                          if (!window.confirm(`Contact van ${p.name} nu wissen? Naam blijft in de planning staan.`)) return;
+                          try {
+                            await api.erasePersonContact(p.id);
+                            await load();
+                          } catch (e) {
+                            setError(e.message);
+                          }
+                        }}
+                      >
+                        🧹
+                      </IconButton>
+                    ) : null}
+                    <IconButton size="sm" title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>🗑️</IconButton>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="space-y-2 md:hidden">
         <div className="flex min-h-[44px] items-center gap-2 px-1 text-sm">
           <input
             type="checkbox"
@@ -1003,7 +1158,10 @@ function PersonenBeheer() {
         </div>
       </div>
 
-      <PersonImport onDone={() => load(showNameless)} />
+      <DesktopOnly>
+        <PersonImport onDone={() => load(showNameless)} />
+      </DesktopOnly>
+      </div>
     </section>
   );
 }
@@ -1014,6 +1172,35 @@ function PersonImport({ onDone }) {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  const importXlsxFile = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    setMsg('');
+    setError('');
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Bestand lezen mislukt'));
+        reader.readAsDataURL(file);
+      });
+      const base64 = String(dataUrl).split(',')[1] || '';
+      const result = await api.importPersonsXlsx({ xlsxBase64: base64, sendInvites });
+      setMsg(
+        `${result.created} nieuw, ${result.updated} bijgewerkt${
+          result.linked ? `, ${result.linked} gekoppeld (hoort bij)` : ''
+        }.`,
+      );
+      await onDone?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -1037,7 +1224,15 @@ function PersonImport({ onDone }) {
 
   return (
     <form onSubmit={submit} className="vvl-card space-y-3">
-      <h2 className="font-heading text-lg font-black uppercase">Personen importeren (CSV)</h2>
+      <h2 className="font-heading text-lg font-black uppercase">Personen importeren</h2>
+      <label className="vvl-label">Excel (.xlsx), zelfde kolommen als de export</label>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        className="vvl-input"
+        onChange={(e) => importXlsxFile(e.target.files?.[0])}
+      />
       <p className="text-sm text-gray-700">
         CSV met kolommen <code>naam;email;telefoon;team;rol;verplichting</code>. Onbekende teams
         worden niet aangemaakt. Verplichting: geen, verplicht of VR18. Liever Excel? Gebruik
@@ -1204,6 +1399,7 @@ function DienstenBeheer() {
   const [personSearch, setPersonSearch] = useState({});
   const [dateFrom, setDateFrom] = useState(todayInputValue());
   const [dateTo, setDateTo] = useState('');
+  const [personQuery, setPersonQuery] = useState('');
 
   const load = () =>
     Promise.all([
@@ -1229,9 +1425,14 @@ function DienstenBeheer() {
       if (to && d > to) return false;
       // Standaard: alleen toekomstig (vanaf vandaag) als geen tot-filter en from = vandaag
       if (!dateTo && dateFrom === todayInputValue() && d < from) return false;
+      if (personQuery.trim()) {
+        const q = personQuery.trim().toLowerCase();
+        const names = (s.enrollments || []).map((e) => e.person?.name || '').join(' ').toLowerCase();
+        if (!names.includes(q) && !String(s.note || '').toLowerCase().includes(q)) return false;
+      }
       return true;
     });
-  }, [services, dateFrom, dateTo]);
+  }, [services, dateFrom, dateTo, personQuery]);
 
   const reset = () => {
     setEditId(null);
@@ -1431,6 +1632,15 @@ function DienstenBeheer() {
             className="vvl-input min-h-[44px]"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="vvl-label">Persoon</label>
+          <input
+            className="vvl-input"
+            value={personQuery}
+            onChange={(e) => setPersonQuery(e.target.value)}
+            placeholder="Naam"
           />
         </div>
         <p className="sm:col-span-2 text-xs text-gray-600">
@@ -1759,11 +1969,7 @@ function TeamsBeheer() {
                 >
                   Wijzigen
                 </button>
-                <button
-                  type="button"
-                  className="text-xs font-bold uppercase text-red-800"
-                  onClick={() => removeTeam(t)}
-                >
+                <button type="button" className="vvl-btn-outline text-xs" onClick={() => removeTeam(t)}>
                   Verwijderen
                 </button>
               </div>

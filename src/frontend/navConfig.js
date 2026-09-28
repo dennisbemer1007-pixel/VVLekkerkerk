@@ -1,0 +1,61 @@
+export function canonicalRole(role) {
+  if (role === 'Bestuur') return 'Admin';
+  if (role === 'Coördinator') return 'Barcommissie';
+  return role || 'Vrijwilliger';
+}
+
+const VOLUNTEER = [
+  { to: '/diensten', label: 'Diensten', short: 'Diensten', icon: 'calendar', match: ['/diensten'] },
+  { to: '/mijn-diensten', label: 'Mijn diensten', short: 'Mijn', icon: 'list', match: ['/mijn-diensten'] },
+  { to: '/ruilen', label: 'Ruilen', short: 'Ruilen', icon: 'swap', match: ['/ruilen'] },
+  { to: '/ik', label: 'Ik', short: 'Ik', icon: 'person', match: ['/ik', '/kinderen'] },
+];
+
+const OPEN = { to: '/open', label: 'Open', short: 'Open', icon: 'dot', match: ['/open'] };
+const ROOSTER = { to: '/rooster', label: 'Rooster', short: 'Rooster', icon: 'calendar', match: ['/rooster', '/planning'] };
+const MENSEN = { to: '/mensen', label: 'Mensen', short: 'Mensen', icon: 'people', match: ['/mensen', '/uitnodigen'] };
+const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', short: 'Ruilen', icon: 'swap', match: ['/mijn-ruilen'] };
+const MEER = { to: '/meer', label: 'Meer', short: 'Meer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens', '/beheer'] };
+const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', short: 'Instel.', icon: 'gear', match: ['/instellingen'], desktopOnly: true };
+
+const SETTINGS_TABS = new Set(['regels', 'mail', 'club', 'activiteiten']);
+
+export function navForRole(role) {
+  const r = canonicalRole(role);
+  if (r === 'Teamcoördinator') {
+    return [
+      VOLUNTEER[0],
+      VOLUNTEER[1],
+      { to: '/team', label: 'Team', short: 'Team', icon: 'people', match: ['/team', '/teams'] },
+      VOLUNTEER[2],
+      VOLUNTEER[3],
+    ];
+  }
+  if (r === 'Barcommissie') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, MEER];
+  if (r === 'Admin') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, INSTELLINGEN, MEER];
+  return VOLUNTEER;
+}
+
+export function mobileNavForRole(role) {
+  return navForRole(role).filter((item) => !item.desktopOnly);
+}
+
+export function isAdminRoleName(role) {
+  return canonicalRole(role) === 'Admin';
+}
+
+export function navItemActive(item, pathname, search, role) {
+  const tab = new URLSearchParams(search || '').get('tab');
+  const admin = isAdminRoleName(role);
+  if (item.to === '/instellingen') {
+    if (pathname === '/instellingen') return true;
+    return pathname === '/beheer' && SETTINGS_TABS.has(tab);
+  }
+  if (item.to === '/meer') {
+    if (['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens'].includes(pathname)) return true;
+    if (pathname !== '/beheer') return false;
+    if (admin && SETTINGS_TABS.has(tab)) return false;
+    return true;
+  }
+  return (item.match || [item.to]).some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}

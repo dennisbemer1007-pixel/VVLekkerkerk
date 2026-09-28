@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ListFilters from '../components/ListFilters.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -15,13 +16,14 @@ function serviceStatus(s) {
   return s.status ?? occupancyStatus(s.enrolled ?? s.enrollments?.length ?? 0, s.required ?? 2);
 }
 
-export default function Dashboard() {
+export default function Dashboard({ focus = 'week' }) {
   const { can } = useAuth();
   const [stats, setStats] = useState(null);
   const [weekServices, setWeekServices] = useState([]);
   const [periodServices, setPeriodServices] = useState([]);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState(null);
+  const [filters, setFilters] = useState({ person: '', from: '', to: '' });
 
   useEffect(() => {
     Promise.all([
@@ -61,10 +63,31 @@ export default function Dashboard() {
     voluntary: people.filter((p) => p.obligation !== 'FULL' && p.obligation !== 'VR18'),
   });
 
-  const notSelfSplit = splitByObligation(notSelf);
-  const noShowSplit = splitByObligation(noShows);
+  const byQuery = (people) =>
+    people.filter((p) => {
+      const q = filters.person.trim().toLowerCase();
+      if (q && !`${p.name || ''} ${p.team?.name || ''} ${p.teamName || ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+  const notSelfSplit = splitByObligation(byQuery(notSelf));
+  const noShowSplit = splitByObligation(byQuery(noShows));
 
   const toggleFilter = (key) => setStatusFilter((cur) => (cur === key ? null : key));
+
+  if (focus === 'aandacht') {
+    return (
+      <div className="space-y-4">
+        <h1 className="font-heading text-xl font-black uppercase">Aandacht</h1>
+        {error ? <p className="text-sm text-red-800">{error}</p> : null}
+        <ListFilters {...filters} onChange={setFilters} personLabel="Naam" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <AttentionBlock title="Niet zelf ingeschreven" mandatory={notSelfSplit.mandatory} voluntary={notSelfSplit.voluntary} />
+          <AttentionBlock title="No-show gehad" mandatory={noShowSplit.mandatory} voluntary={noShowSplit.voluntary} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -133,7 +156,7 @@ export default function Dashboard() {
             <ul className="space-y-2">
               {filteredServices.map((s) => (
                 <li key={s.id} className="vvl-card flex min-h-[44px] items-center justify-between gap-2 py-3 text-sm">
-                  <Link className="font-semibold underline" to="/planning">
+                  <Link className="font-semibold underline" to="/rooster">
                     {new Date(s.date).toLocaleDateString('nl-NL', {
                       weekday: 'short',
                       day: 'numeric',
@@ -170,8 +193,8 @@ export default function Dashboard() {
       {can('beheer') && dutyStats.length ? (
         <section className="space-y-3">
           <h2 className="font-heading text-base font-black uppercase">Dit seizoen</h2>
-          <div className="vvl-card overflow-x-auto p-0">
-            <table className="w-full text-sm">
+          <div className="vvl-card p-0">
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-vvl-secondary text-xs font-bold uppercase">
                 <tr>
                   <th className="p-3 text-left">Naam</th>
@@ -216,7 +239,7 @@ function PersonList({ heading, people }) {
         <ul className="divide-y divide-vvl-border">
           {people.map((p) => (
             <li key={p.id} className="flex min-h-[44px] items-center justify-between gap-2 py-2 text-sm">
-              <span className="font-semibold">{p.name}</span>
+              <Link to="/mensen" className="font-semibold underline">{p.name}</Link>
               <span className="text-gray-600">{p.role || OBLIGATION_SHORT[p.obligation] || '—'}</span>
             </li>
           ))}

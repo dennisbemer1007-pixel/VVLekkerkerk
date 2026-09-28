@@ -3,11 +3,21 @@
  * Run: node scripts/unit-checks.js
  */
 import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
 import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/lib/csvMatches.js';
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
 import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../src/backend/lib/season.js';
-import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../src/backend/lib/csvPersons.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFromObjects } from '../src/backend/lib/csvPersons.js';
+import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
+import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
+import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
+import { tileGroups } from '../src/frontend/utils/tiles.js';
+import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
+import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
 import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
@@ -54,6 +64,7 @@ import {
   rosterDaySections,
   servicesForSlotRow,
   slotCellText,
+  servicesForRoster,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
@@ -780,22 +791,16 @@ assert(
     matchTemplateSheets()[0].rows.length === 0,
 );
 
-// Occupancy-tegels (punt 2): statusclassificatie
-function occupancyStatus(enrolled, required) {
-  if (enrolled >= required) return 'full';
-  if (enrolled === required - 1) return 'almost';
-  return 'open';
-}
+// Occupancy-tegels (punt 2): aantal op de tegel = lengte van de gefilterde lijst
 const tileServices = [
   { enrolled: 2, required: 2 },
   { enrolled: 1, required: 2 },
   { enrolled: 0, required: 2 },
   { enrolled: 3, required: 3 },
 ];
-const tileFull = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'full');
-const tileAlmost = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'almost');
-assert('tegel Vol: aantal = gefilterde lijst', tileFull.length === 2);
-assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tileAlmost.length === 1);
+const tiles = tileGroups(tileServices);
+assert('tegel Vol: aantal = gefilterde lijst', tiles.full.length === 2 && tiles.full.length === tileServices.filter((s) => s.enrolled >= s.required).length);
+assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tiles.almost.length === 1 && tiles.almost.length === tileServices.filter((s) => s.enrolled === s.required - 1).length);
 
 const personSheets = personTemplateSheets([{ name: 'JO11-1' }]);
 assert(
@@ -826,6 +831,113 @@ assert(
     exportSheets[0].headers.join(';') === PERSON_TEMPLATE_HEADERS.join(';') &&
     exportSheets[0].rows.length === 1,
 );
+
+const rosterKept = servicesForRoster([
+  { active: true, draft: false, enrollments: [{ person: { name: 'Lisa' } }] },
+  { active: true, draft: false, enrollments: [] },
+  { active: true, draft: false, enrollments: [{ person: { name: '  ' } }] },
+  { active: false, draft: false, enrollments: [{ person: { name: 'Tom' } }] },
+  { active: true, draft: true, enrollments: [{ person: { name: 'Noa' } }] },
+]);
+assert(
+  'pdf-filter: alleen actieve diensten met ingeschreven persoon',
+  rosterKept.length === 1 && rosterKept[0].enrollments[0].person.name === 'Lisa',
+);
+
+const roundSheets = personExportRowsSheets(
+  [
+    {
+      name: 'Kind Roundtrip',
+      email: 'kind.roundtrip@example.nl',
+      phone: '0611111111',
+      team: { name: 'JO11-1' },
+      role: 'Vrijwilliger',
+      obligation: 'NONE',
+      guardian: { email: 'ouder.roundtrip@example.nl' },
+      exempted: true,
+    },
+  ],
+  [{ name: 'JO11-1' }],
+);
+const roundObjects = xlsxToObjects(workbookToXlsx(roundSheets));
+const roundRows = validatePersonRows(personRowsFromObjects(roundObjects), {
+  teams: [{ id: 3, name: 'JO11-1' }],
+});
+assert(
+  'xlsx-import roundtrip houdt hoort_bij en vrijgesteld',
+  roundRows.ok &&
+    roundRows.rows[0].email === 'kind.roundtrip@example.nl' &&
+    roundRows.rows[0].guardianRef === 'ouder.roundtrip@example.nl' &&
+    roundRows.rows[0].exempted === true &&
+    roundRows.rows[0].teamId === 3,
+);
+
+const voorWie = voorWieChoices({ id: 1, name: 'Lisa' }, [{ id: 2, name: 'Sem' }]);
+assert(
+  'voor-wie popup bij gekoppelde persoon',
+  needsVoorWiePopup(voorWie) && voorWie[0].label === 'Jezelf' && voorWie[1].name === 'Sem',
+);
+assert(
+  'voor-wie geen popup zonder koppeling',
+  needsVoorWiePopup(voorWieChoices({ id: 1, name: 'Lisa' }, [])) === false,
+);
+
+const childOnly = unenrollActions(
+  [{ id: 9, personId: 2, person: { name: 'Sem' } }],
+  [1, 2],
+);
+const bothOnDuty = unenrollActions(
+  [
+    { id: 3, personId: 1, person: { name: 'Lisa' } },
+    { id: 4, personId: 2, person: { name: 'Sem' } },
+    { id: 5, personId: 8, person: { name: 'Ander' } },
+  ],
+  [1, 2],
+);
+assert(
+  'ouder schrijft gekoppeld kind uit als alleen het kind staat',
+  childOnly.length === 1 && childOnly[0].enrollmentId === 9 && childOnly[0].label === 'Uitschrijven Sem',
+);
+assert(
+  'ouder schrijft zichzelf en elk gekoppeld kind uit',
+  bothOnDuty.map((row) => row.label).join('|') === 'Uitschrijven Lisa|Uitschrijven Sem',
+);
+
+assert(
+  'import alleen op desktop',
+  importAllowed(true) === true &&
+    importAllowed(false) === false &&
+    IMPORT_DESKTOP_MESSAGE === 'Importeren kan alleen op de computer',
+);
+
+const tightened = tightenDate({ gte: new Date('2026-01-01') }, { from: '2026-02-01', to: '2026-02-10' });
+assert(
+  'datumfilter vernauwt van/tot',
+  tightened.gte.toISOString().slice(0, 10) === '2026-02-01' &&
+    tightened.lte.toISOString().slice(0, 10) === '2026-02-10',
+);
+assert('persoonfilter is hoofdletterongevoelig', includesText('Lisa de Vries', 'lisa'));
+
+const labels = (role) => navForRole(role).map((item) => item.label).join('|');
+assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');
+assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Ik');
+assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Mijn ruilen|Meer');
+assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Mijn ruilen|Instellingen|Meer');
+assert(
+  'admin-instellingen niet onder Meer',
+  navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
+    navItemActive({ to: '/meer', match: ['/meer', '/beheer'] }, '/beheer', '?tab=regels', 'Admin') === false,
+);
+
+assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
+assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
+
+const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('omgeving opschonen op een databasekopie', resetCheck.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
