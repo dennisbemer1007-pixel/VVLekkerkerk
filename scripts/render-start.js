@@ -1,7 +1,7 @@
 /**
- * Startscript voor Render (free demo).
- * - Zorgt voor SQLite + schema
- * - Seed demo-data als de DB leeg is (na cold start verdwijnt ephemeral storage)
+ * Startscript voor Render.
+ * - Zet SQLite op DATA_DIR (vaste schijf) als die gezet is
+ * - Laadt demo-data alleen als SEED_DEMO=true en de database leeg is
  */
 import { execSync } from 'child_process';
 import path from 'path';
@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
-process.env.SEED_DEMO = process.env.SEED_DEMO ?? 'true';
+process.env.SEED_DEMO = process.env.SEED_DEMO ?? 'false';
 process.env.TRUST_PROXY = process.env.TRUST_PROXY ?? '1';
 
 ensureDataDir();
@@ -37,6 +37,7 @@ if (process.env.SEED_DEMO === 'true' && !process.env.ADMIN_PASSWORD) {
 }
 
 console.log('[render-start] DATABASE_URL=', process.env.DATABASE_URL);
+console.log('[render-start] SEED_DEMO=', process.env.SEED_DEMO);
 console.log('[render-start] APP_URL=', process.env.APP_URL || '(niet gezet)');
 
 execSync('npx prisma db push --schema=src/backend/prisma/schema.prisma --accept-data-loss', {

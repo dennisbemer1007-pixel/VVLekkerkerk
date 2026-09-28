@@ -1,59 +1,31 @@
-# Render Free — klant-demo
+# Render — productie
 
-Puur om de app te laten **testen**. Data blijft niet permanent (Free heeft geen vaste schijf).
+De live service is **vvl-planning-demo** (Starter, Frankfurt). Het bouwplan staat in `render.yaml`.
 
-## Beperkingen (verwacht gedrag)
+## Wat het bouwplan vastzet
 
-- Na ~15 minuten geen bezoek: service “slaapt”. Volgende klik duurt ~30–60 seconden.
-- Bij wake/redeploy is SQLite leeg → demo-data wordt opnieuw geladen.
-- Foto-uploads en handmatige wijzigingen verdwijnen dus na sleep. Dat is ok voor een demo.
-
-## Deploy (Blueprint)
-
-1. Code naar GitHub/GitLab pushen.
-2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**.
-3. Repo koppelen → `render.yaml` wordt herkend.
-4. Deploy starten.
-
-Of handmatig **Web Service**:
-
-| Veld | Waarde |
-|------|--------|
-| Runtime | Node |
-| Plan | Free |
-| Build | `npm install --include=dev && npm run build:render` |
-| Start | `npm run start:render` |
+| Onderdeel | Waarde |
+|-----------|--------|
+| Plan | Starter ($7/maand, blijft aan) |
+| Schijf | `vvl-data`, gekoppeld aan `/var/data`, 1 GB |
+| `DATA_DIR` | `/var/data` (database: `/var/data/vvl.db`) |
+| `SEED_DEMO` | `false` (geen oefenaccounts op het loginscherm) |
+| `ADMIN_EMAIL` | `admin@vvl.local` |
+| `ADMIN_PASSWORD` | alleen in het Render-dashboard, niet in git |
 | Health check | `/api/health` |
 
-## Inloggen (na seed)
+Een nieuwe deploy maakt het schema bij en laat bestaande clubdata staan.
 
-Klikbare accounts staan op het loginscherm (`SEED_DEMO=true`).
+## Eerste keer na deze omschakeling
 
-| Rol | E-mail | Wachtwoord |
-|-----|--------|------------|
-| Admin | `admin@vvl.local` | `demo-test-2026` |
-| Barcommissie | `mark@vvl.demo` | `demo123` |
-| Teamcoördinator | `sandra@vvl.demo` | `demo123` |
-| Vrijwilliger | `lisa@vvl.demo` (en tom, fatima, peter, anneke, kevin, noa, erik) | `demo123` |
+De oude database stond op de tijdelijke schijf van de container. Die verhuist niet mee. Na de eerste deploy met de vaste schijf is de planning leeg. Log in als `admin@vvl.local` met het wachtwoord uit **Environment**.
 
-Volledige lijst: [DEMO.md](DEMO.md).
+Zet in **Environment** een eigen `ADMIN_PASSWORD` van minstens 8 tekens. Gebruik niet `admin123`. De server start niet met dat standaardwachtwoord zolang `SEED_DEMO` uit staat.
 
-## Tips voor de klant
+## Mail
 
-- Eerste bezoek na pauze: even geduld (cold start).
-- Daarna normaal klikken tot de service weer slaapt.
-- Niet gebruiken om “echte” seizoensplanning op te slaan — alleen uitproberen.
+SMTP stel je in via **Beheer → E-mail**. Zonder SMTP werkt de site wel, maar gaan uitnodigingen en herinneringen niet weg.
 
-## Productie (niet Free)
+## Backup
 
-Echte seizoensdata, herinneringsmails en AVG-exports horen op **Render Starter** (of gelijkwaardig) met een **persistente schijf**.
-
-| Veld | Waarde |
-|------|--------|
-| Plan | Starter (of hoger) |
-| Disk | bijv. `/var/data` |
-| `DATA_DIR` | `/var/data` |
-| `SEED_DEMO` | `false` |
-| `ADMIN_PASSWORD` | sterk, niet `admin123` |
-
-SQLite landt dan op de schijf (`vvl.db`). Backup: `npm run db:backup`. Render Free wist de database bij slaapstand; herinneringen “1 dag van tevoren” lopen daar niet betrouwbaar.
+`npm run db:backup` schrijft een kopie van de SQLite-database. De vaste schijf overleeft een deploy; een backup blijft verstandig.
