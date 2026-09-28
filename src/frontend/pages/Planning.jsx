@@ -7,11 +7,11 @@ import ServiceLine, { openSpots } from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
-import { occupancyStatus } from '../utils/formatDate.js';
 import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
+import { serviceTileStatus, tileGroups } from '../utils/tiles.js';
 
 function serviceStatus(s) {
-  return s.status ?? occupancyStatus(s.enrolled ?? s.enrollments?.length ?? 0, s.required ?? 2);
+  return serviceTileStatus(s);
 }
 
 export default function Planning({ variant = 'rooster' }) {
@@ -36,13 +36,13 @@ export default function Planning({ variant = 'rooster' }) {
   const [selectedId, setSelectedId] = useState(null);
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
+  const [weekServices, setWeekServices] = useState([]);
   const isCommittee = can('beheer');
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
 
   const load = useCallback(() => {
     const params = {};
-    if (variant === 'open') params.filter = 'open';
-    else if (filter) params.filter = filter;
+    if (variant !== 'open' && filter) params.filter = filter;
     if (kind) params.type = kind;
     if (filter === 'mine' && personId) params.personId = personId;
     if (listFilters.from) params.from = listFilters.from;
@@ -69,6 +69,17 @@ export default function Planning({ variant = 'rooster' }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (variant !== 'open') return undefined;
+    const params = { filter: 'week' };
+    if (kind) params.type = kind;
+    api
+      .getPlanning(params)
+      .then((data) => setWeekServices(data.services || []))
+      .catch(() => setWeekServices([]));
+    return undefined;
+  }, [variant, kind]);
 
   useEffect(() => {
     if (variant !== 'open' || !isCommittee) return undefined;
@@ -213,22 +224,30 @@ export default function Planning({ variant = 'rooster' }) {
     }
   };
 
+  const groups = useMemo(() => tileGroups(services), [services]);
+
   const shown = useMemo(() => {
     return services.filter((s) => {
-      if (variant === 'rooster' && statusFilter && serviceStatus(s) !== statusFilter) return false;
+      if (variant === 'open') {
+        if (statusFilter) return serviceStatus(s) === statusFilter;
+        return serviceStatus(s) !== 'full';
+      }
+      if (statusFilter && serviceStatus(s) !== statusFilter) return false;
       if (onlyNoShow && !(s.enrollments || []).some((e) => e.noShow)) return false;
       return true;
     });
   }, [services, statusFilter, onlyNoShow, variant]);
 
-  const counts = useMemo(() => {
-    const list = services.filter((s) => s.active !== false && !s.draft);
-    return {
-      full: list.filter((s) => serviceStatus(s) === 'full').length,
-      almost: list.filter((s) => serviceStatus(s) === 'almost').length,
-      open: list.filter((s) => serviceStatus(s) === 'open').length,
-    };
-  }, [services]);
+  const counts = {
+    full: groups.full.length,
+    almost: groups.almost.length,
+    open: groups.open.length,
+  };
+
+  const toggleTile = (key) => {
+    cleared.current = false;
+    setStatusFilter((current) => (current === key ? '' : key));
+  };
 
   useEffect(() => {
     if (!shown.length) return;
@@ -308,6 +327,20 @@ export default function Planning({ variant = 'rooster' }) {
           ) : null}
         </div>
       </header>
+
+      {variant === 'open' ? (
+        <WeekTiles
+          weekServices={weekServices}
+          counts={counts}
+          active={statusFilter}
+          onToggle={toggleTile}
+          onOpen={(service) => {
+            const status = serviceStatus(service);
+            if (status === 'full' || (statusFilter && statusFilter !== status)) setStatusFilter(status);
+            pick(service.id);
+          }}
+        />
+      ) : null}
 
       <ListFilters {...listFilters} onChange={setListFilters}>
         {variant === 'open' ? (
@@ -417,6 +450,72 @@ export default function Planning({ variant = 'rooster' }) {
         }}
       />
     </div>
+  );
+}
+
+const TILES = [
+  { key: 'full', label: 'Vol', border: 'border-l-emerald-500' },
+  { key: 'almost', label: 'Nog 1 nodig', border: 'border-l-amber-500' },
+  { key: 'open', label: 'Open', border: 'border-l-red-500' },
+];
+
+function weekStatusLabel(status) {
+  if (status === 'full') return 'Vol';
+  if (status === 'almost') return 'Nog 1';
+  return 'Open';
+}
+
+function WeekTiles({ weekServices, counts, active, onToggle, onOpen }) {
+  return (
+    <section className="space-y-2" data-testid="deze-week">
+      <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Deze week</h2>
+      {weekServices.length === 0 ? (
+        <p className="text-sm text-gray-600">Geen diensten deze week.</p>
+      ) : (
+        <ul className="max-h-32 divide-y divide-vvl-border overflow-y-auto rounded-sm border border-vvl-border bg-white">
+          {weekServices.map((service) => {
+            const status = serviceStatus(service);
+            const when = new Date(service.date).toLocaleDateString('nl-NL', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+            });
+            const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
+            return (
+              <li key={service.id}>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm"
+                  onClick={() => onOpen(service)}
+                >
+                  <span className="min-w-0 truncate">
+                    {when} · {service.time} · {type}
+                  </span>
+                  <span className="shrink-0 text-xs font-bold uppercase">{weekStatusLabel(status)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        {TILES.map((tile) => (
+          <button
+            key={tile.key}
+            type="button"
+            data-testid={`tegel-${tile.key}`}
+            aria-pressed={active === tile.key}
+            onClick={() => onToggle(tile.key)}
+            className={`flex min-h-11 items-center justify-between gap-1 rounded-sm border border-vvl-border border-l-4 bg-white px-2 text-left ${tile.border} ${
+              active === tile.key ? 'ring-2 ring-black' : ''
+            }`}
+          >
+            <span className="text-[11px] font-bold uppercase leading-tight">{tile.label}</span>
+            <span className="text-lg font-black leading-none">{counts[tile.key]}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

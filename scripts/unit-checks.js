@@ -15,6 +15,7 @@ import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFr
 import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
 import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
 import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
+import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
@@ -790,22 +791,16 @@ assert(
     matchTemplateSheets()[0].rows.length === 0,
 );
 
-// Occupancy-tegels (punt 2): statusclassificatie
-function occupancyStatus(enrolled, required) {
-  if (enrolled >= required) return 'full';
-  if (enrolled === required - 1) return 'almost';
-  return 'open';
-}
+// Occupancy-tegels (punt 2): aantal op de tegel = lengte van de gefilterde lijst
 const tileServices = [
   { enrolled: 2, required: 2 },
   { enrolled: 1, required: 2 },
   { enrolled: 0, required: 2 },
   { enrolled: 3, required: 3 },
 ];
-const tileFull = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'full');
-const tileAlmost = tileServices.filter((s) => occupancyStatus(s.enrolled, s.required) === 'almost');
-assert('tegel Vol: aantal = gefilterde lijst', tileFull.length === 2);
-assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tileAlmost.length === 1);
+const tiles = tileGroups(tileServices);
+assert('tegel Vol: aantal = gefilterde lijst', tiles.full.length === 2 && tiles.full.length === tileServices.filter((s) => s.enrolled >= s.required).length);
+assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tiles.almost.length === 1 && tiles.almost.length === tileServices.filter((s) => s.enrolled === s.required - 1).length);
 
 const personSheets = personTemplateSheets([{ name: 'JO11-1' }]);
 assert(
