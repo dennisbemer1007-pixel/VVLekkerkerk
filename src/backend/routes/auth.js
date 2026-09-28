@@ -268,7 +268,7 @@ router.post(
   '/invite',
   requireRole(...INVITE_ROLES)(async (req, res, next) => {
     try {
-      const { name, email, phone, role, obligation, mandatoryBar, teamId } = req.body;
+      const { name, email, phone, role, obligation, mandatoryBar, teamId, guardianId } = req.body;
       if (!name?.trim() || !email?.trim()) {
         return res.status(400).json({ error: 'Naam en e-mail zijn verplicht' });
       }
@@ -277,6 +277,7 @@ router.post(
       let chosenRole = normalizeRole(role, 'Vrijwilliger');
       let chosenTeamId = teamId ? Number(teamId) : null;
       const chosenObligation = normalizeObligation(obligation, mandatoryBar);
+      const chosenGuardianId = guardianId ? Number(guardianId) : null;
 
       // Teamcoördinator mag alleen vrijwilligers in eigen team(s) uitnodigen
       if (req.person.role === 'Teamcoördinator') {
@@ -314,6 +315,7 @@ router.post(
             role: chosenRole,
             obligation: chosenObligation,
             teamId: chosenTeamId,
+            guardianId: chosenGuardianId,
             inviteToken: token,
             inviteExpiresAt: expiresAt,
             active: true,
@@ -329,6 +331,7 @@ router.post(
             role: chosenRole,
             obligation: chosenObligation,
             teamId: chosenTeamId,
+            guardianId: chosenGuardianId,
             inviteToken: token,
             inviteExpiresAt: expiresAt,
           },

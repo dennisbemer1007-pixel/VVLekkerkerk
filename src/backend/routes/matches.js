@@ -13,6 +13,8 @@ import {
   findTeamInIndex,
 } from '../lib/knvbTeams.js';
 import { defaultTeamFunctions } from '../lib/teamFunctions.js';
+import { workbookToXlsx } from '../lib/xlsxWrite.js';
+import { matchTemplateSheets } from '../lib/matchesXlsx.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -41,6 +43,24 @@ router.get(
       next(err);
     }
   },
+);
+
+/** Sjabloon downloaden: alleen de KNVB-kolomkoppen, geen data. */
+router.get(
+  '/template.xlsx',
+  admin(async (_req, res, next) => {
+    try {
+      const buf = workbookToXlsx(matchTemplateSheets());
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="vvl-wedstrijden-sjabloon.xlsx"');
+      res.send(buf);
+    } catch (err) {
+      next(err);
+    }
+  }),
 );
 
 router.post(

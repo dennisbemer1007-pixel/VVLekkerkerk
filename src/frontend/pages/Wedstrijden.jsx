@@ -22,8 +22,6 @@ export default function Wedstrijden() {
   const [filters, setFilters] = useState({
     date: '',
     team: '',
-    matchNumber: '',
-    playLevel: '',
   });
   const [form, setForm] = useState({
     date: todayInputValue(),
@@ -48,16 +46,7 @@ export default function Wedstrijden() {
     load();
   }, []);
 
-  const playLevels = useMemo(() => {
-    const set = new Set();
-    for (const m of matches) {
-      if (m.playLevel) set.add(m.playLevel);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, 'nl'));
-  }, [matches]);
-
   const filtered = useMemo(() => {
-    const qNr = filters.matchNumber.trim().toLowerCase();
     const dateFilter = filters.date;
     return matches.filter((m) => {
       if (!showAll && !isFutureMatchDate(m.date)) return false;
@@ -66,8 +55,6 @@ export default function Wedstrijden() {
         const teamId = String(m.teamId ?? m.team?.id ?? '');
         if (teamId !== String(filters.team)) return false;
       }
-      if (qNr && !String(m.matchNumber || '').toLowerCase().includes(qNr)) return false;
-      if (filters.playLevel && (m.playLevel || '') !== filters.playLevel) return false;
       return true;
     });
   }, [matches, filters, showAll]);
@@ -149,30 +136,6 @@ export default function Wedstrijden() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="vvl-label">Wedstrijdnummer</label>
-            <input
-              className="vvl-input"
-              value={filters.matchNumber}
-              onChange={(e) => setFilters({ ...filters, matchNumber: e.target.value })}
-              placeholder="Zoek nummer"
-            />
-          </div>
-          <div>
-            <label className="vvl-label">Spelniveau</label>
-            <select
-              className="vvl-input"
-              value={filters.playLevel}
-              onChange={(e) => setFilters({ ...filters, playLevel: e.target.value })}
-            >
-              <option value="">Alle niveaus</option>
-              {playLevels.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold">
           <input
@@ -197,8 +160,8 @@ export default function Wedstrijden() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      <div className="overflow-x-auto vvl-card p-0">
-        <table className="w-full min-w-[760px] text-sm">
+      <div className="vvl-card p-0">
+        <table className="w-full text-sm">
           <thead className="bg-vvl-secondary text-xs font-bold uppercase">
             <tr>
               <th className="p-3 text-left">Datum</th>
@@ -206,8 +169,6 @@ export default function Wedstrijden() {
               <th className="p-3 text-left">Team</th>
               <th className="p-3 text-left">Thuis/uit</th>
               <th className="p-3 text-left">Tegenstander</th>
-              <th className="p-3 text-left">Nr.</th>
-              <th className="p-3 text-left">Spelniveau</th>
               <th className="p-3 text-left">Type</th>
               {isAdmin ? <th className="p-3 text-right">Actie</th> : null}
             </tr>
@@ -215,7 +176,7 @@ export default function Wedstrijden() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td className="p-4 text-sm text-gray-600" colSpan={isAdmin ? 9 : 8}>
+                <td className="p-4 text-sm text-gray-600" colSpan={isAdmin ? 7 : 6}>
                   Geen wedstrijden voor deze filters.
                 </td>
               </tr>
@@ -227,8 +188,6 @@ export default function Wedstrijden() {
                   <td className="p-3 font-semibold">{m.team?.name || '—'}</td>
                   <td className="p-3">{m.home ? 'Thuis' : 'Uit'}</td>
                   <td className="p-3">{m.opponent || '—'}</td>
-                  <td className="p-3">{m.matchNumber || '—'}</td>
-                  <td className="p-3">{m.playLevel || '—'}</td>
                   <td className="p-3">{m.matchType || '—'}</td>
                   {isAdmin ? (
                     <td className="p-3 text-right">

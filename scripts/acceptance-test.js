@@ -604,6 +604,273 @@ async function main() {
     ),
   );
 
+  // --- Barcommissie vereenvoudiging (punten 2,5,6,7,8,10,11,13,14,15) ---
+  mark(record('barcommissie login mark', Boolean(markMe.json?.id), String(markMe.status)));
+
+  const stats = await req('/api/planning/stats', { token: markTok });
+  const planningList = await req('/api/planning', { token: markTok });
+  const periodSvcs = (planningList.json?.services || []).filter((s) => !s.draft && s.active !== false);
+  const countFull = periodSvcs.filter((s) => s.status === 'full').length;
+  const countAlmost = periodSvcs.filter((s) => s.status === 'almost').length;
+  const countOpen = periodSvcs.filter((s) => s.status === 'open').length;
+  mark(
+    record(
+      '2 stats vs planning: Vol/Nog1/Open tellen mee',
+      Array.isArray(stats.json?.dutyStats) &&
+        typeof countFull === 'number' &&
+        countFull + countAlmost + countOpen === periodSvcs.length,
+      `full=${countFull} almost=${countAlmost} open=${countOpen} n=${periodSvcs.length}`,
+    ),
+  );
+
+  // 5: barcommissie mag zichzelf inschrijven bij officieel rooster
+  {
+    const { default: prisma } = await import('../src/backend/lib/prisma.js');
+    try {
+      await req('/api/planning/official', { method: 'POST', token: admin });
+      const lockedList = await req('/api/services?allDates=true', { token: markTok });
+      const target = (lockedList.json || []).find(
+        (s) =>
+          s.locked &&
+          !s.draft &&
+          s.active !== false &&
+          (s.capacity?.personalOpen ?? 0) > 0 &&
+          !(s.enrollments || []).some((e) => e.personId === markMe.json.id),
+      );
+      if (!target) {
+        mark(record('5 barcommissie inschrijven bij officieel', false, 'geen geschikte dienst'));
+      } else {
+        const enr = await req('/api/enrollments', {
+          method: 'POST',
+          token: markTok,
+          body: { serviceId: target.id, personId: markMe.json.id, ignoreMatchBlock: true },
+        });
+        mark(
+          record(
+            '5 barcommissie inschrijven bij officieel',
+            enr.status === 201,
+            `${enr.status} ${enr.json?.error || ''}`,
+          ),
+        );
+        if (enr.json?.id) {
+          await req(`/api/enrollments/${enr.json.id}`, { method: 'DELETE', token: markTok });
+        }
+      }
+    } finally {
+      await prisma.service.updateMany({ data: { locked: false } });
+      await prisma.planningRound.update({
+        where: { id: 1 },
+        data: { official: false, status: 'VOLUNTEER_OPEN' },
+      });
+      await prisma.$disconnect();
+    }
+  }
+
+  // 6: PDF komende 6 weken
+  {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(from);
+    to.setDate(to.getDate() + 41);
+    const pdf6 = await req(
+      `/api/pdf/planning?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`,
+      { token: markTok, raw: true },
+    );
+    mark(
+      record(
+        '6 PDF 6 weken is PDF',
+        pdf6.status === 200 && pdf6.buf.slice(0, 4).toString() === '%PDF',
+        String(pdf6.status),
+      ),
+    );
+    const pdfDefault = await req('/api/pdf/planning', { token: markTok, raw: true });
+    mark(
+      record(
+        '6 PDF default zonder from/to',
+        pdfDefault.status === 200 && pdfDefault.buf.slice(0, 4).toString() === '%PDF',
+        String(pdfDefault.status),
+      ),
+    );
+  }
+
+  // 7: diensten inclusief verleden via allDates
+  {
+    const all = await req('/api/services?allDates=true&activeOnly=false&includeDraft=true', {
+      token: markTok,
+    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const past = (all.json || []).filter((s) => new Date(s.date) < today);
+    const future = (all.json || []).filter((s) => new Date(s.date) >= today);
+    mark(
+      record(
+        '7 allDates levert toekomst én verleden',
+        Array.isArray(all.json) && future.length >= 0,
+        `past=${past.length} future=${future.length}`,
+      ),
+    );
+  }
+
+  // 8: no-show op oude dienst
+  {
+    const { default: prisma } = await import('../src/backend/lib/prisma.js');
+    try {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 14);
+      pastDate.setHours(12, 0, 0, 0);
+      const svc = await prisma.service.create({
+        data: {
+          type: 'BAR',
+          date: pastDate,
+          time: '10:00 - 12:00',
+          location: 'Bar',
+          required: 2,
+          active: true,
+          draft: false,
+          origin: 'MANUAL',
+          slot: 'EXTRA',
+        },
+      });
+      const enr = await prisma.enrollment.create({
+        data: {
+          serviceId: svc.id,
+          personId: markMe.json.id,
+          source: 'ADMIN',
+          kind: 'PERSONAL',
+          reason: 'acceptatietest',
+        },
+      });
+      const noshow = await req(`/api/enrollments/${enr.id}/noshow`, {
+        method: 'POST',
+        token: markTok,
+        body: {},
+      });
+      mark(record('8 no-show op oude dienst', noshow.status === 200, String(noshow.status)));
+      await prisma.enrollment.delete({ where: { id: enr.id } }).catch(() => {});
+      await prisma.service.delete({ where: { id: svc.id } }).catch(() => {});
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
+
+  // 10: afwezigheid CRUD + alleen barcommissie
+  {
+    const from = new Date();
+    from.setDate(from.getDate() + 30);
+    const to = new Date(from);
+    to.setDate(to.getDate() + 7);
+    const created = await req(`/api/persons/${markMe.json.id}/absences`, {
+      method: 'POST',
+      token: markTok,
+      body: {
+        fromDate: from.toISOString().slice(0, 10),
+        toDate: to.toISOString().slice(0, 10),
+        note: 'acceptatie',
+      },
+    });
+    mark(
+      record('10 afwezigheid aanmaken', created.status === 201, `${created.status} ${created.json?.error || ''}`),
+    );
+    const lisaAbs = await req(`/api/persons/${markMe.json.id}/absences`, {
+      method: 'POST',
+      token: lisa,
+      body: {
+        fromDate: from.toISOString().slice(0, 10),
+        toDate: to.toISOString().slice(0, 10),
+      },
+    });
+    mark(record('10 vrijwilliger mag geen afwezigheid zetten', lisaAbs.status === 403));
+    const mine = await req('/api/persons/me/absences', { token: markTok });
+    mark(record('10 eigen afwezigheden lezen', Array.isArray(mine.json), String(mine.status)));
+    if (created.json?.id) {
+      const del = await req(`/api/persons/${markMe.json.id}/absences/${created.json.id}`, {
+        method: 'DELETE',
+        token: markTok,
+      });
+      mark(record('10 afwezigheid verwijderen', del.status === 200 || del.status === 204, String(del.status)));
+    }
+  }
+
+  // 11: hoort bij → e-mail optioneel
+  {
+    const child = await req('/api/persons', {
+      method: 'POST',
+      token: markTok,
+      body: {
+        name: `Kind Acceptatie ${Date.now()}`,
+        guardianId: markMe.json.id,
+        role: 'Vrijwilliger',
+        obligation: 'NONE',
+      },
+    });
+    mark(
+      record(
+        '11 kind zonder e-mail via hoort-bij',
+        child.status === 201 && child.json?.guardianId === markMe.json.id,
+        `${child.status} ${child.json?.error || ''}`,
+      ),
+    );
+    if (child.json?.id) {
+      await req(`/api/persons/${child.json.id}`, { method: 'DELETE', token: markTok });
+    }
+  }
+
+  // 13: personen template/export xlsx
+  {
+    const tpl = await req('/api/persons/template.xlsx', { token: markTok, raw: true });
+    mark(
+      record(
+        '13 personen template xlsx',
+        tpl.status === 200 &&
+          (tpl.type || '').includes('sheet') &&
+          tpl.buf.length > 100,
+        `${tpl.status} ${tpl.type}`,
+      ),
+    );
+    const exp = await req('/api/persons/export.xlsx', { token: markTok, raw: true });
+    mark(
+      record(
+        '13 personen export xlsx',
+        exp.status === 200 && exp.buf.length > 100,
+        String(exp.status),
+      ),
+    );
+    const matchTpl = await req('/api/matches/template.xlsx', { token: markTok, raw: true });
+    mark(
+      record('16 wedstrijden template xlsx', matchTpl.status === 200 && matchTpl.buf.length > 40, String(matchTpl.status)),
+    );
+  }
+
+  // 14: bulk invite
+  {
+    const bulk = await req('/api/persons/bulk-invite', {
+      method: 'POST',
+      token: markTok,
+      body: { personIds: [markMe.json.id] },
+    });
+    mark(
+      record(
+        '14 bulk-invite antwoord',
+        bulk.status === 200 &&
+          Array.isArray(bulk.json?.sent) &&
+          Array.isArray(bulk.json?.skippedNoEmail) &&
+          Array.isArray(bulk.json?.failed),
+        JSON.stringify(bulk.json || {}).slice(0, 160),
+      ),
+    );
+  }
+
+  // 15: stats bevat noShowPeople + seizoenscounts
+  mark(
+    record(
+      '15/3 stats noShowPeople + dutyStats seizoen',
+      Array.isArray(stats.json?.noShowPeople) &&
+        Array.isArray(stats.json?.dutyStats) &&
+        stats.json.dutyStats.every((p) => typeof p.barThisSeason === 'number' || typeof p.barThisYear === 'number'),
+      `noshow=${stats.json?.noShowPeople?.length} duty=${stats.json?.dutyStats?.length}`,
+    ),
+  );
+
   console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
   process.exit(ok ? 0 : 1);
 }

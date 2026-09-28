@@ -85,6 +85,8 @@ export function publicPerson(person, options = {}) {
     makeupDue: person.makeupDue ?? 0,
     teamId: person.teamId ?? null,
     team,
+    guardianId: person.guardianId ?? null,
+    guardianName: person.guardian?.name ?? null,
     mandatoryBar: isMandatoryObligation(obligation),
     obligationLabel: OBLIGATION_LABELS[obligation] ?? OBLIGATION_LABELS.NONE,
     unavailableWeekdays: parseUnavailableWeekdays(person.unavailableWeekdays),

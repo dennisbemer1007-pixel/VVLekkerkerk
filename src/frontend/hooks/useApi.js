@@ -169,6 +169,12 @@ export const api = {
     json(`/persons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateMyPreferences: (data) =>
     json('/persons/me/preferences', { method: 'PUT', body: JSON.stringify(data) }),
+  getMyAbsences: () => json('/persons/me/absences'),
+  getPersonAbsences: (personId) => json(`/persons/${personId}/absences`),
+  createPersonAbsence: (personId, data) =>
+    json(`/persons/${personId}/absences`, { method: 'POST', body: JSON.stringify(data) }),
+  deletePersonAbsence: (personId, absenceId) =>
+    json(`/persons/${personId}/absences/${absenceId}`, { method: 'DELETE' }),
   uploadPersonPhoto: async (id, file) => {
     const form = new FormData();
     form.append('photo', file);
@@ -195,6 +201,17 @@ export const api = {
   getMatches: () => json('/matches'),
   createMatch: (data) => json('/matches', { method: 'POST', body: JSON.stringify(data) }),
   deleteMatch: (id) => json(`/matches/${id}`, { method: 'DELETE' }),
+  downloadMatchTemplateXlsx: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/matches/template.xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Download mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   createEnrollment: (data) =>
     json('/enrollments', { method: 'POST', body: JSON.stringify(data) }),
   deleteEnrollment: (id) => json(`/enrollments/${id}`, { method: 'DELETE' }),
@@ -314,6 +331,31 @@ export const api = {
     return res.blob();
   },
   erasePersonContact: (id) => json(`/persons/${id}/erase-contact`, { method: 'POST', body: '{}' }),
+  deletePerson: (id) => json(`/persons/${id}`, { method: 'DELETE' }),
+  bulkInvitePersons: (personIds) =>
+    json('/persons/bulk-invite', { method: 'POST', body: JSON.stringify({ personIds }) }),
+  downloadPersonTemplateXlsx: async () => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/template.xlsx`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Download mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
+  downloadPersonsExportXlsx: async (params = {}) => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/persons/export.xlsx${qs(params)}`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Export mislukt (${res.status})`);
+    }
+    return res.blob();
+  },
   markPlanningOfficial: (data) =>
     json('/planning/official', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   unmarkPlanningOfficial: (data) =>

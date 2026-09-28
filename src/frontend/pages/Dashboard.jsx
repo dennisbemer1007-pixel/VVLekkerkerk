@@ -1,296 +1,97 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import StatCard from '../components/StatCard.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
-import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { occupancyStatus } from '../utils/formatDate.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
 
 const OBLIGATION_SHORT = {
-  NONE: '',
+  NONE: 'vrijwillig',
   FULL: 'verplicht',
   VR18: 'VR18+',
 };
 
+function serviceStatus(s) {
+  return s.status ?? occupancyStatus(s.enrolled ?? s.enrollments?.length ?? 0, s.required ?? 2);
+}
+
 export default function Dashboard() {
-  const { user, can } = useAuth();
+  const { can } = useAuth();
   const [stats, setStats] = useState(null);
-  const [services, setServices] = useState([]);
+  const [weekServices, setWeekServices] = useState([]);
+  const [periodServices, setPeriodServices] = useState([]);
   const [error, setError] = useState('');
-  const [controlView, setControlView] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null);
 
   useEffect(() => {
-    Promise.all([api.getStats(), api.getServices({ filter: 'week' })])
-      .then(([s, list]) => {
+    Promise.all([
+      api.getStats(),
+      api.getServices({ filter: 'week' }),
+      can('beheer') ? api.getPlanning({}) : Promise.resolve({ services: [] }),
+    ])
+      .then(([s, week, planning]) => {
         setStats(s);
-        setServices(list.slice(0, 6));
+        setWeekServices(week || []);
+        setPeriodServices(planning?.services || week || []);
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [can]);
 
-  const underQuota = (stats?.dutyStats || []).filter((p) => p.underQuota);
+  const counts = useMemo(() => {
+    const list = periodServices.filter((s) => s.active !== false && !s.draft);
+    return {
+      full: list.filter((s) => serviceStatus(s) === 'full').length,
+      almost: list.filter((s) => serviceStatus(s) === 'almost').length,
+      open: list.filter((s) => serviceStatus(s) === 'open').length,
+      list,
+    };
+  }, [periodServices]);
+
+  const filteredServices = useMemo(() => {
+    if (!statusFilter) return [];
+    return counts.list.filter((s) => serviceStatus(s) === statusFilter);
+  }, [counts.list, statusFilter]);
+
   const notSelf = stats?.notSelfEnrolled || [];
-  const controls = stats?.controls;
-  const summary = controls?.summary;
+  const noShows = stats?.noShowPeople || [];
+  const dutyStats = stats?.dutyStats || [];
+
+  const splitByObligation = (people) => ({
+    mandatory: people.filter((p) => p.obligation === 'FULL' || p.obligation === 'VR18'),
+    voluntary: people.filter((p) => p.obligation !== 'FULL' && p.obligation !== 'VR18'),
+  });
+
+  const notSelfSplit = splitByObligation(notSelf);
+  const noShowSplit = splitByObligation(noShows);
+
+  const toggleFilter = (key) => setStatusFilter((cur) => (cur === key ? null : key));
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <PageTitle {...PAGE_HELP.dashboard}>Dashboard</PageTitle>
-        <p className="text-sm text-gray-700">
-          Welkom {user?.name}. De kernvraag: <strong>wat moet er nog geregeld worden?</strong>
-        </p>
-      </header>
-
+    <div className="space-y-6">
       {error ? (
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      {can('beheer') && summary ? (
-        <section className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setControlView(controlView === 'open' ? null : 'open')}
-              className="vvl-card text-left border-l-4 border-l-red-500 transition hover:shadow-md"
-            >
-              <p className="text-xs font-bold uppercase text-vvl-accent">Open diensten</p>
-              <p className="font-heading text-3xl font-black">{summary.openServiceCount}</p>
-              <p className="text-sm text-gray-600">
-                {summary.fullyStaffed}/{summary.serviceCount} volledig bezet
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setControlView(controlView === 'obligations' ? null : 'obligations')}
-              className="vvl-card text-left border-l-4 border-l-amber-500 transition hover:shadow-md"
-            >
-              <p className="text-xs font-bold uppercase text-vvl-accent">Verplichtingen open</p>
-              <p className="font-heading text-3xl font-black">{summary.unfilledObligationCount}</p>
-              <p className="text-sm text-gray-600">Nog niet ingedeeld</p>
-            </button>
-          </div>
-          <p className="text-xs text-gray-600">
-            {summary.enrolledPersonCount} personen ingepland in deze planningsperiode.
-          </p>
-
-          {controlView === 'open' ? (
-            <div className="overflow-x-auto vvl-card p-0">
-              <table className="w-full min-w-[560px] text-sm">
-                <thead className="bg-vvl-secondary text-xs font-bold uppercase">
-                  <tr>
-                    <th className="p-3 text-left">Datum</th>
-                    <th className="p-3 text-left">Tijd</th>
-                    <th className="p-3 text-left">Type</th>
-                    <th className="p-3 text-right">Nodig</th>
-                    <th className="p-3 text-right">Ingevuld</th>
-                    <th className="p-3 text-right">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(controls.openServices || []).map((s) => (
-                    <tr key={s.id} className="border-t border-vvl-border">
-                      <td className="p-3">
-                        <Link className="font-semibold underline" to="/beheer?tab=diensten">
-                          {new Date(s.date).toLocaleDateString('nl-NL')}
-                        </Link>
-                      </td>
-                      <td className="p-3">{s.time}</td>
-                      <td className="p-3">
-                        {s.type === 'KITCHEN' ? 'Keuken' : 'Bar'}
-                        {s.kind === 'TEAM' ? ' · team' : ''}
-                      </td>
-                      <td className="p-3 text-right">{s.required}</td>
-                      <td className="p-3 text-right">{s.enrolled}</td>
-                      <td className="p-3 text-right font-semibold">{s.open}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {controlView === 'obligations' ? (
-            <div className="overflow-x-auto vvl-card p-0">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="bg-vvl-secondary text-xs font-bold uppercase">
-                  <tr>
-                    <th className="p-3 text-left">Persoon</th>
-                    <th className="p-3 text-left">Type</th>
-                    <th className="p-3 text-right">Ingepland</th>
-                    <th className="p-3 text-right">Inhaal</th>
-                    <th className="p-3 text-right">Nog nodig</th>
-                    <th className="p-3 text-left">Reden</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(controls.unfilledObligations || []).map((p) => (
-                    <tr key={p.id} className="border-t border-vvl-border">
-                      <td className="p-3 font-semibold">{p.name}</td>
-                      <td className="p-3">{OBLIGATION_SHORT[p.obligation] || p.obligation}</td>
-                      <td className="p-3 text-right">{p.planned}</td>
-                      <td className="p-3 text-right">{p.makeupDue}</td>
-                      <td className="p-3 text-right">{p.stillNeeded}</td>
-                      <td className="p-3 text-gray-700">{p.reason || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Actieve personen"
-          value={stats?.personCount ?? '—'}
-          to={can('beheer') ? '/beheer?tab=personen' : '/planning'}
-        />
-        <StatCard title="Actieve diensten" value={stats?.serviceCount ?? '—'} to="/planning" />
-        <StatCard
-          title="Bezettingsgraad"
-          value={stats ? `${stats.occupancyRate}%` : '—'}
-          subtitle="Van benodigde plekken ingevuld"
-          to="/planning"
-        />
-        <StatCard
-          title="Inschrijvingen"
-          value={stats?.enrollmentCount ?? '—'}
-          to={can('inschrijven') ? '/inschrijven' : '/planning'}
-        />
-      </section>
-
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Link
-          to="/planning"
-          className="vvl-card flex items-center justify-between border-l-4 border-l-emerald-500 transition hover:shadow-md"
-        >
-          <span className="font-bold">Vol</span>
-          <span className="text-2xl font-black">{stats?.full ?? '—'}</span>
-        </Link>
-        <Link
-          to={can('inschrijven') ? '/inschrijven?filter=open' : '/planning'}
-          className="vvl-card flex items-center justify-between border-l-4 border-l-amber-500 transition hover:shadow-md"
-        >
-          <span className="font-bold">Nog 1 nodig</span>
-          <span className="text-2xl font-black">{stats?.almost ?? '—'}</span>
-        </Link>
-        <Link
-          to={can('inschrijven') ? '/inschrijven?filter=open' : '/planning'}
-          className="vvl-card flex items-center justify-between border-l-4 border-l-red-500 transition hover:shadow-md"
-        >
-          <span className="font-bold">Open</span>
-          <span className="text-2xl font-black">{stats?.open ?? '—'}</span>
-        </Link>
-      </section>
-
-      {can('inschrijven') || (can('teams') && !can('beheer')) ? (
-        <section className="flex flex-wrap gap-2">
-          {can('inschrijven') ? (
-            <Link to="/inschrijven" className="vvl-btn-primary">
-              Inschrijven
-            </Link>
-          ) : null}
-          {can('teams') && !can('beheer') ? (
-            <Link to="/teams" className="vvl-btn-outline">
-              Mijn team
-            </Link>
-          ) : null}
-        </section>
-      ) : null}
-
-      {can('beheer') && stats?.dutyStats ? (
-        <section className="space-y-3">
-          <h2 className="font-heading text-xl font-black uppercase">Wie heeft gestaan</h2>
-          <p className="text-sm text-gray-700">
-            Aantal bardiensten: laatste 6 weken en dit kalenderjaar. Rood = onder quota.
-          </p>
-          {underQuota.length ? (
-            <p className="text-sm font-semibold text-red-800">
-              Onder quota: {underQuota.map((p) => p.name).join(', ')}
-            </p>
-          ) : null}
-          <div className="overflow-x-auto vvl-card p-0">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead className="bg-vvl-secondary text-xs font-bold uppercase">
-                <tr>
-                  <th className="p-3 text-left">Naam</th>
-                  <th className="p-3 text-left">Team</th>
-                  <th className="p-3 text-left">Verplichting</th>
-                  <th className="p-3 text-right">6 weken</th>
-                  <th className="p-3 text-right">Dit jaar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.dutyStats.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`border-t border-vvl-border ${p.underQuota ? 'bg-red-50' : ''}`}
-                  >
-                    <td className="p-3 font-semibold">{p.name}</td>
-                    <td className="p-3">{p.team || '—'}</td>
-                    <td className="p-3">{OBLIGATION_SHORT[p.obligation] || '—'}</td>
-                    <td className="p-3 text-right">{p.barLast6Weeks}</td>
-                    <td className="p-3 text-right">{p.barThisYear}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
-      {can('beheer') && stats?.planningRound ? (
-        <section className="space-y-3">
-          <h2 className="font-heading text-xl font-black uppercase">Niet zelf ingeschreven</h2>
-          <p className="text-sm text-gray-700">
-            Actieve personen zonder zelf-inschrijving in de huidige planningsronde
-            {stats.planningRound.fromDate
-              ? ` (${new Date(stats.planningRound.fromDate).toLocaleDateString('nl-NL')} – ${new Date(stats.planningRound.toDate).toLocaleDateString('nl-NL')})`
-              : ''}
-            .
-          </p>
-          {notSelf.length === 0 ? (
-            <p className="vvl-card text-sm text-gray-600">
-              Iedereen heeft zichzelf minstens één keer ingeschreven, of er is nog geen ronde.
-            </p>
-          ) : (
-            <ul className="vvl-card divide-y divide-vvl-border p-0">
-              {notSelf.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                  <span className="font-semibold">{p.name}</span>
-                  <span className="text-gray-600">
-                    {[p.team, OBLIGATION_SHORT[p.obligation]].filter(Boolean).join(' · ') || '—'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : null}
-
       <section className="space-y-3">
-        <h2 className="font-heading text-xl font-black uppercase">Deze week</h2>
-        {services.length === 0 ? (
+        <h2 className="font-heading text-base font-black uppercase">Deze week</h2>
+        {weekServices.length === 0 ? (
           <p className="vvl-card text-sm text-gray-600">Geen diensten deze week.</p>
         ) : (
           <ul className="space-y-2">
-            {services.map((s) => {
-              const st =
-                s.status ??
-                occupancyStatus(s.enrollments?.length ?? 0, s.required ?? 2);
+            {weekServices.map((s) => {
+              const st = serviceStatus(s);
               return (
-                <li key={s.id} className="vvl-card flex flex-wrap items-center justify-between gap-2 py-3">
+                <li
+                  key={s.id}
+                  className="vvl-card flex min-h-[44px] flex-wrap items-center justify-between gap-2 py-3"
+                >
                   <span className="text-sm font-semibold">
                     {new Date(s.date).toLocaleDateString('nl-NL', {
                       weekday: 'short',
                       day: 'numeric',
                       month: 'short',
                     })}{' '}
-                    · {s.time} · {s.location}
+                    · {s.time} · {s.location || (s.type === 'KITCHEN' ? 'Keuken' : 'Bar')}
                   </span>
                   <StatusBadge status={st} />
                 </li>
@@ -299,6 +100,128 @@ export default function Dashboard() {
           </ul>
         )}
       </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          { key: 'full', label: 'Vol', count: counts.full, border: 'border-l-emerald-500' },
+          { key: 'almost', label: 'Nog 1 nodig', count: counts.almost, border: 'border-l-amber-500' },
+          { key: 'open', label: 'Open', count: counts.open, border: 'border-l-red-500' },
+        ].map((tile) => (
+          <button
+            key={tile.key}
+            type="button"
+            onClick={() => toggleFilter(tile.key)}
+            className={`vvl-card flex min-h-[44px] items-center justify-between border-l-4 ${tile.border} text-left transition hover:shadow-md ${
+              statusFilter === tile.key ? 'ring-2 ring-vvl-primary' : ''
+            }`}
+          >
+            <span className="font-bold">{tile.label}</span>
+            <span className="text-2xl font-black">{tile.count}</span>
+          </button>
+        ))}
+      </section>
+
+      {statusFilter ? (
+        <section className="space-y-2">
+          <p className="text-xs font-bold uppercase text-vvl-accent">
+            {statusFilter === 'full' ? 'Vol' : statusFilter === 'almost' ? 'Nog 1 nodig' : 'Open'} ·{' '}
+            {filteredServices.length}
+          </p>
+          {filteredServices.length === 0 ? (
+            <p className="vvl-card text-sm text-gray-600">Geen diensten.</p>
+          ) : (
+            <ul className="space-y-2">
+              {filteredServices.map((s) => (
+                <li key={s.id} className="vvl-card flex min-h-[44px] items-center justify-between gap-2 py-3 text-sm">
+                  <Link className="font-semibold underline" to="/planning">
+                    {new Date(s.date).toLocaleDateString('nl-NL', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })}{' '}
+                    · {s.time}
+                  </Link>
+                  <StatusBadge status={serviceStatus(s)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {can('beheer') ? (
+        <section className="space-y-4">
+          <h2 className="font-heading text-base font-black uppercase">Aandacht</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <AttentionBlock
+              title="Niet zelf ingeschreven"
+              mandatory={notSelfSplit.mandatory}
+              voluntary={notSelfSplit.voluntary}
+            />
+            <AttentionBlock
+              title="No-show gehad"
+              mandatory={noShowSplit.mandatory}
+              voluntary={noShowSplit.voluntary}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {can('beheer') && dutyStats.length ? (
+        <section className="space-y-3">
+          <h2 className="font-heading text-base font-black uppercase">Dit seizoen</h2>
+          <div className="vvl-card overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-vvl-secondary text-xs font-bold uppercase">
+                <tr>
+                  <th className="p-3 text-left">Naam</th>
+                  <th className="p-3 text-left">Rol</th>
+                  <th className="p-3 text-right">Diensten</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dutyStats.map((p) => (
+                  <tr key={p.id} className="border-t border-vvl-border">
+                    <td className="p-3 font-semibold">{p.name}</td>
+                    <td className="p-3">{p.role || OBLIGATION_SHORT[p.obligation] || '—'}</td>
+                    <td className="p-3 text-right">{p.barThisSeason ?? p.barThisYear}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function AttentionBlock({ title, mandatory, voluntary }) {
+  return (
+    <div className="vvl-card space-y-3">
+      <h3 className="font-heading text-sm font-black uppercase">{title}</h3>
+      <PersonList heading="Verplicht" people={mandatory} />
+      <PersonList heading="Vrijwillig" people={voluntary} />
+    </div>
+  );
+}
+
+function PersonList({ heading, people }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase text-vvl-accent">{heading}</p>
+      {people.length === 0 ? (
+        <p className="text-sm text-gray-600">Geen.</p>
+      ) : (
+        <ul className="divide-y divide-vvl-border">
+          {people.map((p) => (
+            <li key={p.id} className="flex min-h-[44px] items-center justify-between gap-2 py-2 text-sm">
+              <span className="font-semibold">{p.name}</span>
+              <span className="text-gray-600">{p.role || OBLIGATION_SHORT[p.obligation] || '—'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
