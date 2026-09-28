@@ -11,6 +11,7 @@ import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFr
 import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
 import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
+import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
 import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
@@ -895,6 +896,17 @@ assert(
     tightened.lte.toISOString().slice(0, 10) === '2026-02-10',
 );
 assert('persoonfilter is hoofdletterongevoelig', includesText('Lisa de Vries', 'lisa'));
+
+const labels = (role) => navForRole(role).map((item) => item.label).join('|');
+assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');
+assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Ik');
+assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Meer');
+assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Instellingen|Meer');
+assert(
+  'admin-instellingen niet onder Meer',
+  navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
+    navItemActive({ to: '/meer', match: ['/meer', '/beheer'] }, '/beheer', '?tab=regels', 'Admin') === false,
+);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

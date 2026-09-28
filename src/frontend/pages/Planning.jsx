@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
+import { occupancyStatus } from '../utils/formatDate.js';
 import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
 
-export default function Planning() {
+function serviceStatus(s) {
+  return s.status ?? occupancyStatus(s.enrolled ?? s.enrollments?.length ?? 0, s.required ?? 2);
+}
+
+export default function Planning({ variant = 'rooster' }) {
   const { personId, can, user } = useAuth();
   const [filter, setFilter] = useState('');
   const [services, setServices] = useState([]);
@@ -19,6 +25,9 @@ export default function Planning() {
   const [excelBusy, setExcelBusy] = useState(false);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [listFilters, setListFilters] = useState({ person: '', from: '', to: '' });
+  const [kind, setKind] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [onlyNoShow, setOnlyNoShow] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
@@ -27,7 +36,9 @@ export default function Planning() {
 
   const load = useCallback(() => {
     const params = {};
-    if (filter) params.filter = filter;
+    if (variant === 'open') params.filter = 'open';
+    else if (filter) params.filter = filter;
+    if (kind) params.type = kind;
     if (filter === 'mine' && personId) params.personId = personId;
     if (listFilters.from) params.from = listFilters.from;
     if (listFilters.to) params.to = listFilters.to;
@@ -39,7 +50,7 @@ export default function Planning() {
         setPeriod(data.period ?? null);
       })
       .catch((e) => setError(e.message));
-  }, [filter, personId, listFilters]);
+  }, [filter, personId, listFilters, variant, kind]);
 
   useEffect(() => {
     if (!isCommittee) return;
@@ -183,11 +194,38 @@ export default function Planning() {
     }
   };
 
+  const shown = useMemo(() => {
+    return services.filter((s) => {
+      if (variant === 'rooster' && statusFilter && serviceStatus(s) !== statusFilter) return false;
+      if (onlyNoShow && !(s.enrollments || []).some((e) => e.noShow)) return false;
+      return true;
+    });
+  }, [services, statusFilter, onlyNoShow, variant]);
+
+  const counts = useMemo(() => {
+    const list = services.filter((s) => s.active !== false && !s.draft);
+    return {
+      full: list.filter((s) => serviceStatus(s) === 'full').length,
+      almost: list.filter((s) => serviceStatus(s) === 'almost').length,
+      open: list.filter((s) => serviceStatus(s) === 'open').length,
+    };
+  }, [services]);
+
+  const showPast = () => {
+    const to = new Date();
+    to.setDate(to.getDate() - 1);
+    const from = new Date();
+    from.setDate(from.getDate() - 42);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    setListFilters((prev) => ({ ...prev, from: iso(from), to: iso(to) }));
+    setOnlyNoShow(false);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-heading text-xl font-black uppercase">Rooster</h1>
+          <h1 className="font-heading text-xl font-black uppercase">{variant === 'open' ? 'Open' : 'Rooster'}</h1>
           {period ? (
             <p className="text-sm font-semibold text-gray-800">
               {period.from} t/m {period.to}
@@ -195,8 +233,13 @@ export default function Planning() {
             </p>
           ) : null}
         </div>
+        {variant === 'rooster' ? (
+          <p className="text-sm font-semibold">
+            Vol {counts.full} · Nog 1 {counts.almost} · Open {counts.open}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
-          {isCommittee ? (
+          {isCommittee && variant === 'rooster' ? (
             <button
               type="button"
               className="vvl-btn-outline min-h-[44px] text-center"
@@ -206,26 +249,67 @@ export default function Planning() {
               {updateBusy ? 'Bijwerken…' : 'Diensten bijwerken'}
             </button>
           ) : null}
-          <button
-            type="button"
-            className="vvl-btn-outline min-h-[44px] text-center"
-            disabled={excelBusy}
-            onClick={downloadExcel}
-          >
-            {excelBusy ? 'Excel laden…' : 'Excel'}
-          </button>
-          <button
-            type="button"
-            className="vvl-btn-primary min-h-[44px] text-center"
-            disabled={pdfBusy}
-            onClick={downloadPdf}
-          >
-            {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
-          </button>
+          {isCommittee && variant === 'rooster' ? (
+            <Link to="/beheer?tab=diensten" className="vvl-btn-outline inline-flex min-h-[44px] items-center">
+              + Dienst
+            </Link>
+          ) : null}
+          {variant === 'rooster' ? (
+            <>
+              <button
+                type="button"
+                className="vvl-btn-outline min-h-[44px] text-center"
+                disabled={excelBusy}
+                onClick={downloadExcel}
+              >
+                {excelBusy ? 'Excel laden…' : 'Excel'}
+              </button>
+              <button
+                type="button"
+                className="vvl-btn-primary min-h-[44px] text-center"
+                disabled={pdfBusy}
+                onClick={downloadPdf}
+              >
+                {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
-      <ListFilters {...listFilters} onChange={setListFilters} />
+      <ListFilters {...listFilters} onChange={setListFilters}>
+        {variant === 'open' ? (
+          <label className="block min-w-0">
+            <span className="vvl-label">Soort</span>
+            <select className="vvl-input" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Soort">
+              <option value="">Alle</option>
+              <option value="BAR">Bar</option>
+              <option value="KITCHEN">Keuken</option>
+            </select>
+          </label>
+        ) : (
+          <label className="block min-w-0">
+            <span className="vvl-label">Status</span>
+            <select className="vvl-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+              <option value="">Alle</option>
+              <option value="open">Open</option>
+              <option value="almost">Nog 1</option>
+              <option value="full">Vol</option>
+            </select>
+          </label>
+        )}
+      </ListFilters>
+      {variant === 'rooster' ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="vvl-btn-outline text-xs" onClick={showPast}>
+            Voorbije diensten
+          </button>
+          <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" className="h-5 w-5" checked={onlyNoShow} onChange={(e) => setOnlyNoShow(e.target.checked)} />
+            No-show
+          </label>
+        </div>
+      ) : null}
 
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -241,11 +325,11 @@ export default function Planning() {
         onBack={() => setSelectedId(null)}
         emptyDetail="Kies een dienst."
         list={
-          services.length === 0 ? (
+          shown.length === 0 ? (
             <p className="vvl-card text-sm text-gray-600">Geen diensten in deze periode.</p>
           ) : (
             <ul className="space-y-2">
-              {services.map((s) => (
+              {shown.map((s) => (
                 <li key={s.id}>
                   <button
                     type="button"
@@ -266,7 +350,7 @@ export default function Planning() {
             </ul>
           )
         }
-        detail={services
+        detail={shown
           .filter((s) => s.id === selectedId)
           .map((s) => (
             <DienstCard

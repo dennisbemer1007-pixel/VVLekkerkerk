@@ -1,23 +1,17 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { navForRole } from '../navConfig.js';
+import { navForRole, navItemActive } from '../navConfig.js';
 import NotificationBell from './NotificationBell.jsx';
-
-function navActive(pathname, search, to) {
-  const [path, query] = to.split('?');
-  if (pathname !== path) return false;
-  if (!query) return true;
-  return search.includes(query);
-}
 
 export default function Layout({ children }) {
   const { user, logout, isLoggedIn, homePath } = useAuth();
   const location = useLocation();
   const items = isLoggedIn ? navForRole(user?.role) : [];
+  const active = (item) => navItemActive(item, location.pathname, location.search, user?.role);
 
   const linkClass = (active) =>
-    `flex min-h-11 items-center rounded-full px-4 text-sm font-bold uppercase tracking-wide ${
-      active ? 'bg-black text-white' : 'text-black hover:bg-black/5'
+    `flex min-h-11 items-center border-l-4 px-4 text-sm font-bold uppercase tracking-wide ${
+      active ? 'border-vvl-gold bg-black text-white' : 'border-transparent text-black hover:bg-black/5'
     }`;
 
   return (
@@ -31,9 +25,6 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-2">
               <NotificationBell />
               <span className="hidden max-w-[10rem] truncate text-xs sm:inline">{user?.name}</span>
-              <button type="button" onClick={() => logout()} className="vvl-btn-outline-light min-h-11 px-4 text-xs">
-                Uit
-              </button>
             </div>
           ) : (
             <Link to="/login" className="text-sm font-bold uppercase">
@@ -45,19 +36,21 @@ export default function Layout({ children }) {
 
       <div className="mx-auto flex w-full max-w-6xl flex-1">
         {isLoggedIn && items.length ? (
-          <nav className="hidden w-56 shrink-0 border-r border-vvl-border bg-white p-3 md:block" aria-label="Menu">
-            <ul className="space-y-2">
+          <nav className="hidden w-56 shrink-0 flex-col border-r border-vvl-border bg-white md:flex" aria-label="Menu">
+            <ul className="flex-1 space-y-1 p-3">
               {items.map((item) => (
                 <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    className={() => linkClass(navActive(location.pathname, location.search, item.to))}
-                  >
+                  <NavLink to={item.to} className={() => linkClass(active(item))}>
                     {item.label}
                   </NavLink>
                 </li>
               ))}
             </ul>
+            <div className="border-t border-vvl-border p-3">
+              <button type="button" onClick={() => logout()} className="vvl-btn-primary w-full">
+                Uitloggen
+              </button>
+            </div>
           </nav>
         ) : null}
 
@@ -70,21 +63,18 @@ export default function Layout({ children }) {
           aria-label="Tabbladen"
         >
           <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
-            {items.map((item) => {
-              const active = navActive(location.pathname, location.search, item.to);
-              return (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    className={`flex min-h-11 items-center justify-center px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight ${
-                      active ? 'bg-white text-black' : 'text-white'
-                    }`}
-                  >
-                    {item.label}
-                  </NavLink>
-                </li>
-              );
-            })}
+            {items.map((item) => (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  className={`flex min-h-11 items-center justify-center border-b-4 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight ${
+                    active(item) ? 'border-vvl-gold bg-white text-black' : 'border-transparent text-white'
+                  }`}
+                >
+                  {item.label}
+                </NavLink>
+              </li>
+            ))}
           </ul>
         </nav>
       ) : null}

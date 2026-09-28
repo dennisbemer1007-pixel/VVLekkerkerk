@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom';
 
 const LINKS = [
   { to: '/beheer?tab=regels', label: 'Dienstregels' },
+  { to: '/beheer?tab=activiteiten', label: 'Jaarplanning' },
   { to: '/beheer?tab=mail', label: 'E-mail' },
-  { to: '/beheer?tab=club', label: 'Club' },
+  { to: '/beheer?tab=club', label: 'Club & privacy' },
 ];
 
 export default function Instellingen() {

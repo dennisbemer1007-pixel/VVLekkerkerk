@@ -7,6 +7,7 @@ import Beheer from './pages/Beheer.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Ik from './pages/Ik.jsx';
 import Inschrijven from './pages/Inschrijven.jsx';
+import Kinderen from './pages/Kinderen.jsx';
 import Instellingen from './pages/Instellingen.jsx';
 import Login from './pages/Login.jsx';
 import Meer from './pages/Meer.jsx';
@@ -73,14 +74,18 @@ export default function App() {
               <Route path="/inschrijven" element={<Protected feature="inschrijven"><LegacyInschrijven /></Protected>} />
               <Route path="/diensten" element={<Protected feature="inschrijven"><Inschrijven mode="open" /></Protected>} />
               <Route path="/mijn-diensten" element={<Protected feature="inschrijven"><Inschrijven mode="mine" /></Protected>} />
-              <Route path="/open" element={<Protected feature="dashboard"><Dashboard /></Protected>} />
-              <Route path="/rooster" element={<Protected feature="planning"><Planning /></Protected>} />
+              <Route path="/open" element={<Protected feature="dashboard"><Planning variant="open" /></Protected>} />
+              <Route path="/aandacht" element={<Protected feature="dashboard"><Dashboard focus="aandacht" /></Protected>} />
+              <Route path="/rooster" element={<Protected feature="planning"><Planning variant="rooster" /></Protected>} />
               <Route path="/planning" element={<Protected feature="planning"><Navigate to="/rooster" replace /></Protected>} />
               <Route path="/wedstrijden" element={<Protected feature="wedstrijden"><Wedstrijden /></Protected>} />
-              <Route path="/ruilen" element={<Protected><Ruilen scope="mine" /></Protected>} />
-              <Route path="/mijn-ruilen" element={<Protected><Ruilen scope="mine" title="Mijn ruilen" /></Protected>} />
+              <Route path="/ruilen" element={<Protected><Ruilen scope="mine" mode="list" /></Protected>} />
+              <Route path="/ruilen/nieuw" element={<Protected><Ruilen scope="mine" mode="new" title="Nieuw ruilverzoek" /></Protected>} />
+              <Route path="/mijn-ruilen" element={<Protected><Navigate to="/ruilen" replace /></Protected>} />
               <Route path="/voorkeuren" element={<Protected><Navigate to="/ik" replace /></Protected>} />
               <Route path="/ik" element={<Protected><Ik /></Protected>} />
+              <Route path="/kinderen" element={<Protected><Kinderen /></Protected>} />
+              <Route path="/mijn-gegevens" element={<Protected><Ik title="Mijn gegevens" /></Protected>} />
               <Route path="/mensen" element={<Protected feature="beheer"><Beheer onlyTab="personen" /></Protected>} />
               <Route path="/instellingen" element={<Protected feature="beheer" adminOnly><Instellingen /></Protected>} />
               <Route path="/meer" element={<Protected feature="beheer"><Meer /></Protected>} />

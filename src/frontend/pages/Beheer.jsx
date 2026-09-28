@@ -336,6 +336,7 @@ function PersonenBeheer() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
+  const [seasonCounts, setSeasonCounts] = useState({});
 
   const load = async (includeNameless = showNameless) => {
     setError('');
@@ -349,6 +350,14 @@ function PersonenBeheer() {
       setTeams(await api.getTeams());
     } catch (e) {
       errors.push(`Teams: ${e.message}`);
+    }
+    try {
+      const stats = await api.getStats();
+      const map = {};
+      for (const row of stats?.dutyStats || []) map[row.id] = row.barThisSeason ?? row.barThisYear ?? 0;
+      setSeasonCounts(map);
+    } catch {
+      setSeasonCounts({});
     }
     if (errors.length) setError(errors.join(' '));
   };
@@ -829,6 +838,7 @@ function PersonenBeheer() {
               <th className="p-2 font-bold">Verplichting</th>
               <th className="p-2 font-bold">Hoort bij</th>
               <th className="p-2 font-bold">Vrijgesteld</th>
+              <th className="p-2 font-bold">Seizoen</th>
               <th className="p-2 font-bold">Account</th>
               <th className="p-2 font-bold"> </th>
             </tr>
@@ -856,6 +866,7 @@ function PersonenBeheer() {
                   ))}
                 </select>
               </th>
+              <th />
               <th />
               <th />
               <th />
@@ -890,6 +901,7 @@ function PersonenBeheer() {
                 <td className="break-words p-2">{p.obligationLabel}</td>
                 <td className="break-words p-2">{p.guardianName || '—'}</td>
                 <td className="p-2">{p.exempted ? 'ja' : 'nee'}</td>
+                <td className="p-2 text-right">{seasonCounts[p.id] ?? '—'}</td>
                 <td className="p-2">{p.hasAccount ? 'Wel' : p.invitePending ? 'Uitnodiging' : 'Geen'}</td>
                 <td className="p-2">
                   <div className="flex flex-wrap gap-1">

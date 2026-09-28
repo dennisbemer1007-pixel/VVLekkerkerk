@@ -16,7 +16,10 @@ export default function TeamDashboard() {
   const [edit, setEdit] = useState(null);
   const [replaceWith, setReplaceWith] = useState({});
   const [section, setSection] = useState('diensten');
+  const [teamId, setTeamId] = useState('');
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+  const [obligation, setObligation] = useState('');
+  const [venue, setVenue] = useState('');
 
   const OBLIGATION_SHORT = {
     NONE: '—',
@@ -129,6 +132,17 @@ export default function TeamDashboard() {
       <header className="space-y-3">
         <h1 className="font-heading text-xl font-black uppercase">Team</h1>
         <p className="text-sm text-gray-700">Seizoen {data?.seasonLabel || '—'}</p>
+        {(data?.teams || []).length > 1 ? (
+          <label className="block">
+            <span className="vvl-label">Team</span>
+            <select className="vvl-input" value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Team">
+              <option value="">Alle teams</option>
+              {data.teams.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="grid grid-cols-3 gap-2">
           {[
             ['diensten', 'Teamdiensten'],
@@ -145,7 +159,29 @@ export default function TeamDashboard() {
             </button>
           ))}
         </div>
-        <ListFilters {...filters} onChange={setFilters} />
+        <ListFilters {...filters} onChange={setFilters} personLabel={section === 'wedstrijden' ? 'Tegenstander' : 'Persoon'}>
+          {section === 'ouders' ? (
+            <label className="block min-w-0">
+              <span className="vvl-label">Verplichting</span>
+              <select className="vvl-input" value={obligation} onChange={(e) => setObligation(e.target.value)} aria-label="Verplichting">
+                <option value="">Alle</option>
+                <option value="FULL">Verplicht</option>
+                <option value="VR18">VR18+</option>
+                <option value="NONE">Vrijwillig</option>
+              </select>
+            </label>
+          ) : null}
+          {section === 'wedstrijden' ? (
+            <label className="block min-w-0">
+              <span className="vvl-label">Thuis/uit</span>
+              <select className="vvl-input" value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="Thuis of uit">
+                <option value="">Alle</option>
+                <option value="home">Thuis</option>
+                <option value="away">Uit</option>
+              </select>
+            </label>
+          ) : null}
+        </ListFilters>
       </header>
 
       {msg ? (
@@ -160,9 +196,11 @@ export default function TeamDashboard() {
           Je bent nog niet gekoppeld als bardienstcoördinator. Vraag de barcommissie om je team in te stellen.
         </p>
       ) : (
-        (data.teams || []).map((team) => {
+        (data.teams || []).filter((team) => !teamId || String(team.id) === String(teamId)).map((team) => {
           const form = assign[team.id] || { serviceId: '', personId: '' };
-          const members = (team.members || []).filter((m) => includesPerson(m.name, filters.person));
+          const members = (team.members || []).filter(
+            (m) => includesPerson(m.name, filters.person) && (!obligation || m.obligation === obligation),
+          );
           const teamServices = (team.teamServices || []).filter((s) => {
             if (!withinDates(s.date, filters.from, filters.to)) return false;
             if (!filters.person.trim()) return true;
@@ -170,9 +208,12 @@ export default function TeamDashboard() {
             return includesPerson(`${names} ${team.name}`, filters.person);
           });
           const openTeamServices = teamServices.filter((s) => (s.teamOpen ?? 0) > 0);
-          const matches = (team.upcomingMatches || []).filter(
-            (m) => withinDates(m.date, filters.from, filters.to) && includesPerson(`${m.opponent || ''} ${team.name}`, filters.person),
-          );
+          const matches = (team.upcomingMatches || []).filter((m) => {
+            if (!withinDates(m.date, filters.from, filters.to)) return false;
+            if (venue === 'home' && !m.home) return false;
+            if (venue === 'away' && m.home) return false;
+            return includesPerson(`${m.opponent || ''} ${team.name}`, filters.person);
+          });
           return (
             <section key={team.id} className="vvl-card space-y-4">
               <div>
