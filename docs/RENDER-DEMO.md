@@ -22,6 +22,8 @@ De oude database stond op de tijdelijke schijf van de container. Die verhuist ni
 
 Zet in **Environment** een eigen `ADMIN_PASSWORD` van minstens 8 tekens. Gebruik niet `admin123`. De server start niet met dat standaardwachtwoord zolang `SEED_DEMO` uit staat.
 
+Bij elke start zet de server het wachtwoord van `admin@vvl.local` gelijk aan `ADMIN_PASSWORD`. Een nieuw wachtwoord in Environment geldt dus pas na de herstart die Render zelf start als je op Save klikt.
+
 ## Mail
 
 SMTP stel je in via **Beheer → E-mail**. Zonder SMTP werkt de site wel, maar gaan uitnodigingen en herinneringen niet weg.
