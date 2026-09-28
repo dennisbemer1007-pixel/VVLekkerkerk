@@ -96,9 +96,14 @@ export default function Inschrijven({ mode = 'open' }) {
 
   const handleUitschrijven = async (enrollmentId) => {
     setMsg('');
+    const enrollment = services
+      .flatMap((service) => service.enrollments || [])
+      .find((row) => row.id === enrollmentId);
+    const name = enrollment?.person?.name;
+    const own = !name || Number(enrollment?.personId) === Number(personId);
     try {
       await api.deleteEnrollment(enrollmentId);
-      setMsg('Je bent uitgeschreven.');
+      setMsg(own ? 'Je bent uitgeschreven.' : `${name} is uitgeschreven.`);
       await load();
     } catch (e) {
       setError(e.message);
@@ -178,6 +183,8 @@ export default function Inschrijven({ mode = 'open' }) {
                 <DienstCard
                   dienst={s}
                   myPersonId={personId}
+                  householdIds={choices.map((choice) => choice.id)}
+                  enrollTargetId={whoId ? Number(whoId) : null}
                   showActions
                   onInschrijven={handleInschrijven}
                   onUitschrijven={handleUitschrijven}

@@ -4,6 +4,7 @@ import {
   formatServiceDate,
   occupancyStatus,
 } from '../utils/formatDate.js';
+import { unenrollActions } from '../utils/uitschrijven.js';
 
 function obligationMark(person) {
   if (!person) return '';
@@ -37,6 +38,10 @@ export default function DienstCard({
   onInschrijven,
   onUitschrijven,
   myPersonId,
+  /** Zichzelf plus gekoppelde kinderen: elk van hen kan worden uitgeschreven. */
+  householdIds = null,
+  /** Gekozen persoon bij "Wie schrijf je in?". Leeg = de ingelogde gebruiker. */
+  enrollTargetId = null,
   showActions = false,
   headerActions = null,
   adminMode = false,
@@ -53,8 +58,14 @@ export default function DienstCard({
   const required = dienst.required ?? 2;
   const status = dienst.status ?? occupancyStatus(enrolled, required);
   const type = SERVICE_TYPE_LABEL[dienst.type] ?? dienst.type;
+  const managedIds = householdIds?.length ? householdIds : myPersonId ? [myPersonId] : [];
+  const unenroll = unenrollActions(dienst.enrollments, managedIds);
   const myEnrollment = myPersonId
-    ? dienst.enrollments?.find((e) => e.personId === myPersonId)
+    ? dienst.enrollments?.find((e) => Number(e.personId) === Number(myPersonId))
+    : null;
+  const actingId = enrollTargetId || myPersonId;
+  const actingEnrollment = actingId
+    ? dienst.enrollments?.find((e) => Number(e.personId) === Number(actingId))
     : null;
   const inactive = dienst.active === false;
   const isDraft = Boolean(dienst.draft);
@@ -83,7 +94,7 @@ export default function DienstCard({
     showActions &&
     !inactive &&
     !isDraft &&
-    !myEnrollment &&
+    !actingEnrollment &&
     status !== 'full' &&
     !teamOnlyLeft &&
     !(isLocked && !canOverride);
@@ -252,30 +263,38 @@ export default function DienstCard({
 
       {showActions && !inactive && !isDraft && !(isLocked && !canOverride) ? (
         <div className="pt-1">
-          {!myPersonId ? (
+          {!myPersonId && unenroll.length === 0 ? (
             <p className="text-sm text-gray-600">Je moet ingelogd zijn om in te schrijven.</p>
-          ) : myEnrollment ? (
-            <button
-              type="button"
-              className="vvl-btn-outline min-h-[44px] text-xs"
-              onClick={() => onUitschrijven?.(myEnrollment.id)}
-            >
-              Uitschrijven
-            </button>
-          ) : status === 'full' ? (
-            <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
-          ) : capacity && capacity.personalOpen <= 0 && capacity.teamOpen > 0 ? (
-            <p className="text-sm text-gray-700">
-              De open plekken zijn voor het jeugdteam.
-            </p>
           ) : (
-            <button
-              type="button"
-              className="vvl-btn-primary min-h-[44px] text-xs"
-              onClick={() => onInschrijven?.(dienst.id)}
-            >
-              Inschrijven
-            </button>
+            <div className="flex flex-col gap-2">
+              {unenroll.map((action) => (
+                <button
+                  key={action.enrollmentId}
+                  type="button"
+                  className="vvl-btn-outline min-h-11 w-full whitespace-normal text-center text-xs"
+                  onClick={() => onUitschrijven?.(action.enrollmentId)}
+                >
+                  {action.label}
+                </button>
+              ))}
+              {canSelfEnroll ? (
+                <button
+                  type="button"
+                  className="vvl-btn-primary min-h-[44px] text-xs"
+                  onClick={() => onInschrijven?.(dienst.id)}
+                >
+                  Inschrijven
+                </button>
+              ) : null}
+              {!canSelfEnroll && unenroll.length === 0 && status === 'full' ? (
+                <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
+              ) : null}
+              {!canSelfEnroll && unenroll.length === 0 && capacity && capacity.personalOpen <= 0 && capacity.teamOpen > 0 ? (
+                <p className="text-sm text-gray-700">
+                  De open plekken zijn voor het jeugdteam.
+                </p>
+              ) : null}
+            </div>
           )}
         </div>
       ) : null}

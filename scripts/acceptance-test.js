@@ -962,6 +962,67 @@ async function main() {
     await req(`/api/persons/${importedPerson.id}`, { method: 'DELETE', token: markTok });
   }
 
+  {
+    const childName = `Kind Uitschrijven ${Date.now()}`;
+    const child = await req('/api/persons/me/children', {
+      method: 'POST',
+      token: lisa,
+      body: { name: childName },
+    });
+    const visible = await req('/api/services', { token: lisa });
+    const candidates = (Array.isArray(visible.json) ? visible.json : []).filter(
+      (service) => !service.locked && (service.capacity?.personalOpen ?? 0) > 0,
+    );
+    let enrolled = null;
+    let usedService = null;
+    for (const service of candidates) {
+      const attempt = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: service.id, personId: child.json?.id },
+      });
+      if (attempt.status === 201) {
+        enrolled = attempt;
+        usedService = service;
+        break;
+      }
+    }
+    const mine = usedService
+      ? await req(`/api/services?filter=mine&personId=${lisaMe.json.id}`, { token: lisa })
+      : null;
+    const onMine = (mine?.json || []).find((service) => service.id === usedService?.id);
+    const childRow = (onMine?.enrollments || []).find((row) => row.personId === child.json?.id);
+    mark(
+      record(
+        'ouder schrijft kind in',
+        child.status === 201 &&
+          enrolled?.status === 201 &&
+          enrolled.json?.personId === child.json?.id &&
+          Boolean(childRow),
+        `${child.status} ${enrolled?.status || 'geen dienst'} ${enrolled?.json?.error || ''}`,
+      ),
+    );
+    if (enrolled?.json?.id) {
+      const removed = await req(`/api/enrollments/${enrolled.json.id}`, { method: 'DELETE', token: lisa });
+      const after = await req(`/api/services?filter=mine&personId=${lisaMe.json.id}`, { token: lisa });
+      const still = (after.json || [])
+        .flatMap((service) => service.enrollments || [])
+        .some((row) => row.id === enrolled.json.id);
+      mark(
+        record(
+          'ouder schrijft kind uit',
+          removed.status === 204 && still === false,
+          `${removed.status} ${removed.json?.error || ''}`,
+        ),
+      );
+    } else {
+      mark(record('ouder schrijft kind uit', false, 'geen inschrijving'));
+    }
+    if (child.json?.id) {
+      await req(`/api/persons/me/children/${child.json.id}`, { method: 'DELETE', token: lisa });
+    }
+  }
+
   const servicesBeforeReset = await req('/api/services', { token: admin });
   const serviceCountBefore = Array.isArray(servicesBeforeReset.json) ? servicesBeforeReset.json.length : -1;
   const wipeDenied = await req('/api/settings/opschonen', {

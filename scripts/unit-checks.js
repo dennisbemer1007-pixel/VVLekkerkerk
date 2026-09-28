@@ -14,6 +14,7 @@ import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../sr
 import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFromObjects } from '../src/backend/lib/csvPersons.js';
 import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
 import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
+import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
@@ -884,6 +885,27 @@ assert(
 assert(
   'voor-wie geen popup zonder koppeling',
   needsVoorWiePopup(voorWieChoices({ id: 1, name: 'Lisa' }, [])) === false,
+);
+
+const childOnly = unenrollActions(
+  [{ id: 9, personId: 2, person: { name: 'Sem' } }],
+  [1, 2],
+);
+const bothOnDuty = unenrollActions(
+  [
+    { id: 3, personId: 1, person: { name: 'Lisa' } },
+    { id: 4, personId: 2, person: { name: 'Sem' } },
+    { id: 5, personId: 8, person: { name: 'Ander' } },
+  ],
+  [1, 2],
+);
+assert(
+  'ouder schrijft gekoppeld kind uit als alleen het kind staat',
+  childOnly.length === 1 && childOnly[0].enrollmentId === 9 && childOnly[0].label === 'Uitschrijven Sem',
+);
+assert(
+  'ouder schrijft zichzelf en elk gekoppeld kind uit',
+  bothOnDuty.map((row) => row.label).join('|') === 'Uitschrijven Lisa|Uitschrijven Sem',
 );
 
 assert(
