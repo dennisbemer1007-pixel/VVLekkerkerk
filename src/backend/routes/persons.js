@@ -541,11 +541,21 @@ router.put(
         include: { team: true },
       });
 
-      await prisma.session.deleteMany({ where: { personId: id } });
+      const header = req.headers.authorization || '';
+      const currentToken = header.startsWith('Bearer ') ? header.slice(7) : null;
+      const keepThisSession = req.person.id === id && Boolean(currentToken);
+      await prisma.session.deleteMany({
+        where: {
+          personId: id,
+          ...(keepThisSession ? { token: { not: currentToken } } : {}),
+        },
+      });
 
       res.json({
         person: publicPerson(person, { viewerRole: req.person.role }),
-        message: 'Wachtwoord bijgewerkt',
+        message: keepThisSession
+          ? 'Wachtwoord bijgewerkt. Je blijft op dit apparaat ingelogd.'
+          : 'Wachtwoord bijgewerkt',
       });
     } catch (err) {
       next(err);

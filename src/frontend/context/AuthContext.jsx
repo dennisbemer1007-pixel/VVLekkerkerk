@@ -42,6 +42,14 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+    };
+    window.addEventListener('vvl-auth-expired', onExpired);
+    return () => window.removeEventListener('vvl-auth-expired', onExpired);
+  }, []);
+
   const login = async (email, password) => {
     const res = await api.login(email.trim(), password);
     setToken(res.token);

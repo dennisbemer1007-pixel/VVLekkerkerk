@@ -237,8 +237,8 @@ function PersonenBeheer() {
     setPwMsg('');
     setError('');
     try {
-      await api.setPersonPassword(pwPersonId, pwValue);
-      setPwMsg('Wachtwoord opgeslagen.');
+      const res = await api.setPersonPassword(pwPersonId, pwValue);
+      setPwMsg(res?.message || 'Wachtwoord opgeslagen.');
       setPwPersonId(null);
       setPwValue('');
     } catch (err) {
