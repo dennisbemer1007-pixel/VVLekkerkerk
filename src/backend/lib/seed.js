@@ -24,9 +24,14 @@ export async function ensureAdmin() {
   const existing = await prisma.person.findUnique({ where: { email } });
   if (existing?.passwordHash) {
     const samePassword = await verifyPassword(password, existing.passwordHash);
+    // Alleen een nog-standaardwachtwoord vervangen. Een zelf gekozen wachtwoord blijft staan.
+    const stillDefault =
+      !samePassword &&
+      ((await verifyPassword('demo-test-2026', existing.passwordHash)) ||
+        (await verifyPassword('admin123', existing.passwordHash)));
     const data = {};
     if (existing.role === 'Bestuur') data.role = 'Admin';
-    if (!samePassword) data.passwordHash = await hashPassword(password);
+    if (stillDefault) data.passwordHash = await hashPassword(password);
     if (!Object.keys(data).length) return existing;
     if (data.passwordHash) {
       console.log(`Admin-wachtwoord bijgewerkt vanuit ADMIN_PASSWORD: ${email}`);
