@@ -25,7 +25,7 @@ function personName(enrollment) {
   return enrollment?.person?.name || 'Onbekend';
 }
 
-export default function Ruilen({ scope = 'mine', title = 'Ruilen', mode = 'list' }) {
+export default function Ruilen({ scope = 'mine', title = 'Ruilen', mode = 'list', basePath = '/ruilen' }) {
   const { user } = useAuth();
   const [mine, setMine] = useState([]);
   const [others, setOthers] = useState([]);
@@ -158,11 +158,11 @@ export default function Ruilen({ scope = 'mine', title = 'Ruilen', mode = 'list'
       ) : null}
 
       {mode === 'list' ? (
-        <Link to="/ruilen/nieuw" className="vvl-btn-primary inline-flex">
+        <Link to={`${basePath}/nieuw`} className="vvl-btn-primary inline-flex">
           Nieuw ruilverzoek
         </Link>
       ) : (
-        <Link to="/ruilen" className="vvl-btn-outline inline-flex text-xs">
+        <Link to={basePath} className="vvl-btn-outline inline-flex text-xs">
           Terug naar ruilen
         </Link>
       )}

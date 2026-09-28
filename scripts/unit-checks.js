@@ -900,8 +900,8 @@ assert('persoonfilter is hoofdletterongevoelig', includesText('Lisa de Vries', '
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');
 assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Ik');
-assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Meer');
-assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Instellingen|Meer');
+assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Mijn ruilen|Meer');
+assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Mijn ruilen|Instellingen|Meer');
 assert(
   'admin-instellingen niet onder Meer',
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&

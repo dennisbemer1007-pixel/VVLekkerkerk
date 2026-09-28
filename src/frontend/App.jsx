@@ -81,7 +81,8 @@ export default function App() {
               <Route path="/wedstrijden" element={<Protected feature="wedstrijden"><Wedstrijden /></Protected>} />
               <Route path="/ruilen" element={<Protected><Ruilen scope="mine" mode="list" /></Protected>} />
               <Route path="/ruilen/nieuw" element={<Protected><Ruilen scope="mine" mode="new" title="Nieuw ruilverzoek" /></Protected>} />
-              <Route path="/mijn-ruilen" element={<Protected><Navigate to="/ruilen" replace /></Protected>} />
+              <Route path="/mijn-ruilen" element={<Protected feature="beheer"><Ruilen scope="mine" mode="list" title="Mijn ruilen" basePath="/mijn-ruilen" /></Protected>} />
+              <Route path="/mijn-ruilen/nieuw" element={<Protected feature="beheer"><Ruilen scope="mine" mode="new" title="Nieuw ruilverzoek" basePath="/mijn-ruilen" /></Protected>} />
               <Route path="/voorkeuren" element={<Protected><Navigate to="/ik" replace /></Protected>} />
               <Route path="/ik" element={<Protected><Ik /></Protected>} />
               <Route path="/kinderen" element={<Protected><Kinderen /></Protected>} />

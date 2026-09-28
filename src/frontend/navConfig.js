@@ -14,6 +14,7 @@ const VOLUNTEER = [
 const OPEN = { to: '/open', label: 'Open', match: ['/open'] };
 const ROOSTER = { to: '/rooster', label: 'Rooster', match: ['/rooster', '/planning'] };
 const MENSEN = { to: '/mensen', label: 'Mensen', match: ['/mensen', '/uitnodigen'] };
+const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', match: ['/mijn-ruilen'] };
 const MEER = { to: '/meer', label: 'Meer', match: ['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens', '/beheer'] };
 const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', match: ['/instellingen'] };
 
@@ -30,8 +31,8 @@ export function navForRole(role) {
       VOLUNTEER[3],
     ];
   }
-  if (r === 'Barcommissie') return [OPEN, ROOSTER, MENSEN, MEER];
-  if (r === 'Admin') return [OPEN, ROOSTER, MENSEN, INSTELLINGEN, MEER];
+  if (r === 'Barcommissie') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, MEER];
+  if (r === 'Admin') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, INSTELLINGEN, MEER];
   return VOLUNTEER;
 }
 
