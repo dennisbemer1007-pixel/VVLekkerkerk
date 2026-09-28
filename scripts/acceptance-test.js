@@ -1,3 +1,6 @@
+import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
+import { personExportRowsSheets } from '../src/backend/lib/personsXlsx.js';
+
 /**
  * Acceptatie + regressie (draaiende app nodig).
  * Run: npm run test:accept
@@ -870,6 +873,94 @@ async function main() {
       `noshow=${stats.json?.noShowPeople?.length} duty=${stats.json?.dutyStats?.length}`,
     ),
   );
+
+  const farRange = await req('/api/services?from=2099-01-01&to=2099-01-02', { token: lisa });
+  mark(record('filter diensten op datum', farRange.status === 200 && Array.isArray(farRange.json) && farRange.json.length === 0));
+
+  const nobody = await req('/api/services?q=zzz-geen-persoon', { token: lisa });
+  mark(
+    record(
+      'filter diensten op persoon',
+      nobody.status === 200 && Array.isArray(nobody.json) && nobody.json.length === 0,
+    ),
+  );
+
+  const mySwaps = await req('/api/swaps?scope=mine', { token: markTok });
+  const markId = markMe.json?.id;
+  mark(
+    record(
+      'mijn ruilen toont alleen eigen verzoeken',
+      mySwaps.status === 200 &&
+        Array.isArray(mySwaps.json) &&
+        mySwaps.json.every((s) => s.requesterId === markId || s.counterpartyId === markId),
+      String(mySwaps.status),
+    ),
+  );
+
+  const rosterQ = await req('/api/planning?q=zzz-geen-persoon&from=2099-01-01&to=2099-01-02', {
+    token: markTok,
+  });
+  mark(
+    record(
+      'filter rooster op persoon en datum',
+      rosterQ.status === 200 && Array.isArray(rosterQ.json?.services) && rosterQ.json.services.length === 0,
+    ),
+  );
+
+  const peopleOnDay = await req('/api/persons?from=2099-03-01&to=2099-03-02&q=zzz', { token: markTok });
+  mark(
+    record(
+      'filter mensen op persoon en datum',
+      peopleOnDay.status === 200 && Array.isArray(peopleOnDay.json) && peopleOnDay.json.length === 0,
+    ),
+  );
+
+  const matchFilter = await req('/api/matches?from=2099-04-01&to=2099-04-02&q=zzz', { token: markTok });
+  mark(
+    record(
+      'filter wedstrijden op persoon en datum',
+      matchFilter.status === 200 && Array.isArray(matchFilter.json) && matchFilter.json.length === 0,
+    ),
+  );
+
+  const stamp = Date.now();
+  const xlsxBuf = workbookToXlsx(
+    personExportRowsSheets(
+      [
+        {
+          name: `Import Kind ${stamp}`,
+          email: `kind.${stamp}@vvl.demo`,
+          phone: '0699999999',
+          team: null,
+          role: 'Vrijwilliger',
+          obligation: 'NONE',
+          guardian: { email: 'mark@vvl.demo' },
+          exempted: false,
+        },
+      ],
+      [],
+    ),
+  );
+  const imported = await req('/api/persons/import.xlsx', {
+    method: 'POST',
+    token: markTok,
+    body: { xlsxBase64: xlsxBuf.toString('base64') },
+  });
+  const listed = await req(`/api/persons?all=true&q=${encodeURIComponent(`kind.${stamp}`)}`, { token: markTok });
+  const importedPerson = (listed.json || []).find((p) => p.email === `kind.${stamp}@vvl.demo`);
+  mark(
+    record(
+      'xlsx-import roundtrip met hoort bij',
+      imported.status === 200 &&
+        imported.json?.created === 1 &&
+        imported.json?.linked === 1 &&
+        importedPerson?.guardianId === markId,
+      `${imported.status} ${JSON.stringify(imported.json || {}).slice(0, 180)}`,
+    ),
+  );
+  if (importedPerson?.id) {
+    await req(`/api/persons/${importedPerson.id}`, { method: 'DELETE', token: markTok });
+  }
 
   console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
   process.exit(ok ? 0 : 1);

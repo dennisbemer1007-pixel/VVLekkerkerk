@@ -18,7 +18,14 @@ const HEADER_MAP = {
   role: 'role',
   verplichting: 'obligation',
   obligation: 'obligation',
+  hoort_bij: 'guardian',
+  hoortbij: 'guardian',
+  guardian: 'guardian',
+  vrijgesteld: 'exempted',
+  exempted: 'exempted',
 };
+
+const EXEMPTED_YES = new Set(['ja', 'yes', 'true', '1', 'waar']);
 
 const MAX_ROWS = 1000;
 
@@ -31,6 +38,20 @@ Piet Jansen;piet@example.nl;;JO13-2;Teamcoördinator;geen
 
 export function mapPersonHeader(value) {
   return HEADER_MAP[compactHeader(value)] || compactHeader(value);
+}
+
+/** Zet xlsx-objecten (kolomkoppen als sleutel) om naar dezelfde rijvorm als CSV. */
+export function personRowsFromObjects(objects = []) {
+  return objects.map((obj) => {
+    const mapped = { __row: obj.__row };
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === '__row') continue;
+      const header = mapPersonHeader(key);
+      if (!header) continue;
+      mapped[header] = value == null ? '' : String(value).trim();
+    }
+    return mapped;
+  });
 }
 
 function splitCsvLine(line, sep) {
@@ -119,6 +140,8 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       }
       teamId = team.id;
     }
+    const exemptedRaw = String(raw.exempted ?? '').trim().toLowerCase();
+    const guardianRef = String(raw.guardian ?? '').trim() || null;
     rows.push({
       name,
       email,
@@ -127,6 +150,8 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       teamId,
       role: normalizeRole(raw.role, 'Vrijwilliger'),
       obligation: normalizeObligation(raw.obligation),
+      guardianRef,
+      exempted: exemptedRaw ? EXEMPTED_YES.has(exemptedRaw) : undefined,
     });
   }
 

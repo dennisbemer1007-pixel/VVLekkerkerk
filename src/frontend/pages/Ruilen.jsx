@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageTitle } from '../components/PageHelp.jsx';
+import ListFilters from '../components/ListFilters.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { formatServiceDate, SERVICE_TYPE_LABEL } from '../utils/formatDate.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
+import { withinDates } from '../utils/listFilter.js';
 
 const STATUS_LABEL = {
   PENDING_PEER: 'Wacht op de andere persoon',
@@ -23,7 +23,7 @@ function personName(enrollment) {
   return enrollment?.person?.name || 'Onbekend';
 }
 
-export default function Ruilen() {
+export default function Ruilen({ scope = 'mine', title = 'Ruilen' }) {
   const { user } = useAuth();
   const [mine, setMine] = useState([]);
   const [others, setOthers] = useState([]);
@@ -36,13 +36,19 @@ export default function Ruilen() {
   const [busy, setBusy] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [filters, setFilters] = useState({ person: '', from: '', to: '' });
 
   const load = useCallback(async () => {
-    const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps()]);
+    const params = {};
+    if (scope === 'mine') params.scope = 'mine';
+    if (filters.person.trim()) params.q = filters.person.trim();
+    if (filters.from) params.from = filters.from;
+    if (filters.to) params.to = filters.to;
+    const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps(params)]);
     setMine(candidates.mine || []);
     setOthers(candidates.others || []);
     setSwaps(list || []);
-  }, []);
+  }, [scope, filters]);
 
   useEffect(() => {
     load().catch((e) => setError(e.message));
@@ -54,13 +60,16 @@ export default function Ruilen() {
   );
 
   const filteredOthers = useMemo(() => {
-    const q = toQuery.trim().toLowerCase();
-    if (!q) return others;
+    const q = `${toQuery} ${filters.person}`.trim().toLowerCase();
     return others.filter((enrollment) => {
+      if (filters.from || filters.to) {
+        if (!withinDates(enrollment.service?.date, filters.from, filters.to)) return false;
+      }
+      if (!q) return true;
       const hay = `${personName(enrollment)} ${serviceLabel(enrollment)}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [others, toQuery]);
+  }, [others, toQuery, filters]);
 
   const run = async (fn, success) => {
     setBusy(true);
@@ -119,13 +128,9 @@ export default function Ruilen() {
   return (
     <div className="space-y-6">
       <header>
-        <PageTitle {...PAGE_HELP.ruilen}>Ruilen</PageTitle>
-        <p className="mt-1 text-sm text-gray-700">
-          Ingelogd als <strong>{user?.name}</strong>. Je ruilt twee bestaande persoonlijke diensten,
-          ook als het rooster al officieel is. Na akkoord van de andere persoon is de ruiling direct
-          doorgevoerd. Er ontstaat geen open plek. Teamdiensten gaan via de teamcoördinator.
-        </p>
+        <h1 className="font-heading text-xl font-black uppercase">{title}</h1>
       </header>
+      <ListFilters {...filters} onChange={setFilters} />
 
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{msg}</p>

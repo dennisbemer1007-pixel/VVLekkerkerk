@@ -7,7 +7,10 @@ import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
 import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../src/backend/lib/season.js';
-import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../src/backend/lib/csvPersons.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFromObjects } from '../src/backend/lib/csvPersons.js';
+import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
+import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
+import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
 import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
@@ -54,6 +57,7 @@ import {
   rosterDaySections,
   servicesForSlotRow,
   slotCellText,
+  servicesForRoster,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
@@ -826,6 +830,71 @@ assert(
     exportSheets[0].headers.join(';') === PERSON_TEMPLATE_HEADERS.join(';') &&
     exportSheets[0].rows.length === 1,
 );
+
+const rosterKept = servicesForRoster([
+  { active: true, draft: false, enrollments: [{ person: { name: 'Lisa' } }] },
+  { active: true, draft: false, enrollments: [] },
+  { active: true, draft: false, enrollments: [{ person: { name: '  ' } }] },
+  { active: false, draft: false, enrollments: [{ person: { name: 'Tom' } }] },
+  { active: true, draft: true, enrollments: [{ person: { name: 'Noa' } }] },
+]);
+assert(
+  'pdf-filter: alleen actieve diensten met ingeschreven persoon',
+  rosterKept.length === 1 && rosterKept[0].enrollments[0].person.name === 'Lisa',
+);
+
+const roundSheets = personExportRowsSheets(
+  [
+    {
+      name: 'Kind Roundtrip',
+      email: 'kind.roundtrip@example.nl',
+      phone: '0611111111',
+      team: { name: 'JO11-1' },
+      role: 'Vrijwilliger',
+      obligation: 'NONE',
+      guardian: { email: 'ouder.roundtrip@example.nl' },
+      exempted: true,
+    },
+  ],
+  [{ name: 'JO11-1' }],
+);
+const roundObjects = xlsxToObjects(workbookToXlsx(roundSheets));
+const roundRows = validatePersonRows(personRowsFromObjects(roundObjects), {
+  teams: [{ id: 3, name: 'JO11-1' }],
+});
+assert(
+  'xlsx-import roundtrip houdt hoort_bij en vrijgesteld',
+  roundRows.ok &&
+    roundRows.rows[0].email === 'kind.roundtrip@example.nl' &&
+    roundRows.rows[0].guardianRef === 'ouder.roundtrip@example.nl' &&
+    roundRows.rows[0].exempted === true &&
+    roundRows.rows[0].teamId === 3,
+);
+
+const voorWie = voorWieChoices({ id: 1, name: 'Lisa' }, [{ id: 2, name: 'Sem' }]);
+assert(
+  'voor-wie popup bij gekoppelde persoon',
+  needsVoorWiePopup(voorWie) && voorWie[0].label === 'Jezelf' && voorWie[1].name === 'Sem',
+);
+assert(
+  'voor-wie geen popup zonder koppeling',
+  needsVoorWiePopup(voorWieChoices({ id: 1, name: 'Lisa' }, [])) === false,
+);
+
+assert(
+  'import alleen op desktop',
+  importAllowed(true) === true &&
+    importAllowed(false) === false &&
+    IMPORT_DESKTOP_MESSAGE === 'Importeren kan alleen op de computer',
+);
+
+const tightened = tightenDate({ gte: new Date('2026-01-01') }, { from: '2026-02-01', to: '2026-02-10' });
+assert(
+  'datumfilter vernauwt van/tot',
+  tightened.gte.toISOString().slice(0, 10) === '2026-02-01' &&
+    tightened.lte.toISOString().slice(0, 10) === '2026-02-10',
+);
+assert('persoonfilter is hoofdletterongevoelig', includesText('Lisa de Vries', 'lisa'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

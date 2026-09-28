@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import DienstCard from '../components/DienstCard.jsx';
-import FilterChips from '../components/FilterChips.jsx';
+import ListFilters from '../components/ListFilters.jsx';
+import MasterDetail from '../components/MasterDetail.jsx';
+import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
+import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
 
 export default function Planning() {
   const { personId, can, user } = useAuth();
@@ -15,12 +18,20 @@ export default function Planning() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [listFilters, setListFilters] = useState({ person: '', from: '', to: '' });
+  const [selectedId, setSelectedId] = useState(null);
+  const [children, setChildren] = useState([]);
+  const [pendingId, setPendingId] = useState(null);
   const isCommittee = can('beheer');
+  const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
 
   const load = useCallback(() => {
     const params = {};
     if (filter) params.filter = filter;
     if (filter === 'mine' && personId) params.personId = personId;
+    if (listFilters.from) params.from = listFilters.from;
+    if (listFilters.to) params.to = listFilters.to;
+    if (listFilters.person.trim()) params.q = listFilters.person.trim();
     return api
       .getPlanning(params)
       .then((data) => {
@@ -28,7 +39,12 @@ export default function Planning() {
         setPeriod(data.period ?? null);
       })
       .catch((e) => setError(e.message));
-  }, [filter, personId]);
+  }, [filter, personId, listFilters]);
+
+  useEffect(() => {
+    if (!isCommittee) return;
+    api.getMyChildren().then(setChildren).catch(() => setChildren([]));
+  }, [isCommittee]);
 
   useEffect(() => {
     api.getPlanningRound().then(setRound).catch(() => {});
@@ -108,17 +124,17 @@ export default function Planning() {
     }
   };
 
-  const handleInschrijven = async (serviceId, mode) => {
-    if (mode === 'expand') return;
+  const enrollAs = async (serviceId, targetId) => {
     setError('');
     setMsg('');
     try {
       await api.createEnrollment({
         serviceId,
-        personId,
+        personId: targetId,
         ignoreMatchBlock: isCommittee,
       });
-      setMsg(`${user?.name || 'Je'} staat ingeschreven.`);
+      const who = children.find((c) => c.id === targetId);
+      setMsg(who ? `${who.name} staat ingeschreven.` : `${user?.name || 'Je'} staat ingeschreven.`);
       await load();
     } catch (e) {
       if (e.code === 'MATCH_BLOCK' && isCommittee) {
@@ -126,7 +142,7 @@ export default function Planning() {
           try {
             await api.createEnrollment({
               serviceId,
-              personId,
+              personId: targetId,
               ignoreMatchBlock: true,
             });
             setMsg(`${user?.name || 'Je'} staat ingeschreven.`);
@@ -140,6 +156,19 @@ export default function Planning() {
       }
       setError(e.message);
     }
+  };
+
+  const handleInschrijven = async (serviceId, mode) => {
+    if (mode === 'expand') {
+      setSelectedId(serviceId);
+      return;
+    }
+    if (needsVoorWiePopup(choices)) {
+      setPendingId(serviceId);
+      setSelectedId(serviceId);
+      return;
+    }
+    await enrollAs(serviceId, personId);
   };
 
   const handleUitschrijven = async (enrollmentId) => {
@@ -158,6 +187,7 @@ export default function Planning() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          <h1 className="font-heading text-xl font-black uppercase">Rooster</h1>
           {period ? (
             <p className="text-sm font-semibold text-gray-800">
               {period.from} t/m {period.to}
@@ -195,7 +225,7 @@ export default function Planning() {
         </div>
       </header>
 
-      <FilterChips value={filter} onChange={setFilter} showMine />
+      <ListFilters {...listFilters} onChange={setListFilters} />
 
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -206,11 +236,39 @@ export default function Planning() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      {services.length === 0 ? (
-        <p className="vvl-card text-sm text-gray-600">Geen diensten in deze periode.</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {services.map((s) => (
+      <MasterDetail
+        selected={selectedId}
+        onBack={() => setSelectedId(null)}
+        emptyDetail="Kies een dienst."
+        list={
+          services.length === 0 ? (
+            <p className="vvl-card text-sm text-gray-600">Geen diensten in deze periode.</p>
+          ) : (
+            <ul className="space-y-2">
+              {services.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(s.id)}
+                    className="min-h-11 w-full rounded-sm border border-vvl-border bg-white px-3 py-3 text-left"
+                  >
+                    <span className="block text-sm font-bold">
+                      {new Date(s.date).toLocaleDateString('nl-NL', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      })}{' '}
+                      · {s.time}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        detail={services
+          .filter((s) => s.id === selectedId)
+          .map((s) => (
             <DienstCard
               key={s.id}
               dienst={s}
@@ -221,8 +279,17 @@ export default function Planning() {
               onUitschrijven={isCommittee ? handleUitschrijven : undefined}
             />
           ))}
-        </div>
-      )}
+      />
+      <VoorWieDialog
+        open={Boolean(pendingId)}
+        choices={choices}
+        onClose={() => setPendingId(null)}
+        onChoose={async (choice) => {
+          const id = pendingId;
+          setPendingId(null);
+          await enrollAs(id, choice.id);
+        }}
+      />
     </div>
   );
 }

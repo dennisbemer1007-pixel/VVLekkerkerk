@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import CsvMatchImport from '../components/CsvMatchImport.jsx';
+import DesktopOnly from '../components/DesktopOnly.jsx';
+import ListFilters from '../components/ListFilters.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -22,6 +24,9 @@ export default function Wedstrijden() {
   const [filters, setFilters] = useState({
     date: '',
     team: '',
+    person: '',
+    from: '',
+    to: '',
   });
   const [form, setForm] = useState({
     date: todayInputValue(),
@@ -34,23 +39,34 @@ export default function Wedstrijden() {
     playLevel: '',
   });
 
-  const load = () =>
-    Promise.all([api.getMatches(), api.getTeams()])
+  const load = () => {
+    const params = {};
+    if (filters.person.trim()) params.q = filters.person.trim();
+    if (filters.from) params.from = filters.from;
+    if (filters.to) params.to = filters.to;
+    if (filters.team) params.personId = '';
+    return Promise.all([api.getMatches(params), api.getTeams()])
       .then(([m, t]) => {
         setMatches(m);
         setTeams(t);
       })
       .catch((e) => setError(e.message));
+  };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [filters.person, filters.from, filters.to]);
 
   const filtered = useMemo(() => {
     const dateFilter = filters.date;
     return matches.filter((m) => {
       if (!showAll && !isFutureMatchDate(m.date)) return false;
       if (dateFilter && toDateInputValue(m.date) !== dateFilter) return false;
+      if (filters.from || filters.to) {
+        const day = toDateInputValue(m.date);
+        if (filters.from && day < filters.from) return false;
+        if (filters.to && day > filters.to) return false;
+      }
       if (filters.team) {
         const teamId = String(m.teamId ?? m.team?.id ?? '');
         if (teamId !== String(filters.team)) return false;
@@ -111,6 +127,12 @@ export default function Wedstrijden() {
       </header>
 
       <div className="vvl-card space-y-4">
+        <ListFilters
+          person={filters.person}
+          from={filters.from}
+          to={filters.to}
+          onChange={(next) => setFilters({ ...filters, ...next })}
+        />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="vvl-label">Datum</label>
@@ -160,7 +182,24 @@ export default function Wedstrijden() {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      <div className="vvl-card p-0">
+      <ul className="space-y-2 md:hidden">
+        {filtered.map((m) => (
+          <li key={m.id} className="vvl-card text-sm">
+            <p className="font-semibold">
+              {formatMatchDate(m.date)} · {m.team?.name || '—'}
+            </p>
+            <p>
+              {m.time || '—'} · {m.home ? 'Thuis' : 'Uit'} vs {m.opponent || '—'}
+            </p>
+            {isAdmin ? (
+              <button type="button" className="vvl-btn-outline mt-2 text-xs" onClick={() => remove(m.id)}>
+                Verwijder
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <div className="vvl-card hidden p-0 md:block">
         <table className="w-full text-sm">
           <thead className="bg-vvl-secondary text-xs font-bold uppercase">
             <tr>
@@ -191,11 +230,7 @@ export default function Wedstrijden() {
                   <td className="p-3">{m.matchType || '—'}</td>
                   {isAdmin ? (
                     <td className="p-3 text-right">
-                      <button
-                        type="button"
-                        className="text-xs font-bold uppercase text-red-700"
-                        onClick={() => remove(m.id)}
-                      >
+                      <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => remove(m.id)}>
                         Verwijder
                       </button>
                     </td>
@@ -287,7 +322,9 @@ export default function Wedstrijden() {
             </button>
           </form>
 
-          <CsvMatchImport onImported={load} />
+          <DesktopOnly>
+            <CsvMatchImport onImported={load} />
+          </DesktopOnly>
         </>
       ) : null}
     </div>

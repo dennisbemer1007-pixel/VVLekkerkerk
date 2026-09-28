@@ -78,7 +78,7 @@ export default function NotificationBell() {
           setOpen((v) => !v);
           if (!open) load();
         }}
-        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
+        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition ${
           hasNew
             ? 'border-vvl-gold bg-vvl-gold/20 text-vvl-gold notification-bell-pulse'
             : 'border-white/50 text-white hover:bg-white/10'

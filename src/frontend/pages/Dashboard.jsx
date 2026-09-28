@@ -133,7 +133,7 @@ export default function Dashboard() {
             <ul className="space-y-2">
               {filteredServices.map((s) => (
                 <li key={s.id} className="vvl-card flex min-h-[44px] items-center justify-between gap-2 py-3 text-sm">
-                  <Link className="font-semibold underline" to="/planning">
+                  <Link className="font-semibold underline" to="/rooster">
                     {new Date(s.date).toLocaleDateString('nl-NL', {
                       weekday: 'short',
                       day: 'numeric',
@@ -170,8 +170,8 @@ export default function Dashboard() {
       {can('beheer') && dutyStats.length ? (
         <section className="space-y-3">
           <h2 className="font-heading text-base font-black uppercase">Dit seizoen</h2>
-          <div className="vvl-card overflow-x-auto p-0">
-            <table className="w-full text-sm">
+          <div className="vvl-card p-0">
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-vvl-secondary text-xs font-bold uppercase">
                 <tr>
                   <th className="p-3 text-left">Naam</th>

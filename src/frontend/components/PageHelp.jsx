@@ -31,7 +31,7 @@ export default function PageHelp({ purpose, actions = [], title = 'Over deze pag
     <div className="relative inline-flex shrink-0" ref={rootRef}>
       <button
         type="button"
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-black transition ${
+        className={`inline-flex h-11 w-11 items-center justify-center rounded-full border-2 text-xs font-black transition ${
           open
             ? 'border-vvl-primary bg-vvl-primary text-white'
             : 'border-vvl-accent bg-white text-vvl-accent hover:border-vvl-primary hover:text-vvl-primary'

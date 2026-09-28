@@ -70,7 +70,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-vvl-muted px-4 py-10">
+    <div className="min-h-screen bg-vvl-muted">
+      <header className="border-b-4 border-vvl-gold bg-black px-4 py-3 text-center font-black uppercase tracking-wide text-white">
+        V.V. Lekkerkerk
+      </header>
+      <div className="px-4 py-10">
       <div className="mx-auto max-w-md space-y-6">
         <header className="text-center">
           <img src="/logo.png" alt="V.V. Lekkerkerk" className="vvl-logo mx-auto mb-4 h-24 w-24 object-contain" />
@@ -171,6 +175,7 @@ export default function Login() {
             Privacy
           </Link>
         </p>
+      </div>
       </div>
     </div>
   );

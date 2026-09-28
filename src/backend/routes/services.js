@@ -5,6 +5,7 @@ import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpe
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
 import { clampServiceDateFilter, periodFromRound } from '../lib/planningPeriod.js';
+import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -32,14 +33,23 @@ function buildServiceWhere(query) {
     where.date = { gte: startOfDay(now) };
   }
 
-  return { where, filter, personId: query.personId ? Number(query.personId) : null };
+  if (query.from || query.to) {
+    where.date = tightenDate(where.date, query);
+  }
+
+  return {
+    where,
+    filter,
+    personId: query.personId ? Number(query.personId) : null,
+    q: queryText(query),
+  };
 }
 
 router.get(
   '/',
   requireAuth(async (req, res, next) => {
     try {
-      let { where, filter, personId } = buildServiceWhere(req.query);
+      let { where, filter, personId, q } = buildServiceWhere(req.query);
       // Alleen beheerders mogen concepten zien
       if (req.query.includeDraft === 'true' && !isAdminRole(req.person.role)) {
         where.draft = false;
@@ -77,6 +87,11 @@ router.get(
         }
         services = services.filter((s) =>
           s.enrollments.some((e) => ids.has(e.personId)),
+        );
+      }
+      if (q) {
+        services = services.filter((s) =>
+          (s.enrollments || []).some((e) => includesText(e.person?.name, q)),
         );
       }
 

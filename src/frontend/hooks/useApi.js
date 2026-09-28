@@ -155,10 +155,13 @@ export const api = {
   createService: (data) => json('/services', { method: 'POST', body: JSON.stringify(data) }),
   updateService: (id, data) =>
     json(`/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  getPersons: (all = false, { includeNameless = false } = {}) => {
+  getPersons: (all = false, { includeNameless = false, q, from, to } = {}) => {
     const params = {};
     if (all) params.all = 'true';
     if (includeNameless) params.includeNameless = 'true';
+    if (q) params.q = q;
+    if (from) params.from = from;
+    if (to) params.to = to;
     return json(`/persons${qs(params)}`);
   },
   getMyChildren: () => json('/persons/me/children'),
@@ -198,7 +201,7 @@ export const api = {
   updateTeam: (id, data) =>
     json(`/teams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTeam: (id) => json(`/teams/${id}`, { method: 'DELETE' }),
-  getMatches: () => json('/matches'),
+  getMatches: (params = {}) => json(`/matches${qs(params)}`),
   createMatch: (data) => json('/matches', { method: 'POST', body: JSON.stringify(data) }),
   deleteMatch: (id) => json(`/matches/${id}`, { method: 'DELETE' }),
   downloadMatchTemplateXlsx: async () => {
@@ -280,7 +283,7 @@ export const api = {
   getPlanningControls: () => json('/planning/controls'),
   markNoShow: (id) => json(`/enrollments/${id}/noshow`, { method: 'POST', body: '{}' }),
   clearNoShow: (id) => json(`/enrollments/${id}/noshow`, { method: 'DELETE' }),
-  getSwaps: () => json('/swaps'),
+  getSwaps: (params = {}) => json(`/swaps${qs(params)}`),
   getSwapCandidates: () => json('/swaps/candidates'),
   createSwap: (data) => json('/swaps', { method: 'POST', body: JSON.stringify(data) }),
   acceptSwap: (id, data = {}) =>
@@ -307,6 +310,8 @@ export const api = {
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),
   importPersons: (data) => json('/persons/import', { method: 'POST', body: JSON.stringify(data) }),
+  importPersonsXlsx: (data) =>
+    json('/persons/import.xlsx', { method: 'POST', body: JSON.stringify(data) }),
   downloadPersonCsvExample: async () => {
     const headers = {};
     const token = getToken();

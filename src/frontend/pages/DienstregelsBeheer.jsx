@@ -352,8 +352,42 @@ export default function DienstregelsBeheer() {
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
-      <div className="overflow-x-auto vvl-card p-0">
-        <table className="w-full min-w-[720px] text-sm">
+      <ul className="space-y-2 md:hidden">
+        {rules.map((r) => (
+          <li key={r.id} className="vvl-card text-sm">
+            <p className="font-semibold">{r.name}</p>
+            <p className="text-xs text-gray-600">
+              {WEEKDAY_OPTIONS.find((d) => d.id === r.weekday)?.label || 'Elke dag'} {r.startTime}–{r.endTime}
+            </p>
+            <button
+              type="button"
+              className="vvl-btn-outline mt-2 text-xs"
+              onClick={() => {
+                setEditId(r.id);
+                setForm({
+                  ...emptyRule,
+                  ...r,
+                  weekday: r.weekday ?? '',
+                  conditionTeamId: r.conditionTeamId ? String(r.conditionTeamId) : '',
+                  conditionTeamName: r.conditionTeamName || '',
+                  conditionActivityType: r.conditionActivityType || '',
+                  kickoffAfter: r.kickoffAfter || '',
+                  teamDutySlotRole: r.teamDutySlotRole || '',
+                  teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
+                  teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
+                  teamDutyAgeTo: r.teamDutyAgeTo ?? '',
+                  slot: r.slot || '',
+                });
+                scrollToForm(formRef);
+              }}
+            >
+              Wijzigen
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="vvl-card hidden p-0 md:block">
+        <table className="w-full table-fixed text-sm">
           <thead className="bg-vvl-secondary text-xs font-bold uppercase">
             <tr>
               <th className="p-3 text-left">Regel</th>
