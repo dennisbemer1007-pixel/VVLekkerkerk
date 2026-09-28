@@ -18,6 +18,46 @@ export function setToken(token) {
   }
 }
 
+const AUTH_NOTICE_KEY = 'vvl-auth-notice';
+
+export function consumeAuthNotice() {
+  try {
+    const notice = sessionStorage.getItem(AUTH_NOTICE_KEY);
+    if (notice) sessionStorage.removeItem(AUTH_NOTICE_KEY);
+    return notice || '';
+  } catch {
+    return '';
+  }
+}
+
+function isAnonymousAuthPath(path) {
+  return (
+    path.startsWith('/auth/login') ||
+    path.startsWith('/auth/demo-accounts') ||
+    path.startsWith('/auth/forgot-password') ||
+    path.startsWith('/auth/invite/') ||
+    path.startsWith('/auth/reset/')
+  );
+}
+
+/** Sessie op de server is weg, terwijl het scherm nog ingelogd leek. */
+function markSessionExpired() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.setItem(
+      AUTH_NOTICE_KEY,
+      'Je sessie is afgelopen. Log opnieuw in met je wachtwoord.',
+    );
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new Event('vvl-auth-expired'));
+}
+
 function gatewayMessage(status, body) {
   if (body?.error === 'Database niet bereikbaar') {
     return 'Database niet bereikbaar. Controleer of dev.db bestaat (npm run setup) en herstart npm run dev.';
@@ -60,6 +100,9 @@ async function json(path, options = {}, attempt = 0) {
     }
     if (res.status === 502 || res.status === 503) {
       throw new Error(gatewayMessage(res.status, body));
+    }
+    if (res.status === 401 && !isAnonymousAuthPath(path)) {
+      markSessionExpired();
     }
     const err = new Error(body.error ?? `Fout (${res.status})`);
     err.status = res.status;

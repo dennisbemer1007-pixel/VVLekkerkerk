@@ -96,10 +96,8 @@ Zet een sterke `ADMIN_PASSWORD` (niet `admin123`). Voor persistente SQLite op ee
 
 Kopieer `.env.example` naar `.env`.
 
-## Klant-demo op Render (Free)
+## Render
 
-Geschikt om de app te laten uitproberen. Data blijft niet bewaard na idle sleep.
+`render.yaml` zet de live service op het Starter-plan met een vaste schijf (`/var/data`) en zonder oefenaccounts. Het adminwachtwoord staat alleen in het Render-dashboard.
 
-Zie **[docs/RENDER-DEMO.md](docs/RENDER-DEMO.md)** — kort: push naar Git, Render → Blueprint (`render.yaml`), inloggen met `admin@vvl.local` / `demo-test-2026`.
-
-Productie: Starter + persistente schijf (`DATA_DIR`). Keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md).
+Zie **[docs/RENDER-DEMO.md](docs/RENDER-DEMO.md)**. Keuzes: [docs/FO-KEUZES.md](docs/FO-KEUZES.md).

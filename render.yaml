@@ -1,33 +1,38 @@
-# Blueprint: VVL Planning — klant-demo op Render Free
+# Blueprint: VVL Planning — productie op Render Starter
 # https://render.com/docs/blueprint-spec
 #
-# Let op: Free = ephemeral storage. Na idle sleep (~15 min) is de database weg
-# en wordt bij de volgende start opnieuw geseed. Prima voor testen, niet voor productie.
+# De database staat op een vaste schijf. Een nieuwe deploy wist de planning niet.
+# SEED_DEMO blijft uit: geen oefenaccounts op het loginscherm.
+# ADMIN_PASSWORD staat alleen in het Render-dashboard (sync: false), niet in git.
 
 services:
   - type: web
     name: vvl-planning-demo
     runtime: node
-    plan: free
+    plan: starter
     region: frankfurt
     # --include=dev: Vite e.d. staan in devDependencies; Render zet NODE_ENV=production
     buildCommand: npm install --include=dev && npm run build:render
     startCommand: npm run start:render
     healthCheckPath: /api/health
+    disk:
+      name: vvl-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: SEED_DEMO
-        value: "true"
+        value: "false"
       - key: TRUST_PROXY
         value: "1"
-      - key: DATABASE_URL
-        value: file:./demo.db
+      - key: DATA_DIR
+        value: /var/data
       - key: ADMIN_EMAIL
         value: admin@vvl.local
+      # Bestaande waarde in het dashboard blijft staan. Zet daar een eigen wachtwoord.
       - key: ADMIN_PASSWORD
-        value: demo-test-2026
-      # APP_URL wordt in startscript gezet via RENDER_EXTERNAL_URL
-      # Demo-logins komen van GET /api/auth/demo-accounts (SEED_DEMO=true)
+        sync: false
+      # APP_URL wordt in het startscript gezet via RENDER_EXTERNAL_URL
       - key: MAIL_SECRET
         generateValue: true

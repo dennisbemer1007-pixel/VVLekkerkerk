@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { homePathForUser, useAuth } from '../context/AuthContext.jsx';
-import { api } from '../hooks/useApi.js';
+import { api, consumeAuthNotice } from '../hooks/useApi.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Login() {
@@ -13,10 +13,20 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoAccounts, setDemoAccounts] = useState([]);
+  const [notice, setNotice] = useState(() => consumeAuthNotice());
 
   useEffect(() => {
     if (!authLoading && isLoggedIn) navigate(homePath, { replace: true });
   }, [authLoading, isLoggedIn, navigate, homePath]);
+
+  useEffect(() => {
+    const onExpired = () => {
+      const text = consumeAuthNotice();
+      if (text) setNotice(text);
+    };
+    window.addEventListener('vvl-auth-expired', onExpired);
+    return () => window.removeEventListener('vvl-auth-expired', onExpired);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +81,10 @@ export default function Login() {
             VVL Planning App — gebruik je e-mail en wachtwoord.
           </p>
         </header>
+
+        {notice ? (
+          <p className="rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{notice}</p>
+        ) : null}
 
         <form onSubmit={submit} className="vvl-card space-y-4">
           <div>
