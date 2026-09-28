@@ -309,6 +309,9 @@ export const api = {
   rolloverSeason: (data) =>
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),
+  previewOpschonen: () => json('/settings/opschonen'),
+  opschonen: (confirm) =>
+    json('/settings/opschonen', { method: 'POST', body: JSON.stringify({ confirm }) }),
   importPersons: (data) => json('/persons/import', { method: 'POST', body: JSON.stringify(data) }),
   importPersonsXlsx: (data) =>
     json('/persons/import.xlsx', { method: 'POST', body: JSON.stringify(data) }),

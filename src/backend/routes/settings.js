@@ -11,6 +11,8 @@ import {
 import { publicClubSettings, rolloverSeason } from '../lib/season.js';
 import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
+import prisma from '../lib/prisma.js';
+import { previewEnvironmentReset, runEnvironmentReset } from '../lib/environmentReset.js';
 
 const router = Router();
 const ADMIN = ADMIN_ROLES;
@@ -126,6 +128,37 @@ router.post(
         detail: `${result.oldLabel} → ${result.seasonLabel}`,
       });
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/opschonen',
+  requireRole('Admin')(async (_req, res, next) => {
+    try {
+      res.json(await previewEnvironmentReset(prisma));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/opschonen',
+  requireRole('Admin')(async (req, res, next) => {
+    try {
+      const result = await runEnvironmentReset(prisma, {
+        actorId: req.person.id,
+        confirm: req.body?.confirm,
+      });
+      res.json({
+        message: result.message,
+        backup: result.backup,
+        gewist: result.gewist,
+        blijft: result.blijft,
+      });
     } catch (err) {
       next(err);
     }

@@ -3,6 +3,10 @@
  * Run: node scripts/unit-checks.js
  */
 import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
 import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/lib/csvMatches.js';
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
@@ -907,6 +911,16 @@ assert(
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
     navItemActive({ to: '/meer', match: ['/meer', '/beheer'] }, '/beheer', '?tab=regels', 'Admin') === false,
 );
+
+assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
+assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
+
+const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('omgeving opschonen op een databasekopie', resetCheck.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

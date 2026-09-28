@@ -962,6 +962,60 @@ async function main() {
     await req(`/api/persons/${importedPerson.id}`, { method: 'DELETE', token: markTok });
   }
 
+  const servicesBeforeReset = await req('/api/services', { token: admin });
+  const serviceCountBefore = Array.isArray(servicesBeforeReset.json) ? servicesBeforeReset.json.length : -1;
+  const wipeDenied = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: lisa,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen vrijwilliger 403', wipeDenied.status === 403, String(wipeDenied.status)));
+  const wipeTeam = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: sandra,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen teamcoördinator 403', wipeTeam.status === 403, String(wipeTeam.status)));
+  const wipeBar = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: markTok,
+    body: { confirm: 'OPSCHONEN' },
+  });
+  mark(record('opschonen barcommissie 403', wipeBar.status === 403, String(wipeBar.status)));
+  const wipePreviewDenied = await req('/api/settings/opschonen', { token: markTok });
+  mark(record('opschonen voorbeeld barcommissie 403', wipePreviewDenied.status === 403));
+  const wipePreview = await req('/api/settings/opschonen', { token: admin });
+  mark(
+    record(
+      'opschonen voorbeeld admin',
+      wipePreview.status === 200 &&
+        Array.isArray(wipePreview.json?.wissen) &&
+        Array.isArray(wipePreview.json?.blijft) &&
+        wipePreview.json.wissen.some((row) => row.key === 'diensten') &&
+        wipePreview.json.blijft.some((row) => row.key === 'teams'),
+      String(wipePreview.status),
+    ),
+  );
+  const wipeBad = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: admin,
+    body: { confirm: 'wissen' },
+  });
+  const wipeEmpty = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: admin,
+    body: {},
+  });
+  const servicesAfterReset = await req('/api/services', { token: admin });
+  const serviceCountAfter = Array.isArray(servicesAfterReset.json) ? servicesAfterReset.json.length : -2;
+  mark(
+    record(
+      'opschonen zonder juist woord doet niets',
+      wipeBad.status === 400 && wipeEmpty.status === 400 && serviceCountAfter === serviceCountBefore && serviceCountBefore >= 0,
+      `${wipeBad.status}/${wipeEmpty.status} diensten ${serviceCountBefore}→${serviceCountAfter}`,
+    ),
+  );
+
   console.log(ok ? '\nALLE ACCEPTATIETESTS GESLAAGD' : '\nSOMMIGE ACCEPTATIETESTS MISLUKT');
   process.exit(ok ? 0 : 1);
 }
