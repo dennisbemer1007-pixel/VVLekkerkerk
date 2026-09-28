@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar.jsx';
 import DesktopOnly from '../components/DesktopOnly.jsx';
+import NlDateInput from '../components/NlDateInput.jsx';
 import DienstCard from '../components/DienstCard.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -120,20 +121,21 @@ const ACCOUNT_FILTERS = [
   { value: 'no', label: 'Geen account' },
 ];
 
-function IconButton({ title, onClick, children, tone = 'default', type = 'button' }) {
+function IconButton({ title, onClick, children, tone = 'default', type = 'button', size = 'md' }) {
   const toneClass =
     tone === 'danger'
       ? 'text-red-800 border-red-300 hover:bg-red-50'
       : tone === 'warn'
         ? 'text-amber-800 border-amber-300 hover:bg-amber-50'
         : 'border-vvl-border hover:bg-vvl-secondary';
+  const box = size === 'sm' ? 'h-8 w-8 text-sm' : 'h-11 w-11 text-base';
   return (
     <button
       type={type}
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border bg-white text-base ${toneClass}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-sm border bg-white ${box} ${toneClass}`}
     >
       {children}
       <span className="sr-only">{title}</span>
@@ -337,6 +339,7 @@ function PersonenBeheer() {
   const [bulkMsg, setBulkMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
   const [seasonCounts, setSeasonCounts] = useState({});
+  const [showExtraCols, setShowExtraCols] = useState(false);
 
   const load = async (includeNameless = showNameless) => {
     setError('');
@@ -584,16 +587,16 @@ function PersonenBeheer() {
   };
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(22rem,32rem)] md:items-start md:gap-4 md:space-y-0">
       <form
         ref={formRef}
         onSubmit={submit}
-        className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="vvl-card grid gap-3 sm:grid-cols-2 md:sticky md:top-4 md:col-start-2 md:row-start-1 lg:grid-cols-1"
       >
-        <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
+        <h2 className="sm:col-span-2 font-heading text-lg font-black uppercase lg:col-span-1">
           {editId ? 'Persoon bewerken' : 'Persoon toevoegen'}
         </h2>
-        <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
+        <p className="text-sm text-gray-700 sm:col-span-2 lg:col-span-1">
           E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin). Vul
           e-mail in om een uitnodiging te versturen, of kies "Hoort bij" voor iemand zonder eigen
           account (dan is e-mail niet verplicht).
@@ -684,7 +687,7 @@ function PersonenBeheer() {
           />
           Vrijgesteld (niet automatisch inplannen)
         </label>
-        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
+        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-1">
           <button type="submit" className="vvl-btn-primary min-h-[44px]">
             {editId ? 'Opslaan' : 'Toevoegen / uitnodigen'}
           </button>
@@ -697,14 +700,16 @@ function PersonenBeheer() {
       </form>
 
       {editId ? (
-        <PersonAbsencesEditor
-          personId={editId}
-          personName={persons.find((p) => p.id === editId)?.name || ''}
-        />
+        <div className="md:col-start-2">
+          <PersonAbsencesEditor
+            personId={editId}
+            personName={persons.find((p) => p.id === editId)?.name || ''}
+          />
+        </div>
       ) : null}
 
       {inviteResult ? (
-        <div className="vvl-card space-y-3 border-l-4 border-l-emerald-500">
+        <div className="vvl-card space-y-3 border-l-4 border-l-emerald-500 md:col-start-2">
           <h3 className="font-heading text-lg font-black uppercase">Uitnodiging klaar</h3>
           {inviteResult.emailSent ? (
             <p className="text-sm text-emerald-800">
@@ -745,8 +750,14 @@ function PersonenBeheer() {
         </div>
       ) : null}
 
+      <div className="space-y-4 md:col-start-1 md:row-start-1">
       <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-base font-black uppercase">Filters</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-heading text-base font-black uppercase">Filters</h2>
+          <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => setShowExtraCols((v) => !v)}>
+            {showExtraCols ? 'Minder kolommen' : 'Meer kolommen'}
+          </button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="vvl-label">Naam</label>
@@ -782,11 +793,11 @@ function PersonenBeheer() {
           </div>
           <div>
             <label className="vvl-label">Van</label>
-            <input type="date" className="vvl-input" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+            <NlDateInput value={filterFrom} onChange={setFilterFrom} ariaLabel="Van" />
           </div>
           <div>
             <label className="vvl-label">Tot</label>
-            <input type="date" className="vvl-input" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+            <NlDateInput value={filterTo} onChange={setFilterTo} ariaLabel="Tot" />
           </div>
           <div>
             <label className="vvl-label">Account</label>
@@ -823,8 +834,8 @@ function PersonenBeheer() {
         ) : null}
       </div>
 
-      <div className="hidden overflow-hidden md:block">
-        <table className="w-full table-fixed text-xs">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[48rem] text-sm">
           <thead className="bg-black text-left text-white">
             <tr>
               <th className="p-2">
@@ -832,12 +843,12 @@ function PersonenBeheer() {
               </th>
               <th className="p-2 font-bold">Naam</th>
               <th className="p-2 font-bold">E-mail</th>
-              <th className="p-2 font-bold">Telefoon</th>
+              {showExtraCols ? <th className="p-2 font-bold">Telefoon</th> : null}
               <th className="p-2 font-bold">Rol</th>
               <th className="p-2 font-bold">Team</th>
               <th className="p-2 font-bold">Verplichting</th>
-              <th className="p-2 font-bold">Hoort bij</th>
-              <th className="p-2 font-bold">Vrijgesteld</th>
+              {showExtraCols ? <th className="p-2 font-bold">Hoort bij</th> : null}
+              {showExtraCols ? <th className="p-2 font-bold">Vrijgesteld</th> : null}
               <th className="p-2 font-bold">Seizoen</th>
               <th className="p-2 font-bold">Account</th>
               <th className="p-2 font-bold"> </th>
@@ -848,7 +859,7 @@ function PersonenBeheer() {
                 <input className="vvl-input" value={filterName} onChange={(e) => setFilterName(e.target.value)} aria-label="Filter naam" />
               </th>
               <th />
-              <th />
+              {showExtraCols ? <th /> : null}
               <th className="p-1">
                 <select className="vvl-input" value={filterRole} onChange={(e) => setFilterRole(e.target.value)} aria-label="Filter rol">
                   <option value="">Alle</option>
@@ -867,8 +878,8 @@ function PersonenBeheer() {
                 </select>
               </th>
               <th />
-              <th />
-              <th />
+              {showExtraCols ? <th /> : null}
+              {showExtraCols ? <th /> : null}
               <th />
               <th className="p-1">
                 <select className="vvl-input" value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)} aria-label="Filter account">
@@ -882,38 +893,44 @@ function PersonenBeheer() {
           </thead>
           <tbody>
             {filteredPersons.map((p) => (
-              <tr key={p.id} className="border-t border-vvl-border align-top">
-                <td className="p-2">
+              <tr
+                key={p.id}
+                className="cursor-pointer border-t border-vvl-border hover:bg-vvl-muted"
+                onClick={() => startEdit(p)}
+              >
+                <td className="whitespace-nowrap p-2">
                   <input
                     type="checkbox"
                     className="h-5 w-5"
                     checked={selectedIds.includes(p.id)}
                     disabled={!p.email || p.hasAccount}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={() => toggleSelect(p.id)}
                     aria-label={`Selecteer ${p.name}`}
                   />
                 </td>
-                <td className="break-words p-2 font-semibold">{p.name}{!p.active ? ' (inactief)' : ''}</td>
-                <td className="break-words p-2">{p.email || '—'}</td>
-                <td className="break-words p-2">{p.phone || '—'}</td>
-                <td className="break-words p-2">{p.role}</td>
-                <td className="break-words p-2">{p.team?.name || '—'}</td>
-                <td className="break-words p-2">{p.obligationLabel}</td>
-                <td className="break-words p-2">{p.guardianName || '—'}</td>
-                <td className="p-2">{p.exempted ? 'ja' : 'nee'}</td>
-                <td className="p-2 text-right">{seasonCounts[p.id] ?? '—'}</td>
-                <td className="p-2">{p.hasAccount ? 'Wel' : p.invitePending ? 'Uitnodiging' : 'Geen'}</td>
-                <td className="p-2">
-                  <div className="flex flex-wrap gap-1">
-                    <IconButton title={`${p.name} bewerken`} onClick={() => startEdit(p)}>✏️</IconButton>
+                <td className="whitespace-nowrap p-2 font-semibold">{p.name}{!p.active ? ' (inactief)' : ''}</td>
+                <td className="whitespace-nowrap p-2">{p.email || '—'}</td>
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.phone || '—'}</td> : null}
+                <td className="whitespace-nowrap p-2">{p.role}</td>
+                <td className="whitespace-nowrap p-2">{p.team?.name || '—'}</td>
+                <td className="whitespace-nowrap p-2">{p.obligationLabel}</td>
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.guardianName || '—'}</td> : null}
+                {showExtraCols ? <td className="whitespace-nowrap p-2">{p.exempted ? 'ja' : 'nee'}</td> : null}
+                <td className="whitespace-nowrap p-2 text-right">{seasonCounts[p.id] ?? '—'}</td>
+                <td className="whitespace-nowrap p-2">{p.hasAccount ? 'Wel' : p.invitePending ? 'Uitnodiging' : 'Geen'}</td>
+                <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-nowrap gap-1">
+                    <IconButton size="sm" title={`${p.name} bewerken`} onClick={() => startEdit(p)}>✏️</IconButton>
                     {!p.hasAccount && p.email ? (
-                      <IconButton title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
+                      <IconButton size="sm" title={`Link opnieuw versturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
                     ) : null}
-                    <IconButton title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`} tone="warn" onClick={() => toggleActive(p)}>
+                    <IconButton size="sm" title={p.active ? `${p.name} deactiveren` : `${p.name} activeren`} tone="warn" onClick={() => toggleActive(p)}>
                       {p.active ? '⛔' : '✅'}
                     </IconButton>
                     {!p.active && (p.email || p.phone) ? (
                       <IconButton
+                        size="sm"
                         title={`Contact van ${p.name} wissen (AVG)`}
                         tone="warn"
                         onClick={async () => {
@@ -929,7 +946,7 @@ function PersonenBeheer() {
                         🧹
                       </IconButton>
                     ) : null}
-                    <IconButton title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>🗑️</IconButton>
+                    <IconButton size="sm" title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>🗑️</IconButton>
                   </div>
                 </td>
               </tr>
@@ -1144,6 +1161,7 @@ function PersonenBeheer() {
       <DesktopOnly>
         <PersonImport onDone={() => load(showNameless)} />
       </DesktopOnly>
+      </div>
     </section>
   );
 }

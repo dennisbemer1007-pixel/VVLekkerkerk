@@ -24,6 +24,13 @@ export default function Meer() {
     <div className="space-y-4">
       <h1 className="font-heading text-xl font-black uppercase">Meer</h1>
       <ul className="space-y-2">
+        {admin ? (
+          <li className="md:hidden">
+            <Link to="/instellingen" className="vvl-btn-primary w-full">
+              Instellingen
+            </Link>
+          </li>
+        ) : null}
         {items.map((item) => (
           <li key={item.to}>
             <Link to={item.to} className="vvl-btn-primary w-full">

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import NlDateInput from './NlDateInput.jsx';
 
 export default function ListFilters({
   person = '',
@@ -11,41 +12,31 @@ export default function ListFilters({
   const [open, setOpen] = useState(false);
   const set = (patch) => onChange({ person, from, to, ...patch });
   const active = Boolean(person.trim() || from || to);
+  const personPlaceholder = personLabel === 'Persoon' ? 'Zoek persoon' : personLabel;
 
-  const fields = (
-    <>
-      <label className="block min-w-0">
-        <span className="vvl-label">{personLabel}</span>
-        <input
-          className="vvl-input"
-          value={person}
-          onChange={(e) => set({ person: e.target.value })}
-          placeholder="Naam"
-          aria-label={personLabel}
-        />
-      </label>
-      <label className="block min-w-0">
-        <span className="vvl-label">Van</span>
-        <input
-          type="date"
-          className="vvl-input"
-          value={from}
-          onChange={(e) => set({ from: e.target.value })}
-          aria-label="Van"
-        />
-      </label>
-      <label className="block min-w-0">
-        <span className="vvl-label">Tot</span>
-        <input
-          type="date"
-          className="vvl-input"
-          value={to}
-          onChange={(e) => set({ to: e.target.value })}
-          aria-label="Tot"
-        />
-      </label>
-      {children}
-    </>
+  const personField = (
+    <label className="block min-w-0 md:w-56 md:shrink-0">
+      <span className="vvl-label md:sr-only">{personLabel}</span>
+      <input
+        className="vvl-input"
+        value={person}
+        onChange={(e) => set({ person: e.target.value })}
+        placeholder={personPlaceholder}
+        aria-label={personLabel}
+      />
+    </label>
+  );
+  const fromField = (
+    <label className="block min-w-0 md:w-40 md:shrink-0">
+      <span className="vvl-label md:sr-only">Van</span>
+      <NlDateInput value={from} onChange={(next) => set({ from: next })} ariaLabel="Van" placeholder="Van dd-mm-jjjj" />
+    </label>
+  );
+  const toField = (
+    <label className="block min-w-0 md:w-40 md:shrink-0">
+      <span className="vvl-label md:sr-only">Tot</span>
+      <NlDateInput value={to} onChange={(next) => set({ to: next })} ariaLabel="Tot" placeholder="Tot dd-mm-jjjj" />
+    </label>
   );
 
   return (
@@ -54,9 +45,21 @@ export default function ListFilters({
         <button type="button" className="vvl-btn-outline w-full" onClick={() => setOpen((v) => !v)}>
           {open ? 'Filter sluiten' : `Filter${active ? ' · aan' : ''}`}
         </button>
-        {open ? <div className="mt-2 space-y-2 rounded-sm border border-vvl-border bg-white p-3">{fields}</div> : null}
+        {open ? (
+          <div className="mt-2 space-y-2 rounded-sm border border-vvl-border bg-white p-3">
+            {personField}
+            {fromField}
+            {toField}
+            {children}
+          </div>
+        ) : null}
       </div>
-      <div className="hidden gap-2 md:grid md:grid-cols-3">{fields}</div>
+      <div className="hidden items-center gap-2 md:flex [&_.vvl-label]:sr-only">
+        {personField}
+        {fromField}
+        {toField}
+        {children}
+      </div>
     </div>
   );
 }

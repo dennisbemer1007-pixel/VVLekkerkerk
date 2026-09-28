@@ -256,7 +256,7 @@ export default function TeamDashboard() {
                   ))}
                 </ul>
                 <div className="mt-2 hidden md:block">
-                  <table className="w-full table-fixed text-sm">
+                  <table className="w-full text-sm">
                     <thead className="bg-vvl-secondary text-xs font-bold uppercase">
                       <tr>
                         <th className="p-3 text-left">Naam</th>
@@ -288,7 +288,7 @@ export default function TeamDashboard() {
                           <td className="p-3 text-right">{m.stoodYear ?? m.barThisYear ?? 0}</td>
                           <td className="p-3 text-right">{m.teamDutyCount || 0}</td>
                           <td className="p-3">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-nowrap gap-2">
                               {edit?.id === m.id ? (
                                 <>
                                   <button type="button" className="vvl-btn-primary px-3 text-xs" onClick={() => saveParent(team.id)}>

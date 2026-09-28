@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
+import ServiceLine, { openSpots } from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -28,6 +29,10 @@ export default function Planning({ variant = 'rooster' }) {
   const [kind, setKind] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [onlyNoShow, setOnlyNoShow] = useState(false);
+  const [people, setPeople] = useState([]);
+  const [seasonCounts, setSeasonCounts] = useState({});
+  const [assignQuery, setAssignQuery] = useState('');
+  const cleared = useRef(false);
   const [selectedId, setSelectedId] = useState(null);
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
@@ -64,6 +69,20 @@ export default function Planning({ variant = 'rooster' }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (variant !== 'open' || !isCommittee) return undefined;
+    api.getPersons(true).then(setPeople).catch(() => setPeople([]));
+    api
+      .getStats()
+      .then((stats) => {
+        const map = {};
+        for (const row of stats?.dutyStats || []) map[row.id] = row.barThisSeason ?? row.barThisYear ?? 0;
+        setSeasonCounts(map);
+      })
+      .catch(() => setSeasonCounts({}));
+    return undefined;
+  }, [variant, isCommittee]);
 
   const downloadPdf = async () => {
     setPdfBusy(true);
@@ -211,6 +230,19 @@ export default function Planning({ variant = 'rooster' }) {
     };
   }, [services]);
 
+  useEffect(() => {
+    if (!shown.length) return;
+    if (selectedId && shown.some((s) => s.id === selectedId)) return;
+    if (cleared.current) return;
+    setSelectedId(shown[0].id);
+  }, [shown, selectedId]);
+
+  const pick = (id) => {
+    cleared.current = false;
+    setSelectedId(id);
+    setAssignQuery('');
+  };
+
   const showPast = () => {
     const to = new Date();
     to.setDate(to.getDate() - 1);
@@ -322,7 +354,10 @@ export default function Planning({ variant = 'rooster' }) {
 
       <MasterDetail
         selected={selectedId}
-        onBack={() => setSelectedId(null)}
+        onBack={() => {
+          cleared.current = true;
+          setSelectedId(null);
+        }}
         emptyDetail="Kies een dienst."
         list={
           shown.length === 0 ? (
@@ -331,20 +366,13 @@ export default function Planning({ variant = 'rooster' }) {
             <ul className="space-y-2">
               {shown.map((s) => (
                 <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(s.id)}
-                    className="min-h-11 w-full rounded-sm border border-vvl-border bg-white px-3 py-3 text-left"
-                  >
-                    <span className="block text-sm font-bold">
-                      {new Date(s.date).toLocaleDateString('nl-NL', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      })}{' '}
-                      · {s.time}
-                    </span>
-                  </button>
+                  <ServiceLine
+                    service={s}
+                    selected={selectedId === s.id}
+                    onSelect={() => pick(s.id)}
+                    actionLabel={variant === 'open' ? 'Wijs toe' : undefined}
+                    onAction={() => pick(s.id)}
+                  />
                 </li>
               ))}
             </ul>
@@ -352,17 +380,31 @@ export default function Planning({ variant = 'rooster' }) {
         }
         detail={shown
           .filter((s) => s.id === selectedId)
-          .map((s) => (
-            <DienstCard
-              key={s.id}
-              dienst={s}
-              myPersonId={personId}
-              showActions={isCommittee}
-              committeeOverride={isCommittee}
-              onInschrijven={isCommittee ? handleInschrijven : undefined}
-              onUitschrijven={isCommittee ? handleUitschrijven : undefined}
-            />
-          ))}
+          .map((s) =>
+            variant === 'open' ? (
+              <AssignPanel
+                key={s.id}
+                service={s}
+                people={people}
+                seasonCounts={seasonCounts}
+                query={assignQuery}
+                onQuery={setAssignQuery}
+                busy={false}
+                onAssign={(person) => enrollAs(s.id, person)}
+                onRemove={handleUitschrijven}
+              />
+            ) : (
+              <DienstCard
+                key={s.id}
+                dienst={s}
+                myPersonId={personId}
+                showActions={isCommittee}
+                committeeOverride={isCommittee}
+                onInschrijven={isCommittee ? handleInschrijven : undefined}
+                onUitschrijven={isCommittee ? handleUitschrijven : undefined}
+              />
+            ),
+          )}
       />
       <VoorWieDialog
         open={Boolean(pendingId)}
@@ -374,6 +416,63 @@ export default function Planning({ variant = 'rooster' }) {
           await enrollAs(id, choice.id);
         }}
       />
+    </div>
+  );
+}
+
+function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, onRemove }) {
+  const enrolledIds = new Set((service.enrollments || []).map((e) => e.personId));
+  const q = query.trim().toLowerCase();
+  const options = (people || [])
+    .filter((p) => p.active !== false && !enrolledIds.has(p.id))
+    .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .slice(0, 8);
+  const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
+  const when = new Date(service.date).toLocaleDateString('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  return (
+    <div className="vvl-card space-y-3">
+      <header>
+        <h2 className="font-heading text-lg font-black uppercase">Toewijzen</h2>
+        <p className="text-sm text-gray-700">
+          {when} · {service.time} · {type} · nog {openSpots(service)}
+        </p>
+      </header>
+      {(service.enrollments || []).length ? (
+        <ul className="space-y-1 text-sm">
+          {service.enrollments.map((e) => (
+            <li key={e.id} className="flex items-center justify-between gap-2">
+              <span>{e.person?.name || '—'}</span>
+              <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => onRemove(e.id)}>
+                Eruit
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-600">Nog niemand ingeschreven.</p>
+      )}
+      <label className="block">
+        <span className="vvl-label">Zoek persoon</span>
+        <input className="vvl-input" value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Naam" />
+      </label>
+      <ul className="space-y-2">
+        {options.map((p) => (
+          <li key={p.id} className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-sm">
+              {p.name}{' '}
+              <span className="text-gray-500">{seasonCounts[p.id] ?? 0}× dit seizoen</span>
+            </span>
+            <button type="button" className="vvl-btn-primary shrink-0 px-3 text-xs" onClick={() => onAssign(p.id)}>
+              Zet {p.name.split(' ')[0]}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

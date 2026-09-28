@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
+import ServiceLine from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -20,6 +21,7 @@ export default function Inschrijven({ mode = 'open' }) {
   const [onlyOpen, setOnlyOpen] = useState(mode === 'open');
   const [whoId, setWhoId] = useState('');
   const [stood, setStood] = useState(null);
+  const cleared = useRef(false);
 
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
 
@@ -103,6 +105,13 @@ export default function Inschrijven({ mode = 'open' }) {
     }
   };
 
+  useEffect(() => {
+    if (!services.length) return;
+    if (selectedId && services.some((s) => s.id === selectedId)) return;
+    if (cleared.current) return;
+    setSelectedId(services[0].id);
+  }, [services, selectedId]);
+
   const title = mode === 'mine' ? 'Mijn diensten' : 'Diensten';
 
   return (
@@ -123,7 +132,10 @@ export default function Inschrijven({ mode = 'open' }) {
 
       <MasterDetail
         selected={selectedId}
-        onBack={() => setSelectedId(null)}
+        onBack={() => {
+          cleared.current = true;
+          setSelectedId(null);
+        }}
         emptyDetail="Kies een dienst."
         list={
           services.length === 0 ? (
@@ -132,26 +144,14 @@ export default function Inschrijven({ mode = 'open' }) {
             <ul className="space-y-2">
               {services.map((s) => (
                 <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(s.id)}
-                    className={`w-full rounded-sm border px-3 py-3 text-left ${
-                      selectedId === s.id ? 'border-black bg-white' : 'border-vvl-border bg-white'
-                    }`}
-                  >
-                    <span className="block text-sm font-bold">
-                      {new Date(s.date).toLocaleDateString('nl-NL', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      })}{' '}
-                      · {s.time}
-                    </span>
-                    <span className="block text-xs text-gray-600">
-                      {s.type === 'KITCHEN' ? 'Keuken' : 'Bar'} · {s.enrolled ?? s.enrollments?.length ?? 0}/
-                      {s.required ?? 0}
-                    </span>
-                  </button>
+                  <ServiceLine
+                    service={s}
+                    selected={selectedId === s.id}
+                    onSelect={() => {
+                      cleared.current = false;
+                      setSelectedId(s.id);
+                    }}
+                  />
                 </li>
               ))}
             </ul>
