@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
-import Voorkeuren from './Voorkeuren.jsx';
 
 export default function Ik({ title = 'Ik' }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
@@ -73,8 +72,6 @@ export default function Ik({ title = 'Ik' }) {
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
 
-      <Voorkeuren embedded />
-
       {title === 'Ik' ? (
         <Link to="/kinderen" className="vvl-btn-outline inline-flex w-full sm:w-auto">
           Mijn kinderen
@@ -97,9 +94,6 @@ export default function Ik({ title = 'Ik' }) {
         </Link>
         <button type="button" className="vvl-btn-outline w-full sm:w-auto" onClick={resetPassword}>
           Wachtwoord via e-mail
-        </button>
-        <button type="button" className="vvl-btn-primary w-full sm:w-auto" onClick={() => logout()}>
-          Uitloggen
         </button>
       </section>
     </div>

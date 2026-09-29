@@ -87,11 +87,23 @@ export function personalEnrollmentCount(enrollments, from, to) {
   }).length;
 }
 
+/** Vrijgesteld zonder datum geldt altijd. Met datum alleen t/m die dag. */
+export function isExemptedOn(person, date = new Date()) {
+  if (!person?.exempted) return false;
+  if (!person.exemptedUntil) return true;
+  const until = new Date(person.exemptedUntil);
+  if (Number.isNaN(until.getTime())) return true;
+  const day = new Date(date);
+  until.setHours(23, 59, 59, 999);
+  day.setHours(12, 0, 0, 0);
+  return day.getTime() <= until.getTime();
+}
+
 /**
  * Quota: FULL ≥1 in 6 weken; VR18 ≥1 in 12 weken.
  */
 export function underQuota(person, count6w, countYear, count12w = count6w) {
-  if (person?.exempted) return false;
+  if (isExemptedOn(person)) return false;
   if ((person?.makeupDue ?? 0) > 0) return true;
   const obligation = normalizeObligation(person.obligation);
   if (obligation === OBLIGATIONS.FULL) {
@@ -118,7 +130,7 @@ export function normalObligationRequired(obligation) {
 
 /** Nog te plannen: restant normale verplichting + openstaande inhaaldiensten. */
 export function remainingObligation(person, executed) {
-  if (person?.exempted) return 0;
+  if (isExemptedOn(person)) return 0;
   if (!isMandatoryObligation(person?.obligation)) return 0;
   const normal = normalObligationRequired(person.obligation);
   return Math.max(0, normal - (executed ?? 0)) + Math.max(0, person.makeupDue ?? 0);

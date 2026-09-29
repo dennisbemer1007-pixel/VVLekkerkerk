@@ -20,6 +20,8 @@ model Person {
   /** NONE | FULL (1×/6w) | VR18 (1×/12w) */
   obligation       String       @default("NONE")
   exempted         Boolean      @default(false)
+  /** Leeg = vrijgesteld tot je het vinkje uitzet. Gevuld = vrijgesteld t/m deze dag. */
+  exemptedUntil    DateTime?
   /** Openstaande inhaaldiensten */
   makeupDue        Int          @default(0)
   /** JSON array van weekdagen 0=zo … 6=za waarop iemand niet kan */
@@ -138,6 +140,8 @@ model Activity {
   location  String?
   locked    Boolean   @default(false)
   note      String?
+  /** Hoeveel bardiensten deze activiteit nodig heeft. Leeg = alleen de gewone dienstregels. */
+  barRequired Int?
   services  Service[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

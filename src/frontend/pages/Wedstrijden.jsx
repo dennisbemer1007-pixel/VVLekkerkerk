@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import CsvMatchImport from '../components/CsvMatchImport.jsx';
+import NlDateInput from '../components/NlDateInput.jsx';
 import DesktopOnly from '../components/DesktopOnly.jsx';
-import ListFilters from '../components/ListFilters.jsx';
 import { PageTitle } from '../components/PageHelp.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -22,9 +22,7 @@ export default function Wedstrijden() {
   const [msg, setMsg] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [filters, setFilters] = useState({
-    date: '',
     team: '',
-    person: '',
     from: '',
     to: '',
   });
@@ -41,10 +39,8 @@ export default function Wedstrijden() {
 
   const load = () => {
     const params = {};
-    if (filters.person.trim()) params.q = filters.person.trim();
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
-    if (filters.team) params.personId = '';
     return Promise.all([api.getMatches(params), api.getTeams()])
       .then(([m, t]) => {
         setMatches(m);
@@ -55,13 +51,11 @@ export default function Wedstrijden() {
 
   useEffect(() => {
     load();
-  }, [filters.person, filters.from, filters.to]);
+  }, [filters.from, filters.to]);
 
   const filtered = useMemo(() => {
-    const dateFilter = filters.date;
     return matches.filter((m) => {
       if (!showAll && !isFutureMatchDate(m.date)) return false;
-      if (dateFilter && toDateInputValue(m.date) !== dateFilter) return false;
       if (filters.from || filters.to) {
         const day = toDateInputValue(m.date);
         if (filters.from && day < filters.from) return false;
@@ -127,22 +121,8 @@ export default function Wedstrijden() {
       </header>
 
       <div className="vvl-card space-y-4">
-        <ListFilters
-          person={filters.person}
-          from={filters.from}
-          to={filters.to}
-          onChange={(next) => setFilters({ ...filters, ...next })}
-        />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label className="vvl-label">Datum</label>
-            <input
-              type="date"
-              className="vvl-input"
-              value={filters.date}
-              onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-            />
-          </div>
+        <p className="text-sm text-gray-700">Filter op team en periode. Standaard alleen komende wedstrijden.</p>
+        <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className="vvl-label">Team</label>
             <select
@@ -157,6 +137,14 @@ export default function Wedstrijden() {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="vvl-label">Van</label>
+            <NlDateInput value={filters.from} onChange={(next) => setFilters({ ...filters, from: next })} ariaLabel="Periode van" />
+          </div>
+          <div>
+            <label className="vvl-label">Tot</label>
+            <NlDateInput value={filters.to} onChange={(next) => setFilters({ ...filters, to: next })} ariaLabel="Periode tot" />
           </div>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold">

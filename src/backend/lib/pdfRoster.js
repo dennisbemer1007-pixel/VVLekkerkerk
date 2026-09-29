@@ -1,4 +1,4 @@
-import { startOfWeek, toIsoDate } from './dates.js';
+import { startOfDay, startOfWeek, toIsoDate } from './dates.js';
 import { SLOT_TIMES } from './youthTeams.js';
 
 export const DAY_LABELS = [
@@ -67,6 +67,15 @@ export function slotCellText(services) {
 /** Elke weekdag gebruikt dezelfde tijdsblok-rijen. */
 export function rosterDaySections() {
   return DAY_LABELS.map((label, day) => ({ day, label, rows: SLOT_ROWS }));
+}
+
+/** Rooster-PDF: altijd 6 weken vanaf de download-dag, niet de hele planning. */
+export function sixWeekRosterWindow(now = new Date()) {
+  const from = startOfDay(now);
+  const to = new Date(from);
+  to.setDate(to.getDate() + 6 * 7 - 1);
+  to.setHours(23, 59, 59, 999);
+  return { from, to, maxWeeks: 6 };
 }
 
 export function weekStartsInRange(from, to, max = 60) {
@@ -194,7 +203,7 @@ export function renderPlanningRoster(doc, {
         .text(
           clubhouse
             ? 'Clubhuisprint · bar én keuken · namen per tijdsblok'
-            : 'Bar- en keukendienst per tijdsblok (ma–zo)',
+            : 'Alleen de komende 6 weken vanaf vandaag · bar en keuken',
           left,
           y,
           {

@@ -1,4 +1,5 @@
 import { occupancyStatus } from '../utils/formatDate.js';
+import { occupancyFraction } from '../utils/teamLines.js';
 
 export function openSpots(service) {
   const enrolled = service.enrolled ?? service.enrollments?.length ?? 0;
@@ -40,7 +41,7 @@ export default function ServiceLine({ service, selected, onSelect, actionLabel, 
           </span>
         </span>
         <span className="mt-0.5 block text-xs text-gray-600">
-          {type} · nog {openSpots(service)}
+          {type} · {occupancyFraction(service)}
         </span>
       </button>
       {actionLabel ? (

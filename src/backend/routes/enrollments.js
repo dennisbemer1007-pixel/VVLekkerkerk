@@ -8,7 +8,12 @@ import { blocksForPerson, overlappingMatchBlocks } from '../lib/matchBlocks.js';
 import { writeAudit } from '../lib/audit.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { pendingForEnrollment } from '../lib/swapQueries.js';
-import { friendlyEnrollmentReason, serviceCapacity, teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
+import {
+  friendlyEnrollmentReason,
+  resolveEnrollmentKind,
+  serviceCapacity,
+  teamDutyOpenForTeam,
+} from '../lib/teamDutyPlanning.js';
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
@@ -158,12 +163,15 @@ router.post(
       const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
       const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
       const coordinatorNamingTeam =
-        fillingTeamDuty &&
-        (req.person.role === 'Teamcoördinator' || isAdminRole(req.person.role));
+        fillingTeamDuty && req.person.role === 'Teamcoördinator';
       if (servicePreview?.locked && !isAdminRole(req.person.role) && !coordinatorNamingTeam) {
-        return res.status(403).json({
-          error: 'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
-        });
+        const cap = serviceCapacity(servicePreview);
+        if (cap.personalOpen <= 0) {
+          return res.status(403).json({
+            error:
+              'Dit rooster is officieel. Open plekken kun je nog vullen, maar deze dienst heeft geen vrije plek. Uitschrijven kan niet meer; ruilen wel.',
+          });
+        }
       }
       if (servicePreview && Number(req.person.id) === targetId && !requestedTeamId) {
         const cap = serviceCapacity(servicePreview);
@@ -249,47 +257,31 @@ router.post(
           ) {
             source = 'TEAM';
           }
-          const actorTeamIds = source === 'TEAM' ? await teamIdsForActor(req.person) : new Set();
           const dutyTeams = (service.teamDuties || []).map((d) => d.teamId);
           let forTeamId = null;
           let kind = 'PERSONAL';
 
-          const pickTeamDuty = () => {
-            if (requestedTeamId && dutyTeams.includes(requestedTeamId) && teamDutyOpenForTeam(service, requestedTeamId) > 0) {
-              return requestedTeamId;
-            }
-            for (const teamId of dutyTeams) {
-              if (!personTeams.has(teamId) && source !== 'ADMIN') continue;
-              if (source === 'TEAM' && !actorTeamIds.has(teamId) && !isAdminRole(req.person.role)) continue;
-              if (teamDutyOpenForTeam(service, teamId) > 0) return teamId;
-            }
-            return null;
-          };
-
           const fillingForSomeoneElse = Number(req.person.id) !== targetId;
-          if ((fillingForSomeoneElse && (source === 'TEAM' || source === 'ADMIN')) || requestedTeamId) {
-            const dutyTeam = pickTeamDuty();
-            if (dutyTeam) {
-              kind = 'TEAM';
-              forTeamId = dutyTeam;
-            }
-          }
+          const assignTeamSpot = Boolean(req.body.assignTeamSpot) && isAdminRole(req.person.role);
+          const actorTeamIds =
+            req.person.role === 'Teamcoördinator' ? [...(await teamIdsForActor(req.person))] : [];
+          const placement = resolveEnrollmentKind({
+            actorRole: req.person.role,
+            assignTeamSpot,
+            fillingForSomeoneElse,
+            requestedTeamId,
+            dutyTeamIds: dutyTeams,
+            actorTeamIds,
+            personTeamIds: [...personTeams],
+            teamHasOpen: (teamId) => teamDutyOpenForTeam(service, teamId) > 0,
+          });
+          kind = placement.kind;
+          forTeamId = placement.forTeamId;
+          if (kind === 'TEAM' && req.person.role === 'Teamcoördinator') source = 'TEAM';
 
-          if (service.locked && !isAdminRole(req.person.role) && kind !== 'TEAM') {
+          if (service.locked && kind === 'TEAM' && req.person.role !== 'Teamcoördinator' && !assignTeamSpot) {
             const err = new Error(
-              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
-            );
-            err.status = 403;
-            throw err;
-          }
-          if (
-            service.locked &&
-            kind === 'TEAM' &&
-            req.person.role !== 'Teamcoördinator' &&
-            !isAdminRole(req.person.role)
-          ) {
-            const err = new Error(
-              'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+              'Dit rooster is officieel. Een teamplek vult de bardienstcoördinator.',
             );
             err.status = 403;
             throw err;
@@ -301,7 +293,7 @@ router.post(
               err.status = 409;
               throw err;
             }
-            if (source === 'TEAM' && !actorTeamIds.has(forTeamId) && !isAdminRole(req.person.role)) {
+            if (source === 'TEAM' && !actorTeamIds.includes(forTeamId) && !isAdminRole(req.person.role)) {
               const err = new Error('Je mag alleen ouders van je eigen team op de teamdienst zetten');
               err.status = 403;
               throw err;
@@ -468,7 +460,8 @@ router.delete(
       }
       if (enrollment.service?.locked && !isAdminRole(req.person.role)) {
         return res.status(403).json({
-          error: 'Dit rooster is officieel. Alleen de barcommissie kan nog wijzigen.',
+          error:
+            'Het rooster is officieel. Je kunt je niet meer uitschrijven. Ruilen met iemand anders mag wel.',
         });
       }
 

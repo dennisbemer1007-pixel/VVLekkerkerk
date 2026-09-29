@@ -19,13 +19,14 @@ import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
-import { renderMail, resolveMailTemplates } from '../src/backend/lib/mailTemplates.js';
+import { customMailTemplates, filterMailAudience, renderMail, resolveMailTemplates, serializeMailTemplates } from '../src/backend/lib/mailTemplates.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
 import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
 import {
   underQuota,
   isUnavailableOn,
+  isExemptedOn,
   prefersSlot,
   normalizeObligation,
   remainingObligation,
@@ -65,11 +66,15 @@ import {
   servicesForSlotRow,
   slotCellText,
   servicesForRoster,
+  sixWeekRosterWindow,
+  weekStartsInRange,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
 import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
 import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
+import { resolveEnrollmentKind } from '../src/backend/lib/teamDutyPlanning.js';
+import { occupancyFraction, teamSpotLines } from '../src/frontend/utils/teamLines.js';
 import { matchTemplateSheets, MATCH_TEMPLATE_HEADERS } from '../src/backend/lib/matchesXlsx.js';
 import {
   PERSON_TEMPLATE_HEADERS,
@@ -465,6 +470,58 @@ const personMail = validatePersonRows(
   { teams: [] },
 );
 assert('person csv invalid email rejected', personMail.ok === false);
+const personRow = validatePersonRows(
+  [{ __row: 4, name: 'Eva Meijer', email: 'eva@vvl.demo', team: 'Onbekend FC' }],
+  { teams: [{ id: 1, name: 'O10-1' }] },
+);
+assert(
+  'import noemt rij en onbekend team',
+  personRow.ok === false &&
+    personRow.invalidRows[0].__row === 4 &&
+    personRow.unknownTeams.includes('Onbekend FC') &&
+    /Onbekend FC/.test(personRow.invalidRows[0].error),
+);
+assert(
+  'vrijgesteld tot datum telt mee',
+  isExemptedOn({ exempted: true, exemptedUntil: '2026-10-01' }, new Date('2026-09-29T12:00:00')) === true &&
+    isExemptedOn({ exempted: true, exemptedUntil: '2026-09-01' }, new Date('2026-09-29T12:00:00')) === false &&
+    isExemptedOn({ exempted: false, exemptedUntil: '2026-12-01' }, new Date('2026-09-29T12:00:00')) === false,
+);
+const committeeSpot = resolveEnrollmentKind({
+  actorRole: 'Barcommissie',
+  dutyTeamIds: [4],
+  personTeamIds: [4],
+  teamHasOpen: () => true,
+});
+const coordinatorSpot = resolveEnrollmentKind({
+  actorRole: 'Teamcoördinator',
+  fillingForSomeoneElse: true,
+  requestedTeamId: 4,
+  dutyTeamIds: [4],
+  actorTeamIds: [4],
+  personTeamIds: [4],
+  teamHasOpen: () => true,
+});
+const editedSpot = resolveEnrollmentKind({
+  actorRole: 'Barcommissie',
+  assignTeamSpot: true,
+  requestedTeamId: 4,
+  dutyTeamIds: [4],
+  personTeamIds: [],
+  teamHasOpen: () => true,
+});
+assert('barcommissie vult geen teamplek', committeeSpot.kind === 'PERSONAL' && committeeSpot.forTeamId == null);
+assert('coordinator vult wel een teamplek', coordinatorSpot.kind === 'TEAM' && coordinatorSpot.forTeamId === 4);
+assert('bewerk mag een persoon op een teamplek zetten', editedSpot.kind === 'TEAM' && editedSpot.forTeamId === 4);
+const spotLines = teamSpotLines({
+  teamDuties: [{ id: 1, teamId: 4, reserved: 2, team: { id: 4, name: 'O10-1' } }],
+  enrollments: [{ id: 9, kind: 'TEAM', forTeamId: 4, noShow: false, person: { name: 'Eva Meijer' } }],
+});
+assert(
+  'teamplek twee regels: naam en team',
+  spotLines.length === 2 && spotLines[0].label === 'Eva Meijer' && spotLines[0].team === false && spotLines[1].label === 'O10-1' && spotLines[1].team === true,
+);
+assert('bezetting is gevuld/nodig', occupancyFraction({ enrolled: 1, required: 2 }) === '1/2');
 
 const xlsxBuf = workbookToXlsx([
   {
@@ -843,6 +900,14 @@ assert(
   'pdf-filter: alleen actieve diensten met ingeschreven persoon',
   rosterKept.length === 1 && rosterKept[0].enrollments[0].person.name === 'Lisa',
 );
+const sixWeeks = sixWeekRosterWindow(new Date('2026-09-29T15:00:00'));
+const farEnd = new Date('2027-06-01T12:00:00');
+assert(
+  'pdf blijft 6 weken ook als de periode veel langer is',
+  weekStartsInRange(sixWeeks.from, farEnd, sixWeeks.maxWeeks).length === 6 &&
+    sixWeeks.maxWeeks === 6 &&
+    (sixWeeks.to.getTime() - sixWeeks.from.getTime()) / 86400000 < 43,
+);
 
 const roundSheets = personExportRowsSheets(
   [
@@ -917,6 +982,27 @@ assert(
     tightened.lte.toISOString().slice(0, 10) === '2026-02-10',
 );
 assert('persoonfilter is hoofdletterongevoelig', includesText('Lisa de Vries', 'lisa'));
+const storedMail = JSON.parse(
+  serializeMailTemplates({
+    invite: { subject: 'Uitnodiging eigen', body: 'Hoi {naam}' },
+    custom: [{ id: 'eigen-1', name: 'Oproep', subject: 'Kom helpen', body: 'Hoi {naam}' }],
+  }),
+);
+assert(
+  'eigen e-mailtekst blijft naast de systeemtekst',
+  customMailTemplates(storedMail)[0]?.name === 'Oproep' && storedMail.invite.subject === 'Uitnodiging eigen',
+);
+const mailPeople = [
+  { name: 'Lisa', email: 'lisa@vvl.demo', role: 'Vrijwilliger', teamId: 2, active: true, serviceIds: [9] },
+  { name: 'Mark', email: 'mark@vvl.demo', role: 'Barcommissie', teamId: 2, active: true, serviceIds: [9] },
+  { name: 'Zonder', email: '', role: 'Vrijwilliger', teamId: 2, active: true },
+];
+assert(
+  'mailgroep vrijwilligers en dienst',
+  filterMailAudience(mailPeople, { audience: 'volunteers' }).map((p) => p.name).join() === 'Lisa' &&
+    filterMailAudience(mailPeople, { audience: 'shift', serviceId: 9 }).map((p) => p.name).join() === 'Lisa,Mark' &&
+    filterMailAudience(mailPeople, { audience: 'team', teamId: 2 }).length === 2,
+);
 
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');

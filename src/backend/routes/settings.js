@@ -13,6 +13,8 @@ import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
 import prisma from '../lib/prisma.js';
 import { previewEnvironmentReset, runEnvironmentReset } from '../lib/environmentReset.js';
+import { customMailTemplates, dienstLabel, filterMailAudience, formatDutyDate, renderMail } from '../lib/mailTemplates.js';
+import { resolvePublicAppUrl } from '../lib/appUrl.js';
 
 const router = Router();
 const ADMIN = ADMIN_ROLES;
@@ -97,6 +99,92 @@ router.post(
       res.status(400).json({
         error: `Mailtest mislukt: ${err.message}`,
       });
+    }
+  }),
+);
+
+router.post(
+  '/mail/send-own',
+  requireRole(...ADMIN)(async (req, res, next) => {
+    try {
+      const audience = String(req.body?.audience || '');
+      const templateId = String(req.body?.templateId || '');
+      const settings = await getMailSettings();
+      const template = customMailTemplates(settings.templates).find((item) => item.id === templateId);
+      if (!template) return res.status(400).json({ error: 'Kies een eigen e-mailtekst' });
+      if (!['volunteers', 'team', 'shift'].includes(audience)) {
+        return res.status(400).json({ error: 'Kies een groep: iedereen op een dienst, een team, of alle vrijwilligers' });
+      }
+      const persons = await prisma.person.findMany({
+        where: { active: true },
+        select: { id: true, name: true, email: true, role: true, teamId: true, active: true },
+      });
+      let people = persons;
+      let sampleService = null;
+      if (audience === 'shift') {
+        const service = await prisma.service.findUnique({
+          where: { id: Number(req.body.serviceId) },
+          include: { enrollments: { include: { person: true } } },
+        });
+        if (!service) return res.status(400).json({ error: 'Kies een dienst' });
+        sampleService = service;
+        const ids = new Set((service.enrollments || []).map((row) => row.personId));
+        people = persons
+          .filter((person) => ids.has(person.id))
+          .map((person) => ({ ...person, serviceIds: [service.id] }));
+      }
+      const recipients = filterMailAudience(people, {
+        audience,
+        teamId: req.body.teamId,
+        serviceId: req.body.serviceId,
+      });
+      const link = (() => {
+        try {
+          return resolvePublicAppUrl();
+        } catch {
+          return '';
+        }
+      })();
+      const sample = recipients[0];
+      const preview = renderMail(template, {
+        naam: sample?.name || 'Naam',
+        datum: sampleService ? formatDutyDate(sampleService.date) : '',
+        tijd: sampleService?.time || '',
+        dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
+        link,
+      });
+      if (!req.body?.confirm) {
+        return res.json({
+          confirm: false,
+          count: recipients.length,
+          names: recipients.map((person) => person.name),
+          preview,
+        });
+      }
+      if (!recipients.length) return res.status(400).json({ error: 'Niemand in deze groep heeft een e-mailadres' });
+      let sent = 0;
+      const failed = [];
+      for (const person of recipients) {
+        const mail = renderMail(template, {
+          naam: person.name,
+          datum: sampleService ? formatDutyDate(sampleService.date) : '',
+          tijd: sampleService?.time || '',
+          dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
+          link,
+        });
+        const result = await sendMail({ to: person.email, subject: mail.subject, text: mail.text, html: mail.html });
+        if (result.sent) sent += 1;
+        else failed.push({ name: person.name, reason: result.reason || 'niet verstuurd' });
+      }
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'mail.send_own',
+        entity: 'MailSettings',
+        detail: `${template.name} naar ${sent} van ${recipients.length}`,
+      });
+      res.json({ confirm: true, sent, failed, count: recipients.length });
+    } catch (err) {
+      next(err);
     }
   }),
 );

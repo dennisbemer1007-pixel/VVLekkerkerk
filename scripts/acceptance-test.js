@@ -1,3 +1,4 @@
+import zlib from 'zlib';
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { personExportRowsSheets } from '../src/backend/lib/personsXlsx.js';
 
@@ -10,6 +11,30 @@ const base = (process.argv[2] || process.env.ACCEPT_BASE || 'http://localhost:51
   /\/$/,
   '',
 );
+
+function pdfPlainText(buf) {
+  const raw = buf.toString('latin1');
+  const streams = [...raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((match) =>
+    Buffer.from(match[1], 'latin1'),
+  );
+  let text = '';
+  for (const stream of streams) {
+    let body = stream;
+    try {
+      body = zlib.inflateSync(stream);
+    } catch {
+      /* ongecomprimeerd */
+    }
+    const chunks = [];
+    for (const match of body.toString('latin1').matchAll(/<([0-9A-Fa-f\s]+)>/g)) {
+      const clean = match[1].replace(/\s/g, '');
+      if (!clean || clean.length % 2) continue;
+      chunks.push(Buffer.from(clean, 'hex').toString('latin1'));
+    }
+    text += chunks.join('');
+  }
+  return text;
+}
 
 async function req(path, { method = 'GET', token, body, raw = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -151,6 +176,48 @@ async function main() {
     body: { csv: 'naam;email;team\nTest;test-fase@vvl.demo;OnbestaandElf' },
   });
   mark(record('import onbekend team 400', badImport.status === 400));
+  mark(
+    record(
+      'import noemt rij en onbekend team',
+      badImport.json?.canCreateTeams === true &&
+        (badImport.json?.unknownTeams || []).includes('OnbestaandElf') &&
+        (badImport.json?.invalidRows || []).some((row) => row.row && row.team === 'OnbestaandElf'),
+      JSON.stringify(badImport.json || {}).slice(0, 220),
+    ),
+  );
+  const madeTeam = await req('/api/persons/import', {
+    method: 'POST',
+    token: admin,
+    body: {
+      csv: 'naam;email;team\nFase Import;fase-import-ee39@vvl.demo;FaseTeamEe39',
+      createMissingTeams: true,
+    },
+  });
+  mark(
+    record(
+      'ontbrekende teams aanmaken en importeren',
+      madeTeam.status === 200 && madeTeam.json?.created === 1,
+      `${madeTeam.status} ${JSON.stringify(madeTeam.json || {}).slice(0, 180)}`,
+    ),
+  );
+  {
+    const { default: prisma } = await import('../src/backend/lib/prisma.js');
+    try {
+      const person = await prisma.person.findFirst({ where: { email: 'fase-import-ee39@vvl.demo' } });
+      if (person) {
+        await prisma.enrollment.deleteMany({ where: { personId: person.id } });
+        await prisma.personTeam.deleteMany({ where: { personId: person.id } });
+        await prisma.person.delete({ where: { id: person.id } });
+      }
+      const team = await prisma.team.findFirst({ where: { name: 'FaseTeamEe39' } });
+      if (team) {
+        await prisma.person.updateMany({ where: { teamId: team.id }, data: { teamId: null } });
+        await prisma.team.delete({ where: { id: team.id } });
+      }
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
 
   const excel = await req('/api/planning/export.xlsx', { token: admin, raw: true });
   mark(record('excel zip', excel.status === 200 && excel.buf.slice(0, 2).toString() === 'PK'));
@@ -435,20 +502,41 @@ async function main() {
   try {
     const official = await req('/api/planning/official', { method: 'POST', token: admin });
     mark(record('officieel lockt diensten', official.status === 200 && (official.json?.locked ?? 0) >= 0));
-    if (open) {
-      const lockedEnroll = await req('/api/enrollments', {
+    const lockedForLisa = await req('/api/services', { token: lisa });
+    const signupTargets = (lockedForLisa.json || []).filter(
+      (s) =>
+        !s.draft &&
+        s.active !== false &&
+        (s.capacity?.personalOpen ?? 0) > 0 &&
+        !(s.enrollments || []).some((e) => e.personId === me.json?.id || e.person?.id === me.json?.id),
+    );
+    let lockedEnroll = null;
+    for (const candidate of signupTargets.slice(0, 8)) {
+      const attempt = await req('/api/enrollments', {
         method: 'POST',
         token: lisa,
-        body: { serviceId: open.id, personId: me.json.id },
+        body: { serviceId: candidate.id, personId: me.json.id },
       });
-      mark(
-        record(
-          'lisa geblokkeerd na officieel',
-          lockedEnroll.status === 403,
-          String(lockedEnroll.status),
-        ),
-      );
+      lockedEnroll = attempt;
+      if (attempt.status === 201) break;
     }
+    let selfUnenroll = null;
+    if (lockedEnroll?.status === 201 && lockedEnroll.json?.id) {
+      selfUnenroll = await req(`/api/enrollments/${lockedEnroll.json.id}`, {
+        method: 'DELETE',
+        token: lisa,
+      });
+      await req(`/api/enrollments/${lockedEnroll.json.id}`, { method: 'DELETE', token: admin });
+    }
+    mark(
+      record(
+        'lisa mag inschrijven maar niet uitschrijven na officieel',
+        lockedEnroll?.status === 201 &&
+          selfUnenroll?.status === 403 &&
+          /uitschrijven/i.test(selfUnenroll?.json?.error || ''),
+        `${lockedEnroll?.status || 'geen'} ${selfUnenroll?.status || ''} ${lockedEnroll?.json?.error || selfUnenroll?.json?.error || ''}`,
+      ),
+    );
 
     const volunteerEmails = [
       'lisa@vvl.demo',
@@ -692,6 +780,24 @@ async function main() {
         '6 PDF default zonder from/to',
         pdfDefault.status === 200 && pdfDefault.buf.slice(0, 4).toString() === '%PDF',
         String(pdfDefault.status),
+      ),
+    );
+    const far = new Date();
+    far.setFullYear(far.getFullYear() + 1);
+    const widePdf = await req(`/api/pdf/planning?to=${far.toISOString().slice(0, 10)}`, {
+      token: markTok,
+      raw: true,
+    });
+    const pdfText = pdfPlainText(widePdf.buf);
+    const weekHeaders = [...new Set(pdfText.match(/Week \d{1,2}(?=\d{1,2}-)/g) || [])];
+    mark(
+      record(
+        'pdf toont hoogstens 6 weken ook bij lange periode',
+        widePdf.status === 200 &&
+          pdfText.includes('komende 6 weken') &&
+          weekHeaders.length > 0 &&
+          weekHeaders.length <= 6,
+        `${widePdf.status} weken=${weekHeaders.length}`,
       ),
     );
   }

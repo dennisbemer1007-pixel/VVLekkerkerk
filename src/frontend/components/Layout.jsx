@@ -91,6 +91,9 @@ export default function Layout({ children }) {
           {isLoggedIn ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
+              <button type="button" onClick={() => logout()} className="min-h-11 px-2 text-xs font-bold uppercase md:hidden">
+                Uitloggen
+              </button>
               <span className="hidden max-w-[14rem] truncate text-xs sm:inline">{user?.name}</span>
             </div>
           ) : (
@@ -104,7 +107,7 @@ export default function Layout({ children }) {
       <div className="flex w-full flex-1">
         {isLoggedIn && items.length ? (
           <nav className="hidden w-52 shrink-0 flex-col bg-black text-white md:flex" aria-label="Menu">
-            <ul className="flex-1 space-y-1 p-3">
+            <ul className="space-y-1 p-3">
               {items.map((item) => (
                 <li key={item.to}>
                   <NavLink to={item.to} className={() => linkClass(active(item))}>
@@ -112,12 +115,12 @@ export default function Layout({ children }) {
                   </NavLink>
                 </li>
               ))}
+              <li>
+                <button type="button" onClick={() => logout()} className={`${linkClass(false)} w-full text-left`}>
+                  Uitloggen
+                </button>
+              </li>
             </ul>
-            <div className="border-t border-white/15 p-3">
-              <button type="button" onClick={() => logout()} className="vvl-btn-outline-light w-full">
-                Uitloggen
-              </button>
-            </div>
           </nav>
         ) : null}
 

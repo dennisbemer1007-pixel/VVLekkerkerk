@@ -153,7 +153,7 @@ function GuardianPicker({ persons, value, onChange, excludeId }) {
 
   return (
     <div className="space-y-1">
-      <label className="vvl-label">Hoort bij (optioneel)</label>
+      <label className="vvl-label">Kind van / gekoppeld aan ouder</label>
       <input
         className="vvl-input"
         placeholder="Zoek op naam om te koppelen…"
@@ -172,7 +172,7 @@ function GuardianPicker({ persons, value, onChange, excludeId }) {
         ))}
       </select>
       <p className="text-xs text-gray-600">
-        Voor personen zonder eigen account (bijv. kinderen) die aan een ander account hangen.
+        Koppel een kind aan de ouder. Die ouder kan het kind daarna zelf inschrijven voor een dienst.
         E-mail is dan niet verplicht.
       </p>
     </div>
@@ -315,6 +315,7 @@ function PersonenBeheer() {
     obligation: 'NONE',
     teamId: '',
     exempted: false,
+    exemptedUntil: '',
     guardianId: '',
     unavailableWeekdays: [],
     preferredSlots: [],
@@ -337,7 +338,6 @@ function PersonenBeheer() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
-  const [exportBusy, setExportBusy] = useState(false);
   const [seasonCounts, setSeasonCounts] = useState({});
   const [showExtraCols, setShowExtraCols] = useState(false);
 
@@ -379,6 +379,7 @@ function PersonenBeheer() {
       obligation: 'NONE',
       teamId: '',
       exempted: false,
+      exemptedUntil: '',
       guardianId: '',
       unavailableWeekdays: [],
       preferredSlots: [],
@@ -427,6 +428,7 @@ function PersonenBeheer() {
       obligation: p.obligation || (p.mandatoryBar ? 'FULL' : 'NONE'),
       teamId: p.teamId ? String(p.teamId) : '',
       exempted: Boolean(p.exempted),
+      exemptedUntil: p.exemptedUntil || '',
       guardianId: p.guardianId ? String(p.guardianId) : '',
       unavailableWeekdays: p.unavailableWeekdays || [],
       preferredSlots: p.preferredSlots || [],
@@ -553,39 +555,6 @@ function PersonenBeheer() {
     }
   };
 
-  const downloadTemplate = async () => {
-    setError('');
-    try {
-      const blob = await api.downloadPersonTemplateXlsx();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vvl-personen-sjabloon.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const downloadExport = async () => {
-    setExportBusy(true);
-    setError('');
-    try {
-      const blob = await api.downloadPersonsExportXlsx();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vvl-personen-export.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setExportBusy(false);
-    }
-  };
-
   return (
     <section className="space-y-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(22rem,32rem)] md:items-start md:gap-4 md:space-y-0">
       <form
@@ -597,9 +566,9 @@ function PersonenBeheer() {
           {editId ? 'Persoon bewerken' : 'Persoon toevoegen'}
         </h2>
         <p className="text-sm text-gray-700 sm:col-span-2 lg:col-span-1">
-          E-mail en telefoon zijn alleen zichtbaar voor beheerders (Barcommissie / Admin). Vul
-          e-mail in om een uitnodiging te versturen, of kies "Hoort bij" voor iemand zonder eigen
-          account (dan is e-mail niet verplicht).
+          E-mail en telefoon zijn alleen zichtbaar voor beheerders. Vul een e-mail in om uit te
+          nodigen, of koppel iemand als kind aan een ouder. Vrijgesteld betekent: niet automatisch
+          inplannen.
         </p>
 
         <div>
@@ -611,6 +580,25 @@ function PersonenBeheer() {
             required
           />
         </div>
+        <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-1">
+          <input
+            type="checkbox"
+            checked={form.exempted}
+            onChange={(e) => setForm({ ...form, exempted: e.target.checked, exemptedUntil: e.target.checked ? form.exemptedUntil : '' })}
+          />
+          Vrijgesteld (niet automatisch inplannen)
+        </label>
+        {form.exempted ? (
+          <div>
+            <label className="vvl-label">Vrijgesteld tot</label>
+            <NlDateInput
+              value={form.exemptedUntil}
+              onChange={(next) => setForm({ ...form, exemptedUntil: next })}
+              ariaLabel="Vrijgesteld tot"
+            />
+            <p className="mt-1 text-xs text-gray-600">Leeg = vrijgesteld tot je het vinkje uitzet.</p>
+          </div>
+        ) : null}
         <div>
           <label className="vvl-label">E-mail {form.guardianId ? '' : '*'}</label>
           <input
@@ -679,14 +667,6 @@ function PersonenBeheer() {
           onChange={(v) => setForm({ ...form, guardianId: v })}
           excludeId={editId}
         />
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={form.exempted}
-            onChange={(e) => setForm({ ...form, exempted: e.target.checked })}
-          />
-          Vrijgesteld (niet automatisch inplannen)
-        </label>
         <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-1">
           <button type="submit" className="vvl-btn-primary min-h-[44px]">
             {editId ? 'Opslaan' : 'Toevoegen / uitnodigen'}
@@ -792,13 +772,16 @@ function PersonenBeheer() {
             </select>
           </div>
           <div>
-            <label className="vvl-label">Van</label>
-            <NlDateInput value={filterFrom} onChange={setFilterFrom} ariaLabel="Van" />
+            <label className="vvl-label">Heeft een dienst van</label>
+            <NlDateInput value={filterFrom} onChange={setFilterFrom} ariaLabel="Heeft een dienst van" />
           </div>
           <div>
-            <label className="vvl-label">Tot</label>
-            <NlDateInput value={filterTo} onChange={setFilterTo} ariaLabel="Tot" />
+            <label className="vvl-label">Heeft een dienst tot</label>
+            <NlDateInput value={filterTo} onChange={setFilterTo} ariaLabel="Heeft een dienst tot" />
           </div>
+          <p className="text-xs text-gray-600 sm:col-span-2 lg:col-span-4">
+            Van en tot laten alleen mensen zien die in die periode een dienst hebben. Laat ze leeg om iedereen te zien.
+          </p>
           <div>
             <label className="vvl-label">Account</label>
             <select
@@ -847,48 +830,11 @@ function PersonenBeheer() {
               <th className="p-2 font-bold">Rol</th>
               <th className="p-2 font-bold">Team</th>
               <th className="p-2 font-bold">Verplichting</th>
-              {showExtraCols ? <th className="p-2 font-bold">Hoort bij</th> : null}
+              {showExtraCols ? <th className="p-2 font-bold">Kind van</th> : null}
               {showExtraCols ? <th className="p-2 font-bold">Vrijgesteld</th> : null}
               <th className="p-2 font-bold">Seizoen</th>
               <th className="p-2 font-bold">Account</th>
               <th className="p-2 font-bold"> </th>
-            </tr>
-            <tr className="bg-white text-black">
-              <th />
-              <th className="p-1">
-                <input className="vvl-input" value={filterName} onChange={(e) => setFilterName(e.target.value)} aria-label="Filter naam" />
-              </th>
-              <th />
-              {showExtraCols ? <th /> : null}
-              <th className="p-1">
-                <select className="vvl-input" value={filterRole} onChange={(e) => setFilterRole(e.target.value)} aria-label="Filter rol">
-                  <option value="">Alle</option>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </th>
-              <th className="p-1">
-                <select className="vvl-input" value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)} aria-label="Filter team">
-                  <option value="">Alle</option>
-                  <option value="__none__">Geen</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </th>
-              <th />
-              {showExtraCols ? <th /> : null}
-              {showExtraCols ? <th /> : null}
-              <th />
-              <th className="p-1">
-                <select className="vvl-input" value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)} aria-label="Filter account">
-                  {ACCOUNT_FILTERS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
-              </th>
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -1027,7 +973,7 @@ function PersonenBeheer() {
                       <dd>{p.phone || '—'}</dd>
                     </div>
                     <div>
-                      <dt className="font-bold uppercase text-vvl-accent">Hoort bij</dt>
+                      <dt className="font-bold uppercase text-vvl-accent">Kind van</dt>
                       <dd>{p.guardianName || '—'}</dd>
                     </div>
                   </dl>
@@ -1137,27 +1083,6 @@ function PersonenBeheer() {
         {bulkMsg ? <p className="text-sm text-emerald-800">{bulkMsg}</p> : null}
       </div>
 
-      <div className="vvl-card space-y-3">
-        <h2 className="font-heading text-lg font-black uppercase">Import / export (Excel)</h2>
-        <p className="text-sm text-gray-700">
-          Download het sjabloon voor de juiste kolommen en toegestane waarden, of exporteer alle
-          huidige personen in dezelfde structuur (her-importeerbaar).
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="vvl-btn-outline text-xs min-h-[44px]" onClick={downloadTemplate}>
-            Template downloaden
-          </button>
-          <button
-            type="button"
-            className="vvl-btn-outline text-xs min-h-[44px]"
-            onClick={downloadExport}
-            disabled={exportBusy}
-          >
-            {exportBusy ? 'Exporteren…' : 'Exporteren'}
-          </button>
-        </div>
-      </div>
-
       <DesktopOnly>
         <PersonImport onDone={() => load(showNameless)} />
       </DesktopOnly>
@@ -1166,119 +1091,223 @@ function PersonenBeheer() {
   );
 }
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function PersonImport({ onDone }) {
   const [csv, setCsv] = useState('');
   const [sendInvites, setSendInvites] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  const [rowErrors, setRowErrors] = useState([]);
+  const [canCreateTeams, setCanCreateTeams] = useState(false);
+  const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
 
-  const importXlsxFile = async (file) => {
-    if (!file) return;
-    setBusy(true);
+  const clearResult = () => {
     setMsg('');
     setError('');
+    setRowErrors([]);
+    setCanCreateTeams(false);
+  };
+
+  const showImportError = (err, nextPending) => {
+    const details = err.details || {};
+    const rows = Array.isArray(details.invalidRows) ? details.invalidRows : [];
+    setRowErrors(rows);
+    setCanCreateTeams(Boolean(details.canCreateTeams));
+    setPending(details.canCreateTeams ? nextPending : null);
+    const teams = (details.unknownTeams || []).join(', ');
+    const listed = rows
+      .slice(0, 8)
+      .map((row) => `rij ${row.row || '?'}: ${row.team || row.name || 'regel'} (${row.error})`)
+      .join('; ');
+    setError(
+      [err.message, teams ? `Onbekende teams: ${teams}.` : '', listed].filter(Boolean).join(' '),
+    );
+  };
+
+  const finishImport = async (result) => {
+    setPending(null);
+    setCanCreateTeams(false);
+    setRowErrors([]);
+    setMsg(
+      `${result.created} nieuw, ${result.updated} bijgewerkt${
+        result.linked ? `, ${result.linked} gekoppeld aan een ouder` : ''
+      }.`,
+    );
+    await onDone?.();
+  };
+
+  const importXlsxFile = async (file, createMissingTeams = false) => {
+    if (!file && !pending?.xlsxBase64) return;
+    setBusy(true);
+    clearResult();
+    let base64 = pending?.xlsxBase64 || '';
     try {
-      const dataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Bestand lezen mislukt'));
-        reader.readAsDataURL(file);
-      });
-      const base64 = String(dataUrl).split(',')[1] || '';
-      const result = await api.importPersonsXlsx({ xlsxBase64: base64, sendInvites });
-      setMsg(
-        `${result.created} nieuw, ${result.updated} bijgewerkt${
-          result.linked ? `, ${result.linked} gekoppeld (hoort bij)` : ''
-        }.`,
-      );
-      await onDone?.();
+      if (file) {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Bestand lezen mislukt'));
+          reader.readAsDataURL(file);
+        });
+        base64 = String(dataUrl).split(',')[1] || '';
+      }
+      const payload = { xlsxBase64: base64, sendInvites, createMissingTeams };
+      const result = await api.importPersonsXlsx(payload);
+      await finishImport(result);
     } catch (err) {
-      setError(err.message);
+      showImportError(err, { kind: 'xlsx', xlsxBase64: base64 });
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const importCsv = async (createMissingTeams = false) => {
     setBusy(true);
-    setMsg('');
-    setError('');
+    clearResult();
     try {
-      const result = await api.importPersons({ csv, sendInvites });
-      setMsg(`${result.created} nieuw, ${result.updated} bijgewerkt.`);
+      const result = await api.importPersons({ csv, sendInvites, createMissingTeams });
       setCsv('');
-      await onDone?.();
+      await finishImport(result);
     } catch (err) {
-      const extra = err.details?.unknownTeams?.length
-        ? ` Onbekende teams: ${err.details.unknownTeams.join(', ')}.`
-        : '';
-      setError(`${err.message}${extra}`);
+      showImportError(err, { kind: 'csv' });
     } finally {
       setBusy(false);
     }
   };
 
+  const createMissingAndImport = async () => {
+    if (pending?.kind === 'xlsx') return importXlsxFile(null, true);
+    return importCsv(true);
+  };
+
   return (
-    <form onSubmit={submit} className="vvl-card space-y-3">
-      <h2 className="font-heading text-lg font-black uppercase">Personen importeren</h2>
-      <label className="vvl-label">Excel (.xlsx), zelfde kolommen als de export</label>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        className="vvl-input"
-        onChange={(e) => importXlsxFile(e.target.files?.[0])}
-      />
-      <p className="text-sm text-gray-700">
-        CSV met kolommen <code>naam;email;telefoon;team;rol;verplichting</code>. Onbekende teams
-        worden niet aangemaakt. Verplichting: geen, verplicht of VR18. Liever Excel? Gebruik
-        hierboven "Template downloaden" en "Exporteren".
-      </p>
-      <button
-        type="button"
-        className="vvl-btn-outline text-xs min-h-[44px]"
-        onClick={async () => {
-          setError('');
-          try {
-            const blob = await api.downloadPersonCsvExample();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'voorbeeld-personen.csv';
-            a.click();
-            URL.revokeObjectURL(url);
-          } catch (err) {
-            setError(err.message);
-          }
+    <div className="vvl-card space-y-4">
+      <h2 className="font-heading text-lg font-black uppercase">Import en export</h2>
+      <ul className="space-y-3 text-sm text-gray-800">
+        <li>
+          <button
+            type="button"
+            className="vvl-btn-outline mb-1 text-xs min-h-[44px]"
+            onClick={async () => {
+              clearResult();
+              try {
+                downloadBlob(await api.downloadPersonTemplateXlsx(), 'vvl-personen-sjabloon.xlsx');
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+          >
+            Sjabloon downloaden
+          </button>
+          <p>Leeg Excel-bestand met de kolommen en de teamnamen die al in de app staan.</p>
+        </li>
+        <li>
+          <button
+            type="button"
+            className="vvl-btn-outline mb-1 text-xs min-h-[44px]"
+            onClick={async () => {
+              clearResult();
+              try {
+                downloadBlob(await api.downloadPersonsExportXlsx(), 'vvl-personen-export.xlsx');
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+          >
+            Personen exporteren
+          </button>
+          <p>Alle huidige personen in hetzelfde Excel-bestand. Aanpassen en opnieuw importeren mag.</p>
+        </li>
+        <li>
+          <label className="vvl-label">Ingevuld Excel-bestand importeren</label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="vvl-input"
+            onChange={(e) => importXlsxFile(e.target.files?.[0])}
+          />
+          <p className="mt-1">Een ingevuld sjabloon of een export. Bestaande personen worden bijgewerkt.</p>
+        </li>
+      </ul>
+      <form
+        className="space-y-2 border-t border-vvl-border pt-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          importCsv(false);
         }}
       >
-        Voorbeeld-CSV downloaden
-      </button>
-      <textarea
-        className="vvl-input min-h-[120px] font-mono text-xs"
-        value={csv}
-        onChange={(e) => setCsv(e.target.value)}
-        placeholder="naam;email;telefoon;team;rol;verplichting"
-        required
-      />
-      <label className="flex items-center gap-2 text-sm font-semibold">
-        <input
-          type="checkbox"
-          checked={sendInvites}
-          onChange={(e) => setSendInvites(e.target.checked)}
+        <label className="vvl-label">Of plak een CSV</label>
+        <p className="text-sm text-gray-700">
+          Zelfde gegevens als tekst, als je geen Excel hebt. Kolommen: naam, e-mail, telefoon, team, rol, verplichting.
+        </p>
+        <textarea
+          className="vvl-input min-h-[100px] font-mono text-xs"
+          value={csv}
+          onChange={(e) => setCsv(e.target.value)}
+          placeholder="naam;email;telefoon;team;rol;verplichting"
+          required
         />
-        Uitnodigingsmail sturen als SMTP aanstaat
-      </label>
-      <button type="submit" className="vvl-btn-outline w-fit min-h-[44px]" disabled={busy}>
-        {busy ? 'Importeren…' : 'CSV importeren'}
-      </button>
+        <button
+          type="button"
+          className="vvl-btn-outline text-xs min-h-[44px]"
+          onClick={async () => {
+            clearResult();
+            try {
+              downloadBlob(await api.downloadPersonCsvExample(), 'voorbeeld-personen.csv');
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        >
+          Voorbeeld-CSV
+        </button>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={sendInvites}
+            onChange={(e) => setSendInvites(e.target.checked)}
+          />
+          Stuur meteen een uitnodigingsmail, als de mailserver aanstaat
+        </label>
+        <button type="submit" className="vvl-btn-outline w-fit min-h-[44px]" disabled={busy}>
+          {busy ? 'Importeren…' : 'CSV importeren'}
+        </button>
+      </form>
+      {canCreateTeams ? (
+        <button
+          type="button"
+          className="vvl-btn-primary min-h-[44px] text-xs"
+          disabled={busy}
+          onClick={createMissingAndImport}
+        >
+          Ontbrekende teams aanmaken en importeren
+        </button>
+      ) : null}
+      {rowErrors.length ? (
+        <ul className="space-y-1 text-sm text-red-800">
+          {rowErrors.map((row) => (
+            <li key={`${row.row}-${row.name}-${row.team}`}>
+              Rij {row.row || '?'}: {row.name || 'zonder naam'}
+              {row.team ? ` · team ${row.team}` : ''} — {row.error}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-    </form>
+    </div>
   );
 }
 
@@ -1393,6 +1422,9 @@ function DienstenBeheer() {
     slot: 'EXTRA',
   });
   const [editId, setEditId] = useState(null);
+  const [startTime, setStartTime] = useState('18:00');
+  const [endTime, setEndTime] = useState('22:00');
+  const [matchId, setMatchId] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [enrollPick, setEnrollPick] = useState({});
@@ -1400,15 +1432,23 @@ function DienstenBeheer() {
   const [dateFrom, setDateFrom] = useState(todayInputValue());
   const [dateTo, setDateTo] = useState('');
   const [personQuery, setPersonQuery] = useState('');
+  const [occFilter, setOccFilter] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [dutyTeams, setDutyTeams] = useState([]);
+  const [teamPick, setTeamPick] = useState({});
 
   const load = () =>
     Promise.all([
       api.getServices({ activeOnly: 'false', allDates: 'true', includeDraft: 'true' }),
       api.getPersons(true),
+      api.getMatches().catch(() => []),
+      api.getTeams().catch(() => []),
     ])
-      .then(([s, p]) => {
+      .then(([s, p, m, t]) => {
         setServices(s);
         setPersons(p.filter((x) => x.active !== false));
+        setMatches(Array.isArray(m) ? m : []);
+        setDutyTeams(Array.isArray(t) ? t : []);
       })
       .catch((e) => setError(e.message));
 
@@ -1430,9 +1470,10 @@ function DienstenBeheer() {
         const names = (s.enrollments || []).map((e) => e.person?.name || '').join(' ').toLowerCase();
         if (!names.includes(q) && !String(s.note || '').toLowerCase().includes(q)) return false;
       }
+      if (occFilter && (s.status || '') !== occFilter) return false;
       return true;
     });
-  }, [services, dateFrom, dateTo, personQuery]);
+  }, [services, dateFrom, dateTo, personQuery, occFilter]);
 
   const reset = () => {
     setEditId(null);
@@ -1446,6 +1487,9 @@ function DienstenBeheer() {
       draft: false,
       slot: 'EXTRA',
     });
+    setStartTime('18:00');
+    setEndTime('22:00');
+    setMatchId('');
   };
 
   const submit = async (e) => {
@@ -1454,7 +1498,13 @@ function DienstenBeheer() {
     setMsg('');
     try {
       const location = form.type === 'KITCHEN' ? 'Keuken' : 'Bar';
-      const payload = { ...form, required: Number(form.required), location };
+      const payload = {
+        ...form,
+        time: `${startTime} - ${endTime}`,
+        matchId: matchId || null,
+        required: Number(form.required),
+        location,
+      };
       if (editId) await api.updateService(editId, payload);
       else await api.createService(payload);
       reset();
@@ -1477,6 +1527,10 @@ function DienstenBeheer() {
       draft: Boolean(s.draft),
       slot: s.slot || 'EXTRA',
     });
+    const parts = String(s.time || '').split('-').map((part) => part.trim());
+    setStartTime(parts[0] || '18:00');
+    setEndTime(parts[1] || '22:00');
+    setMatchId(s.matchId ? String(s.matchId) : '');
     scrollToForm(formRef);
   };
 
@@ -1558,13 +1612,26 @@ function DienstenBeheer() {
           />
         </div>
         <div>
-          <label className="vvl-label">Tijd</label>
-          <input
-            className="vvl-input"
-            value={form.time}
-            onChange={(e) => setForm({ ...form, time: e.target.value })}
-            required
-          />
+          <label className="vvl-label">Begintijd</label>
+          <input className="vvl-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+        </div>
+        <div>
+          <label className="vvl-label">Eindtijd</label>
+          <input className="vvl-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <label className="vvl-label">Koppel aan wedstrijd (optioneel)</label>
+          <select className="vvl-input" value={matchId} onChange={(e) => setMatchId(e.target.value)}>
+            <option value="">— Geen wedstrijd —</option>
+            {matches.slice(0, 80).map((match) => (
+              <option key={match.id} value={match.id}>
+                {new Date(match.date).toLocaleDateString('nl-NL')} {match.time || ''} {match.team?.name || ''} {match.opponent || ''}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-600">
+            Voor een eenmalige tijd, bijvoorbeeld 7x7 thuis: bardienst 19:00–21:30, daarna neemt het team het over.
+          </p>
         </div>
         <div>
           <label className="vvl-label">Benodigde bezetting</label>
@@ -1646,6 +1713,23 @@ function DienstenBeheer() {
         <p className="sm:col-span-2 text-xs text-gray-600">
           Standaard vanaf vandaag. Leeg de tot-datum of zet van vroeger om oude diensten te zoeken.
         </p>
+        <div className="flex flex-wrap gap-2 sm:col-span-2">
+          {[
+            { id: '', label: 'Alles' },
+            { id: 'full', label: 'Vol' },
+            { id: 'almost', label: 'Eén open' },
+            { id: 'open', label: 'Open' },
+          ].map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={occFilter === item.id ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
+              onClick={() => setOccFilter(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -1724,6 +1808,83 @@ function DienstenBeheer() {
                   </button>
                 </div>
               ) : null}
+              {(s.teamDuties || []).length ? (
+                <div className="vvl-card space-y-2 py-3 text-sm">
+                  <p className="font-bold">Teamplekken</p>
+                  <p className="text-xs text-gray-600">
+                    Alleen de bardienstcoördinator vult een teamplek. Hier kun je het team wijzigen, de plek weghalen, of er bewust een persoon op zetten.
+                  </p>
+                  {(s.teamDuties || []).map((duty) => (
+                    <div key={duty.id} className="flex flex-wrap items-end gap-2">
+                      <select
+                        className="vvl-input min-h-11"
+                        value={teamPick[duty.id] ?? duty.teamId}
+                        onChange={(e) => setTeamPick({ ...teamPick, [duty.id]: e.target.value })}
+                        aria-label="Ander team"
+                      >
+                        {dutyTeams.map((team) => (
+                          <option key={team.id} value={team.id}>{team.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="vvl-btn-outline text-xs"
+                        onClick={async () => {
+                          try {
+                            await api.updateTeamDuty(s.id, duty.id, { teamId: Number(teamPick[duty.id] ?? duty.teamId) });
+                            setMsg('Team van de teamplek gewijzigd.');
+                            await load();
+                          } catch (err) {
+                            setError(err.message);
+                          }
+                        }}
+                      >
+                        Ander team
+                      </button>
+                      <button
+                        type="button"
+                        className="vvl-btn-outline text-xs"
+                        onClick={async () => {
+                          try {
+                            await api.deleteTeamDuty(s.id, duty.id);
+                            setMsg('Teamplek weggehaald. Je kunt nu een gewone persoon toevoegen.');
+                            await load();
+                          } catch (err) {
+                            setError(err.message);
+                          }
+                        }}
+                      >
+                        Teamplek weg
+                      </button>
+                      <button
+                        type="button"
+                        className="vvl-btn-outline text-xs"
+                        onClick={async () => {
+                          const personId = Number(enrollPick[s.id]);
+                          if (!personId) {
+                            setError('Kies eerst een persoon bij Persoon toevoegen.');
+                            return;
+                          }
+                          try {
+                            await api.createEnrollment({
+                              serviceId: s.id,
+                              personId,
+                              forTeamId: duty.teamId,
+                              assignTeamSpot: true,
+                            });
+                            setMsg('Persoon op de teamplek gezet.');
+                            await load();
+                          } catch (err) {
+                            setError(err.message);
+                          }
+                        }}
+                      >
+                        Persoon op teamplek
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -1737,7 +1898,14 @@ function DienstenBeheer() {
   );
 }
 
+function coordinatorChoices(persons, selectedId) {
+  return persons.filter(
+    (person) => person.role === 'Teamcoördinator' || String(person.id) === String(selectedId || ''),
+  );
+}
+
 function TeamsBeheer() {
+  const { user } = useAuth();
   const [teams, setTeams] = useState([]);
   const [persons, setPersons] = useState([]);
   const [services, setServices] = useState([]);
@@ -1884,7 +2052,7 @@ function TeamsBeheer() {
             onChange={(e) => setTeamForm({ ...teamForm, coordinatorId: e.target.value })}
           >
             <option value="">— Optioneel —</option>
-            {persons.map((p) => (
+            {coordinatorChoices(persons, teamForm.coordinatorId).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -1993,7 +2161,7 @@ function TeamsBeheer() {
                     onChange={(e) => setEditing({ ...editing, coordinatorId: e.target.value })}
                   >
                     <option value="">— Geen —</option>
-                    {persons.map((p) => (
+                    {coordinatorChoices(persons, editing.coordinatorId).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -2002,7 +2170,7 @@ function TeamsBeheer() {
                 </div>
                 <p className="sm:col-span-2 text-xs text-gray-600">
                   Hernoemen (bijvoorbeeld O12 naar O13) houdt dezelfde ouders en coördinator.
-                  Een vrijwilliger die je als coördinator kiest, krijgt de rol Teamcoördinator.
+                  Alleen mensen met de rol teamcoördinator staan in de lijst.
                 </p>
                 <div className="flex gap-2">
                   <button type="submit" className="vvl-btn-primary text-xs">
@@ -2086,6 +2254,7 @@ function TeamsBeheer() {
         ))}
       </div>
 
+      {user?.role === 'Teamcoördinator' ? (
       <form onSubmit={assignMember} className="vvl-card grid gap-3 sm:grid-cols-2">
         <h2 className="sm:col-span-2 font-heading text-lg font-black uppercase">
           Coördinator: lid inschrijven
@@ -2127,6 +2296,7 @@ function TeamsBeheer() {
           Inschrijven voor lid
         </button>
       </form>
+      ) : null}
 
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
@@ -2446,7 +2616,7 @@ function PlanningBeheer() {
       <PlanningStep number={4} title="Officieel vastzetten" done={isOfficial}>
         <p className="text-sm text-gray-700">
           Dit zet het rooster vast, zodat de lijst in de kantine hetzelfde blijft als in de app.
-          Vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven. Onderling ruilen
+          Vrijwilligers kunnen zich daarna nog inschrijven op een open plek, maar niet meer uitschrijven. Onderling ruilen
           blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De
           bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen de mail “de
           planning is klaar” als de mailserver aanstaat. Officieel maken kun je later weer
@@ -2460,7 +2630,7 @@ function PlanningBeheer() {
             onClick={() => {
               if (
                 !window.confirm(
-                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna niet meer zelf in- of uitschrijven. Onderling ruilen blijft mogelijk als beide akkoord zijn. De barcommissie en de bardienstcoördinator (voor teamdiensten) kunnen nog wijzigen. Doorgaan?',
+                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna nog inschrijven op een open plek, maar niet meer zelf uitschrijven. Onderling ruilen blijft mogelijk als beide akkoord zijn. De barcommissie en de bardienstcoördinator (voor teamdiensten) kunnen nog wijzigen. Doorgaan?',
                 )
               ) {
                 return;
@@ -2601,6 +2771,16 @@ function MailBeheer() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ownDraft, setOwnDraft] = useState({ id: '', name: '', subject: '', body: '' });
+  const [teams, setTeams] = useState([]);
+  const [shifts, setShifts] = useState([]);
+  const [sendForm, setSendForm] = useState({
+    templateId: '',
+    audience: 'volunteers',
+    teamId: '',
+    serviceId: '',
+  });
+  const [preview, setPreview] = useState(null);
 
   useEffect(() => {
     api
@@ -2621,6 +2801,8 @@ function MailBeheer() {
         setTestTo(s.fromEmail || '');
       })
       .catch((e) => setError(e.message));
+    api.getTeams().then(setTeams).catch(() => {});
+    api.getServices().then((list) => setShifts((list || []).slice(0, 40))).catch(() => {});
   }, []);
 
   const applyPreset = (preset) => {
@@ -2811,6 +2993,84 @@ function MailBeheer() {
               />
             </div>
           ))}
+          <div className="space-y-3 border-t border-vvl-border pt-4">
+            <h3 className="font-heading text-base font-black uppercase">Eigen e-mailtekst</h3>
+            <p className="text-xs text-gray-600">
+              De vier teksten hierboven blijven van het systeem. Hier maak je een extra tekst, bijvoorbeeld een oproep voor een drukke week. Sla op voordat je verstuurt.
+            </p>
+            {(form.templates?.custom || []).map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-vvl-border p-2">
+                <p className="text-sm font-semibold">{item.name}</p>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    className="vvl-btn-outline text-xs"
+                    onClick={() => setOwnDraft(item)}
+                  >
+                    Bewerk
+                  </button>
+                  <button
+                    type="button"
+                    className="vvl-btn-outline text-xs"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        templates: {
+                          ...form.templates,
+                          custom: (form.templates?.custom || []).filter((row) => row.id !== item.id),
+                        },
+                      })
+                    }
+                  >
+                    Weg
+                  </button>
+                </span>
+              </div>
+            ))}
+            <input
+              className="vvl-input"
+              value={ownDraft.name}
+              onChange={(e) => setOwnDraft({ ...ownDraft, name: e.target.value })}
+              placeholder="Naam, bijvoorbeeld Oproep zaterdag"
+            />
+            <input
+              className="vvl-input"
+              value={ownDraft.subject}
+              onChange={(e) => setOwnDraft({ ...ownDraft, subject: e.target.value })}
+              placeholder="Onderwerp"
+            />
+            <textarea
+              className="vvl-input min-h-[100px] font-mono text-xs"
+              value={ownDraft.body}
+              onChange={(e) => setOwnDraft({ ...ownDraft, body: e.target.value })}
+              placeholder="Hoi {naam}, …"
+            />
+            <button
+              type="button"
+              className="vvl-btn-outline text-xs"
+              onClick={() => {
+                const name = ownDraft.name.trim();
+                const subject = ownDraft.subject.trim();
+                const body = ownDraft.body.trim();
+                if (!name || !subject || !body) {
+                  setError('Vul naam, onderwerp en tekst in.');
+                  return;
+                }
+                const id = ownDraft.id || `eigen-${Date.now()}`;
+                const next = { id, name, subject, body };
+                const current = form.templates?.custom || [];
+                const custom = current.some((row) => row.id === id)
+                  ? current.map((row) => (row.id === id ? next : row))
+                  : [...current, next];
+                setForm({ ...form, templates: { ...form.templates, custom } });
+                setOwnDraft({ id: '', name: '', subject: '', body: '' });
+                setError('');
+                setMsg('Eigen tekst toegevoegd. Klik Opslaan om hem te bewaren.');
+              }}
+            >
+              {ownDraft.id ? 'Tekst bijwerken' : 'Eigen tekst toevoegen'}
+            </button>
+          </div>
         </div>
         <div className="sm:col-span-2">
           <button type="submit" className="vvl-btn-primary" disabled={loading}>
@@ -2836,6 +3096,143 @@ function MailBeheer() {
             Verbinding testen
           </button>
         </div>
+      </div>
+
+      <div className="vvl-card space-y-3">
+        <h3 className="font-heading text-base font-black uppercase">Eigen tekst versturen</h3>
+        <p className="text-sm text-gray-700">
+          Kies een opgeslagen eigen tekst en een groep: iedereen op een dienst, een team, of alle vrijwilligers. Eerst een voorbeeld, daarna pas versturen.
+        </p>
+        <label className="block">
+          <span className="vvl-label">Tekst</span>
+          <select
+            className="vvl-input"
+            value={sendForm.templateId}
+            onChange={(e) => setSendForm({ ...sendForm, templateId: e.target.value })}
+          >
+            <option value="">— Kies een eigen tekst —</option>
+            {(form.templates?.custom || []).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="vvl-label">Groep</span>
+          <select
+            className="vvl-input"
+            value={sendForm.audience}
+            onChange={(e) => setSendForm({ ...sendForm, audience: e.target.value })}
+          >
+            <option value="volunteers">Alle vrijwilligers</option>
+            <option value="team">Een team</option>
+            <option value="shift">Iedereen op een dienst</option>
+          </select>
+        </label>
+        {sendForm.audience === 'team' ? (
+          <label className="block">
+            <span className="vvl-label">Team</span>
+            <select
+              className="vvl-input"
+              value={sendForm.teamId}
+              onChange={(e) => setSendForm({ ...sendForm, teamId: e.target.value })}
+            >
+              <option value="">— Kies team —</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {sendForm.audience === 'shift' ? (
+          <label className="block">
+            <span className="vvl-label">Dienst</span>
+            <select
+              className="vvl-input"
+              value={sendForm.serviceId}
+              onChange={(e) => setSendForm({ ...sendForm, serviceId: e.target.value })}
+            >
+              <option value="">— Kies dienst —</option>
+              {shifts.map((shift) => (
+                <option key={shift.id} value={shift.id}>
+                  {new Date(shift.date).toLocaleDateString('nl-NL')} {shift.time} {shift.type === 'KITCHEN' ? 'Keuken' : 'Bar'}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="vvl-btn-outline text-xs"
+            disabled={loading || !sendForm.templateId}
+            onClick={async () => {
+              setError('');
+              setPreview(null);
+              setLoading(true);
+              try {
+                const saved = await api.saveMailSettings(form);
+                setPasswordSet(saved.passwordSet);
+                setForm((current) => ({
+                  ...current,
+                  password: '',
+                  templates: saved.templates || current.templates,
+                }));
+                const result = await api.sendOwnMail({
+                  templateId: sendForm.templateId,
+                  audience: sendForm.audience,
+                  teamId: sendForm.teamId || undefined,
+                  serviceId: sendForm.serviceId || undefined,
+                });
+                setPreview(result);
+                setMsg(`Voorbeeld voor ${result.count} personen. Nog niets verstuurd.`);
+              } catch (err) {
+                setError(err.message);
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            Voorbeeld
+          </button>
+          {preview ? (
+            <button
+              type="button"
+              className="vvl-btn-primary text-xs"
+              disabled={loading || !preview.count}
+              onClick={async () => {
+                setLoading(true);
+                setError('');
+                try {
+                  const result = await api.sendOwnMail({
+                    templateId: sendForm.templateId,
+                    audience: sendForm.audience,
+                    teamId: sendForm.teamId || undefined,
+                    serviceId: sendForm.serviceId || undefined,
+                    confirm: true,
+                  });
+                  setPreview(null);
+                  setMsg(`Verstuurd naar ${result.sent} van ${result.count}.`);
+                } catch (err) {
+                  setError(err.message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              Bevestig en verstuur
+            </button>
+          ) : null}
+        </div>
+        {preview?.preview ? (
+          <div className="rounded-sm border border-vvl-border bg-vvl-muted p-3 text-sm">
+            <p className="font-bold">{preview.preview.subject}</p>
+            <p className="mt-2 whitespace-pre-wrap">{preview.preview.text}</p>
+            <p className="mt-2 text-xs text-gray-600">
+              Ontvangers ({preview.count}): {(preview.names || []).slice(0, 12).join(', ')}
+              {(preview.names || []).length > 12 ? '…' : ''}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {msg ? (

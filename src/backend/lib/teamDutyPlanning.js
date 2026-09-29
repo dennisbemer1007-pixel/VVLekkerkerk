@@ -1,4 +1,5 @@
 import { kickoffTimeFromMatch, slotForKickoff } from './matchPlanning.js';
+import { isAdminRole } from './roles.js';
 import { ageInRuleRange, isOldYouthTeam, isYoungYouthTeam, parseJoAge } from './youthTeams.js';
 import { parseTeamDutySlots } from './teamFunctions.js';
 
@@ -259,6 +260,53 @@ export function teamDutyOpenForTeam(service, teamId) {
     (e) => e.kind === 'TEAM' && Number(e.forTeamId) === Number(teamId) && !e.noShow,
   ).length;
   return Math.max(0, Number(duty.reserved || 0) - used);
+}
+
+/**
+ * Een teamplek vult alleen de bardienstcoördinator van dat team.
+ * De barcommissie doet dat alleen met een expliciete Bewerk-actie (assignTeamSpot).
+ * Gewoon iemand toevoegen, de automatische planning en zelf inschrijven blijven persoonlijk.
+ */
+export function resolveEnrollmentKind({
+  actorRole,
+  assignTeamSpot = false,
+  fillingForSomeoneElse = false,
+  requestedTeamId = null,
+  dutyTeamIds = [],
+  actorTeamIds = [],
+  personTeamIds: personTeams = [],
+  teamHasOpen = () => false,
+}) {
+  const committee = isAdminRole(actorRole);
+  const coordinator = actorRole === 'Teamcoördinator';
+  const duties = (dutyTeamIds || []).map((id) => Number(id));
+  const actorTeams = new Set((actorTeamIds || []).map((id) => Number(id)));
+  const ownTeams = new Set((personTeams || []).map((id) => Number(id)));
+
+  const pick = (preferId, onlyActorTeams) => {
+    const prefer = preferId ? Number(preferId) : null;
+    if (prefer && duties.includes(prefer) && teamHasOpen(prefer)) {
+      if (onlyActorTeams && !actorTeams.has(prefer)) return null;
+      return prefer;
+    }
+    for (const teamId of duties) {
+      if (!teamHasOpen(teamId)) continue;
+      if (onlyActorTeams && !actorTeams.has(teamId)) continue;
+      if (!onlyActorTeams && !ownTeams.has(teamId)) continue;
+      return teamId;
+    }
+    return null;
+  };
+
+  if (coordinator && (requestedTeamId || fillingForSomeoneElse)) {
+    const teamId = pick(requestedTeamId, true);
+    if (teamId) return { kind: 'TEAM', forTeamId: teamId };
+  }
+  if (assignTeamSpot && committee) {
+    const teamId = pick(requestedTeamId, false) || (requestedTeamId && duties.includes(Number(requestedTeamId)) && teamHasOpen(Number(requestedTeamId)) ? Number(requestedTeamId) : null);
+    if (teamId) return { kind: 'TEAM', forTeamId: teamId };
+  }
+  return { kind: 'PERSONAL', forTeamId: null };
 }
 
 export function friendlyEnrollmentReason(source, { makeup = false, obligation } = {}) {

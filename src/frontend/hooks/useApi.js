@@ -218,6 +218,11 @@ export const api = {
   createEnrollment: (data) =>
     json('/enrollments', { method: 'POST', body: JSON.stringify(data) }),
   deleteEnrollment: (id) => json(`/enrollments/${id}`, { method: 'DELETE' }),
+  updateTeamDuty: (serviceId, dutyId, data) =>
+    json(`/services/${serviceId}/team-duties/${dutyId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTeamDuty: (serviceId, dutyId) =>
+    json(`/services/${serviceId}/team-duties/${dutyId}`, { method: 'DELETE' }),
+  sendOwnMail: (data) => json('/settings/mail/send-own', { method: 'POST', body: JSON.stringify(data) }),
   generateFromMatches: (data) =>
     json('/planning/from-matches', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   proposePlanning: (data) =>

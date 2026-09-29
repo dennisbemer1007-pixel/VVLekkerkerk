@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ListFilters from '../components/ListFilters.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
@@ -79,11 +78,32 @@ export default function Dashboard({ focus = 'week' }) {
     return (
       <div className="space-y-4">
         <h1 className="font-heading text-xl font-black uppercase">Aandacht</h1>
+        <p className="text-sm text-gray-700">
+          Mensen die extra aandacht nodig hebben. Dit is geen dienstenlijst.
+        </p>
         {error ? <p className="text-sm text-red-800">{error}</p> : null}
-        <ListFilters {...filters} onChange={setFilters} personLabel="Naam" />
+        <label className="block max-w-sm">
+          <span className="vvl-label">Naam</span>
+          <input
+            className="vvl-input"
+            value={filters.person}
+            onChange={(e) => setFilters({ ...filters, person: e.target.value })}
+            placeholder="Zoek op naam"
+          />
+        </label>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <AttentionBlock title="Niet zelf ingeschreven" mandatory={notSelfSplit.mandatory} voluntary={notSelfSplit.voluntary} />
-          <AttentionBlock title="No-show gehad" mandatory={noShowSplit.mandatory} voluntary={noShowSplit.voluntary} />
+          <AttentionBlock
+            title="Niet zelf ingeschreven"
+            text="Deze mensen staan wel op een dienst. Ze hebben zich niet zelf ingeschreven: de barcommissie of de automatische planning heeft ze gezet."
+            mandatory={notSelfSplit.mandatory}
+            voluntary={notSelfSplit.voluntary}
+          />
+          <AttentionBlock
+            title="No-show gehad"
+            text="Deze mensen zijn een keer niet komen opdagen bij een dienst."
+            mandatory={noShowSplit.mandatory}
+            voluntary={noShowSplit.voluntary}
+          />
         </div>
       </div>
     );
@@ -219,10 +239,11 @@ export default function Dashboard({ focus = 'week' }) {
   );
 }
 
-function AttentionBlock({ title, mandatory, voluntary }) {
+function AttentionBlock({ title, text, mandatory, voluntary }) {
   return (
     <div className="vvl-card space-y-3">
       <h3 className="font-heading text-sm font-black uppercase">{title}</h3>
+      {text ? <p className="text-sm text-gray-700">{text}</p> : null}
       <PersonList heading="Verplicht" people={mandatory} />
       <PersonList heading="Vrijwillig" people={voluntary} />
     </div>
