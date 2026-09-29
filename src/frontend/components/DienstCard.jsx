@@ -16,9 +16,15 @@ function obligationMark(person) {
 
 function displayReason(reason, adminMode) {
   if (!reason) return null;
-  if (adminMode) return reason;
-  if (/barcommissie/i.test(reason) && /handmatig/i.test(reason)) return null;
-  return reason;
+  let cleaned = String(reason).replace(/\s*stond nog open\.?/gi, '').trim();
+  if (!cleaned) return null;
+  // Compact label for auto-filled open spots (old + new wording).
+  if (/^open$/i.test(cleaned) || /Automatisch ingepland:.*(verplichte bardienst|VR18)/i.test(cleaned)) {
+    cleaned = 'open';
+  }
+  if (adminMode) return cleaned;
+  if (/barcommissie/i.test(cleaned) && /handmatig/i.test(cleaned)) return null;
+  return cleaned;
 }
 
 function slotLabel(slot) {
@@ -166,15 +172,6 @@ export default function DienstCard({
           </button>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {onInschrijven && !adminMode && !committeeOverride ? (
-            <button
-              type="button"
-              className="vvl-btn-outline min-h-[44px] text-xs"
-              onClick={() => onInschrijven(dienst.id, 'expand')}
-            >
-              Inklappen
-            </button>
-          ) : null}
           {isDraft ? (
             <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-bold uppercase">Concept</span>
           ) : (
@@ -204,7 +201,9 @@ export default function DienstCard({
                 {line.team ? (
                   <span className="block text-xs font-normal text-gray-600">Teamplek, nog zonder naam</span>
                 ) : line.enrollment?.reason ? (
-                  <span className="block text-xs font-normal text-gray-600">{line.enrollment.reason}</span>
+                  <span className="block text-xs font-normal text-gray-600">
+                    {displayReason(line.enrollment.reason, adminMode) || line.enrollment.reason}
+                  </span>
                 ) : null}
               </span>
               {adminMode && line.enrollment && onAdminRemoveEnrollment ? (

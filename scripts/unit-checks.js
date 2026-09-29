@@ -46,6 +46,7 @@ import {
 } from '../src/backend/lib/matchPlanning.js';
 import {
   eligibleTeamDutyCandidates,
+  friendlyEnrollmentReason,
   occupiedSlots,
   recordTeamDutyStand,
   requiredForTeamDuties,
@@ -1007,12 +1008,30 @@ assert(
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');
 assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Ik');
-assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Mijn ruilen|Meer');
-assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Mijn ruilen|Instellingen|Meer');
+assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Mijn ruilen|Beheer');
+assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Mijn ruilen|Instellingen|Beheer');
 assert(
   'admin-instellingen niet onder Meer',
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
     navItemActive({ to: '/meer', match: ['/meer', '/beheer'] }, '/beheer', '?tab=regels', 'Admin') === false,
+);
+assert(
+  'auto-inschrijving toont kort open i.p.v. lange reden',
+  friendlyEnrollmentReason('AUTO', { obligation: 'FULL' }) === 'open' &&
+    friendlyEnrollmentReason('AUTO', { obligation: 'VR18' }) === 'open' &&
+    friendlyEnrollmentReason('AUTO', { makeup: true }) ===
+      'Automatisch ingepland: openstaande inhaaldienst.',
+);
+const meerSrc = fs.readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Meer.jsx'),
+  'utf8',
+);
+const meerLabels = [...meerSrc.matchAll(/label:\s*'([^']+)'/g)].map((m) => m[1]);
+assert(
+  'beheer-knoppenrij heeft aandacht tot club',
+  meerLabels.join('|') ===
+    'Aandacht|Wedstrijden|Diensten|Planning|Ruilen|Dienstregels|Jaarplanning|Teams|E-mail|Club' &&
+    !/Mijn gegevens|Personen/.test(meerSrc),
 );
 
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);

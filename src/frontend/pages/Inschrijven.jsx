@@ -19,7 +19,6 @@ export default function Inschrijven({ mode = 'open' }) {
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(mode === 'open');
-  const [whoId, setWhoId] = useState('');
   const [stood, setStood] = useState(null);
   const cleared = useRef(false);
 
@@ -35,7 +34,6 @@ export default function Inschrijven({ mode = 'open' }) {
     }
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
-    if (filters.person.trim()) params.q = filters.person.trim();
     return api
       .getServices(params)
       .then(setServices)
@@ -85,13 +83,12 @@ export default function Inschrijven({ mode = 'open' }) {
       setSelectedId((id) => (id === serviceId ? null : serviceId));
       return;
     }
-    const picked = Number(whoId) || personId;
-    if (!whoId && needsVoorWiePopup(choices)) {
+    if (needsVoorWiePopup(choices)) {
       setPendingId(serviceId);
       setSelectedId(serviceId);
       return;
     }
-    await enroll(serviceId, picked);
+    await enroll(serviceId, personId);
   };
 
   const handleUitschrijven = async (enrollmentId) => {
@@ -117,11 +114,8 @@ export default function Inschrijven({ mode = 'open' }) {
     setSelectedId(services[0].id);
   }, [services, selectedId]);
 
-  const title = mode === 'mine' ? 'Mijn diensten' : 'Diensten';
-
   return (
     <div className="space-y-4">
-      <h1 className="font-heading text-xl font-black uppercase">{title}</h1>
       {mode === 'mine' && stood != null ? (
         <p className="text-sm text-gray-700">Gestaan dit seizoen: {stood}</p>
       ) : null}
@@ -131,7 +125,7 @@ export default function Inschrijven({ mode = 'open' }) {
           Alleen open plekken
         </label>
       ) : null}
-      <ListFilters {...filters} onChange={setFilters} />
+      <ListFilters {...filters} onChange={setFilters} hidePerson />
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
 
@@ -167,24 +161,10 @@ export default function Inschrijven({ mode = 'open' }) {
             .filter((s) => s.id === selectedId)
             .map((s) => (
               <div key={s.id} className="space-y-3">
-                {mode === 'open' && choices.length > 1 ? (
-                  <label className="block">
-                    <span className="vvl-label">Wie schrijf je in?</span>
-                    <select className="vvl-input" value={whoId} onChange={(e) => setWhoId(e.target.value)}>
-                      <option value="">Kies</option>
-                      {choices.map((choice) => (
-                        <option key={choice.id} value={choice.id}>
-                          {choice.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
                 <DienstCard
                   dienst={s}
                   myPersonId={personId}
                   householdIds={choices.map((choice) => choice.id)}
-                  enrollTargetId={whoId ? Number(whoId) : null}
                   showActions
                   onInschrijven={handleInschrijven}
                   onUitschrijven={handleUitschrijven}

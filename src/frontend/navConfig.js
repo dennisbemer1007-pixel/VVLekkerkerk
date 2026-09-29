@@ -15,7 +15,7 @@ const OPEN = { to: '/open', label: 'Open', short: 'Open', icon: 'dot', match: ['
 const ROOSTER = { to: '/rooster', label: 'Rooster', short: 'Rooster', icon: 'calendar', match: ['/rooster', '/planning'] };
 const MENSEN = { to: '/mensen', label: 'Mensen', short: 'Mensen', icon: 'people', match: ['/mensen', '/uitnodigen'] };
 const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', short: 'Ruilen', icon: 'swap', match: ['/mijn-ruilen'] };
-const MEER = { to: '/meer', label: 'Meer', short: 'Meer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens', '/beheer'] };
+const MEER = { to: '/meer', label: 'Beheer', short: 'Beheer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/beheer'] };
 const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', short: 'Instel.', icon: 'gear', match: ['/instellingen'], desktopOnly: true };
 
 const SETTINGS_TABS = new Set(['regels', 'mail', 'club', 'activiteiten']);
