@@ -1022,6 +1022,26 @@ assert(
     friendlyEnrollmentReason('AUTO', { makeup: true }) ===
       'Automatisch ingepland: openstaande inhaaldienst.',
 );
+{
+  const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');
+  const pending = {
+    id: 9,
+    name: 'Nieuw',
+    role: 'Vrijwilliger',
+    inviteToken: 'tok-xyz',
+    passwordHash: null,
+    email: 'nieuw@vvl.demo',
+  };
+  const asCommittee = publicPerson(pending, { viewerRole: 'Barcommissie' });
+  const asVolunteer = publicPerson(pending, { viewerRole: 'Vrijwilliger' });
+  assert(
+    'uitnodigingstoken alleen voor barcommissie/admin',
+    asCommittee.inviteToken === 'tok-xyz' &&
+      asCommittee.invitePending === true &&
+      asVolunteer.inviteToken == null &&
+      publicPersonBrief(pending).inviteToken == null,
+  );
+}
 const meerSrc = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Meer.jsx'),
   'utf8',

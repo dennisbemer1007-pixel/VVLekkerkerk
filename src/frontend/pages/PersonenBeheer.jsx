@@ -380,6 +380,7 @@ export default function PersonenBeheer() {
   const [error, setError] = useState('');
   const [inviteResult, setInviteResult] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [copiedPersonId, setCopiedPersonId] = useState(null);
   const [showNameless, setShowNameless] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterName, setFilterName] = useState('');
@@ -461,8 +462,12 @@ export default function PersonenBeheer() {
       } else if (email) {
         const res = await api.invitePerson(data);
         setInviteResult(res);
+        setCopied(false);
+        setCopiedPersonId(null);
+        // Houd de popup open zodat de link altijd te kopiëren is, ook als de mail ging.
         setForm(emptyForm);
         setEditId(null);
+        setFormOpen(true);
       } else {
         await api.createPerson(data);
         closeForm();
@@ -567,10 +572,47 @@ export default function PersonenBeheer() {
     }
   };
 
-  const copyLink = async () => {
-    if (!inviteResult?.inviteLink) return;
-    await navigator.clipboard.writeText(inviteResult.inviteLink);
-    setCopied(true);
+  const inviteUrlFor = (personOrResult) => {
+    if (!personOrResult) return '';
+    if (personOrResult.inviteLink) return personOrResult.inviteLink;
+    if (personOrResult.inviteToken) {
+      return `${window.location.origin}/uitnodiging/${personOrResult.inviteToken}`;
+    }
+    return '';
+  };
+
+  const mailtoFor = (person, link) => {
+    if (!person?.email || !link) return '';
+    return `mailto:${encodeURIComponent(person.email)}?subject=${encodeURIComponent(
+      'Uitnodiging VVL Planning App',
+    )}&body=${encodeURIComponent(
+      `Hoi ${person.name},\n\nJe bent uitgenodigd voor de VVL Planning App van V.V. Lekkerkerk.\n\nMaak je account aan via deze link:\n${link}\n\nDe link is 14 dagen geldig.\n\nGroet,\nV.V. Lekkerkerk`,
+    )}`;
+  };
+
+  const copyLink = async (link, personId = null) => {
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    if (personId != null) {
+      setCopiedPersonId(personId);
+      setCopied(false);
+    } else {
+      setCopied(true);
+      setCopiedPersonId(null);
+    }
+  };
+
+  const ensureInviteLink = async (p) => {
+    setError('');
+    try {
+      const res = await api.resendInvite(p.id);
+      setInviteResult(res);
+      await load();
+      return res;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
   };
 
   return (
@@ -653,22 +695,29 @@ export default function PersonenBeheer() {
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       {bulkMsg ? <p className="text-sm text-emerald-800">{bulkMsg}</p> : null}
-      {inviteResult?.inviteLink && !formOpen ? (
-        <div className="vvl-card space-y-2">
+      {inviteResult && inviteUrlFor(inviteResult) && !formOpen ? (
+        <div className="vvl-card space-y-2" data-testid="invite-link-banner">
           {inviteResult.emailSent ? (
             <p className="text-sm text-emerald-800">
-              E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>.
+              E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>. De link blijft hieronder beschikbaar.
             </p>
           ) : (
-            <p className="text-sm">Mailserver staat uit of is niet ingesteld. Kopieer de link of open je e-mailprogramma.</p>
+            <p className="text-sm">Kopieer de uitnodigingslink of stuur hem via WhatsApp / e-mail.</p>
           )}
-          <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">{inviteResult.inviteLink}</p>
+          <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">{inviteUrlFor(inviteResult)}</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="vvl-btn-primary text-xs min-h-[44px]" onClick={copyLink}>
+            <button
+              type="button"
+              className="vvl-btn-primary text-xs min-h-[44px]"
+              onClick={() => copyLink(inviteUrlFor(inviteResult))}
+            >
               {copied ? 'Gekopieerd!' : 'Kopieer link'}
             </button>
-            {inviteResult.mailto ? (
-              <a href={inviteResult.mailto} className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]">
+            {inviteResult.mailto || mailtoFor(inviteResult.person, inviteUrlFor(inviteResult)) ? (
+              <a
+                href={inviteResult.mailto || mailtoFor(inviteResult.person, inviteUrlFor(inviteResult))}
+                className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]"
+              >
                 Open e-mailprogramma
               </a>
             ) : null}
@@ -875,36 +924,67 @@ export default function PersonenBeheer() {
                 personName={persons.find((p) => p.id === editId)?.name || ''}
               />
             ) : null}
-            {inviteResult ? (
-              <div className="mt-4 space-y-2 border-t border-vvl-border pt-3">
-                {inviteResult.emailSent ? (
-                  <p className="text-sm text-emerald-800">
-                    E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>.
-                  </p>
-                ) : (
-                  <p className="text-sm">
-                    Mailserver staat uit of is niet ingesteld. Kopieer de link of stuur handmatig.
-                  </p>
-                )}
-                {inviteResult.inviteLink ? (
-                  <>
-                    <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">
-                      {inviteResult.inviteLink}
+            {(() => {
+              const editing = editId ? persons.find((p) => p.id === editId) : null;
+              const link =
+                inviteUrlFor(inviteResult) ||
+                (editing && !editing.hasAccount ? inviteUrlFor(editing) : '');
+              const personForMail = inviteResult?.person || editing;
+              if (!link && !(editing && editing.email && !editing.hasAccount)) return null;
+              return (
+                <div className="mt-4 space-y-2 border-t border-vvl-border pt-3" data-testid="invite-link-panel">
+                  <h3 className="font-heading text-base font-black uppercase">Uitnodigingslink</h3>
+                  {inviteResult?.emailSent ? (
+                    <p className="text-sm text-emerald-800">
+                      E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>. De link blijft beschikbaar.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className="vvl-btn-primary text-xs min-h-[44px]" onClick={copyLink}>
-                        {copied ? 'Gekopieerd!' : 'Kopieer link'}
-                      </button>
-                      {inviteResult.mailto ? (
-                        <a href={inviteResult.mailto} className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]">
-                          Open e-mailprogramma
-                        </a>
-                      ) : null}
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
+                  ) : (
+                    <p className="text-sm text-gray-700">
+                      Deel deze link via WhatsApp of e-mail. Geldig tot het account is aangemaakt.
+                    </p>
+                  )}
+                  {link ? (
+                    <>
+                      <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">{link}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="vvl-btn-primary text-xs min-h-[44px]"
+                          onClick={() => copyLink(link, editing?.id || null)}
+                        >
+                          {copied || copiedPersonId === editing?.id ? 'Gekopieerd!' : 'Kopieer link'}
+                        </button>
+                        {mailtoFor(personForMail, link) ? (
+                          <a
+                            href={mailtoFor(personForMail, link)}
+                            className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]"
+                          >
+                            Open e-mailprogramma
+                          </a>
+                        ) : null}
+                        {editing?.email && !editing.hasAccount ? (
+                          <button
+                            type="button"
+                            className="vvl-btn-outline text-xs min-h-[44px]"
+                            onClick={() => ensureInviteLink(editing)}
+                          >
+                            Opnieuw versturen
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="vvl-btn-primary text-xs min-h-[44px]"
+                      onClick={() => ensureInviteLink(editing)}
+                    >
+                      Uitnodigingslink maken
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
           </div>
         </div>

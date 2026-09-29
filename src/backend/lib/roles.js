@@ -103,6 +103,10 @@ export function publicPerson(person, options = {}) {
   if (includeContact) {
     result.email = person.email ?? null;
     result.phone = person.phone ?? null;
+    // Barcommissie/admin mogen de uitnodigingslink altijd zien zolang het account open staat.
+    if (person.inviteToken && !person.passwordHash) {
+      result.inviteToken = person.inviteToken;
+    }
   }
 
   return result;
