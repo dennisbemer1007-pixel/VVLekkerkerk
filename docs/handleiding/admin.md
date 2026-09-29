@@ -1,22 +1,26 @@
 # Handleiding — Admin
 
-Zelfde als barcommissie, plus instellingen en omgeving.
+Zelfde als de barcommissie, plus instellingen voor de club.
 
 ## Wat je kunt
 
-- Alles van de barcommissie
-- **Instellingen** (desktop): club, mailregels, privacy, omgeving opschonen
+- Alles wat de barcommissie kan
+- **Instellingen** (op desktop): club, e-mailregels, privacy, omgeving opschonen
 
-## Belangrijkste stappen
+## Zo werkt het
 
 1. Gebruik **Beheer** zoals de barcommissie.
+![Beheer](shot:admin-beheer-375.png)
+
 2. Open **Instellingen** voor clubgegevens en opschonen.
-3. **Omgeving opschonen** wist oefendata. Alleen doen op een testdatabase — niet zomaar op de live club.
+![Instellingen](shot:admin-instellingen-1280.png)
+
+3. **Omgeving opschonen** wist oefendata. Doe dat alleen op een testdatabase — niet zomaar op de live club.
 
 ## Veelgestelde vragen
 
-**SEED_DEMO?**  
-Op live staat dit uit: geen oefenaccounts op het loginscherm. Clubdata blijft staan bij een deploy.
+**Zijn er oefenaccounts op live?**  
+Nee. Op de live site staan geen demo-logins. Clubdata blijft staan bij een deploy.
 
-**Wachtwoord admin**  
-Staat alleen in het Render-dashboard, niet in git.
+**Waar staat het admin-wachtwoord?**  
+Alleen in het Render-dashboard, niet in de code.

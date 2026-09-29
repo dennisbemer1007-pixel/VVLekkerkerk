@@ -4,27 +4,37 @@ Clubbrede planning en mensenbeheer.
 
 ## Wat je kunt
 
-- **Open**: deze week, tegels Vol / Nog 1 / Open, iemand zetten
-- **Rooster**: filteren, PDF/Excel, diensten bijwerken
-- **Mensen**: toevoegen, bewerken, afwezigheid, uitnodigen, verwijderen/deactiveren
-- **Beheer**: aandacht, wedstrijden, diensten, planning, ruilen, dienstregels, jaarplanning, teams, e-mail, club
+- Open diensten van deze week bekijken en iemand zetten
+- Het rooster filteren, PDF/Excel maken, diensten bijwerken
+- Mensen toevoegen, bewerken, afwezigheid bijhouden, uitnodigen
+- Beheer: aandacht, wedstrijden, diensten, planning, ruilen, dienstregels, jaarplanning, teams, e-mail, club
 
-## Belangrijkste stappen
+## Zo werkt het
 
-1. **Open** — tik een tegel, kies een dienst, zoek een naam (min. 2 letters) → **Zet**.
-2. **Rooster** — kies eerst een filter of **Alles tonen** (start leeg).
-3. **Mensen** — **Persoon toevoegen**, bewaar de **uitnodigingslink** (Kopieer link), ook als de mail al ging.
-4. Potlood → bewerken + afwezigheid in hetzelfde scherm.
-5. **Beheer → Planning** — publiceren, auto-invullen, officieel vastzetten.
-6. PDF-rooster: knop **PDF rooster** (max. 6 weken).
+1. **Open** — tik een tegel (Vol / Nog 1 / Open), kies een dienst, zoek een naam (minstens 2 letters) en tik **Zet**.
+![Open](shot:barcomissie-open-375.png)
+
+2. **Rooster** — kies eerst een filter of **Alles tonen** (start leeg). Daarna PDF of Excel.
+![Rooster](shot:barcomissie-rooster-375.png)
+
+3. **Mensen** — tik **Persoon toevoegen**. Na het opslaan krijg je altijd de uitnodigingslink met **Kopieer link** (ook als de mail al ging).
+![Mensen](shot:barcomissie-mensen-375.png)
+![Uitnodigingslink](shot:barcomissie-invite-375.png)
+
+4. Potlood bij iemand = bewerken én afwezigheid in hetzelfde scherm.
+
+5. **Beheer** — knoppen voor planning, wedstrijden, dienstregels, jaarplanning, teams, e-mail en club.
+![Beheer](shot:barcomissie-beheer-375.png)
+
+6. Planning officieel maken doe je onder **Beheer → Planning**. Daarna kunnen vrijwilligers zich niet meer zelf uitschrijven.
 
 ## Veelgestelde vragen
 
 **Uitnodigingslink kwijt?**  
-Open de persoon (potlood). Zolang het account open staat, staat de link er nog. Of tik op de envelop.
+Open de persoon (potlood). Zolang het account nog open is, staat de link er. Of tik op de envelop.
 
 **Alles selecteren?**  
-Selecteert iedereen in de huidige filterlijst zonder account, klaar om uit te nodigen.
+Selecteert iedereen in de huidige lijst zonder account, klaar om uit te nodigen.
 
 **Verwijderen lukt niet?**  
-Dan is er geschiedenis. De app vraagt of je wilt **deactiveren**.
+Dan is er geschiedenis. De app vraagt of je wilt deactiveren.
