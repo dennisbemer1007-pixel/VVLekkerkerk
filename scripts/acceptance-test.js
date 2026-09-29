@@ -185,6 +185,26 @@ async function main() {
       JSON.stringify(badImport.json || {}).slice(0, 220),
     ),
   );
+  {
+    const { default: prisma } = await import('../src/backend/lib/prisma.js');
+    try {
+      // Opruimen vóór de import, zodat een vorige run geen "updated" geeft.
+      const person = await prisma.person.findFirst({ where: { email: 'fase-import-ee39@vvl.demo' } });
+      if (person) {
+        await prisma.enrollment.deleteMany({ where: { personId: person.id } });
+        await prisma.personTeam.deleteMany({ where: { personId: person.id } });
+        await prisma.person.delete({ where: { id: person.id } });
+      }
+      const team = await prisma.team.findFirst({ where: { name: 'FaseTeamEe39' } });
+      if (team) {
+        await prisma.person.updateMany({ where: { teamId: team.id }, data: { teamId: null } });
+        await prisma.serviceTeamDuty.deleteMany({ where: { teamId: team.id } }).catch(() => {});
+        await prisma.team.delete({ where: { id: team.id } });
+      }
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
   const madeTeam = await req('/api/persons/import', {
     method: 'POST',
     token: admin,
@@ -212,6 +232,7 @@ async function main() {
       const team = await prisma.team.findFirst({ where: { name: 'FaseTeamEe39' } });
       if (team) {
         await prisma.person.updateMany({ where: { teamId: team.id }, data: { teamId: null } });
+        await prisma.serviceTeamDuty.deleteMany({ where: { teamId: team.id } }).catch(() => {});
         await prisma.team.delete({ where: { id: team.id } });
       }
     } finally {

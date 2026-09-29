@@ -23,6 +23,8 @@
     "test:unit": "node scripts/unit-checks.js",
     "test:api": "node scripts/api-smoke-test.js",
     "test:accept": "node scripts/acceptance-test.js",
+    "test:functional": "node scripts/functional-e2e.mjs",
+    "docs:handleiding": "node scripts/make-handleiding-pdfs.mjs",
     "test:security": "node scripts/security-retest.mjs",
     "demo:users": "node scripts/ensure-role-accounts.js",
     "admin:reset": "node scripts/reset-password.js admin@vvl.local admin123",
