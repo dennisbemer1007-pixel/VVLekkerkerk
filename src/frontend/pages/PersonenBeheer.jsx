@@ -414,12 +414,15 @@ export default function PersonenBeheer() {
     setFormOpen(false);
     setEditId(null);
     setForm(emptyForm);
+    // Houd inviteResult staan zodat de link op de pagina blijft tot je hem sluit.
   };
 
   const openAdd = () => {
     setEditId(null);
     setForm(emptyForm);
     setInviteResult(null);
+    setCopied(false);
+    setCopiedPersonId(null);
     setFormOpen(true);
   };
 
@@ -810,13 +813,51 @@ export default function PersonenBeheer() {
           <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-sm bg-white p-4 shadow-lg">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="font-heading text-lg font-black uppercase">
-                {editId ? 'Persoon bewerken' : 'Persoon toevoegen'}
+                {editId
+                  ? 'Persoon bewerken'
+                  : inviteResult
+                    ? 'Uitnodiging klaar'
+                    : 'Persoon toevoegen'}
               </h2>
               <button type="button" className="vvl-btn-outline text-xs" onClick={closeForm}>
                 Sluiten
               </button>
             </div>
-            <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+            {inviteResult && !editId ? (
+              <div className="mb-3 space-y-2" data-testid="invite-link-after-create">
+                <p className="text-sm text-gray-800">
+                  {inviteResult.person?.name || 'Persoon'} is toegevoegd
+                  {inviteResult.emailSent
+                    ? `. Mail is verstuurd naar ${inviteResult.person?.email}.`
+                    : '.'}{' '}
+                  Deel de link hieronder (WhatsApp, mail of zelf tijdelijk inloggen).
+                </p>
+                <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">
+                  {inviteUrlFor(inviteResult)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="vvl-btn-primary text-xs min-h-[44px]"
+                    onClick={() => copyLink(inviteUrlFor(inviteResult))}
+                  >
+                    {copied ? 'Gekopieerd!' : 'Kopieer link'}
+                  </button>
+                  {mailtoFor(inviteResult.person, inviteUrlFor(inviteResult)) ? (
+                    <a
+                      href={mailtoFor(inviteResult.person, inviteUrlFor(inviteResult))}
+                      className="vvl-btn-outline text-xs inline-flex items-center min-h-[44px]"
+                    >
+                      Open e-mailprogramma
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <form
+              onSubmit={submit}
+              className={`grid gap-3 sm:grid-cols-2 ${inviteResult && !editId ? 'hidden' : ''}`}
+            >
               <div className="sm:col-span-2">
                 <label className="vvl-label">Naam *</label>
                 <input
@@ -925,6 +966,8 @@ export default function PersonenBeheer() {
               />
             ) : null}
             {(() => {
+              // Na toevoegen staat de link al bovenaan; hier alleen in het bewerkscherm.
+              if (inviteResult && !editId) return null;
               const editing = editId ? persons.find((p) => p.id === editId) : null;
               const link =
                 inviteUrlFor(inviteResult) ||
