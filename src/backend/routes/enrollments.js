@@ -127,7 +127,9 @@ router.post(
   '/',
   requireAuth(async (req, res, next) => {
     try {
-      const { serviceId, personId, ignoreMatchBlock } = req.body;
+      const { serviceId, ignoreMatchBlock } = req.body;
+      // Zonder personId schrijft de ingelogde persoon zichzelf in.
+      const personId = req.body.personId ?? req.person.id;
       if (!serviceId || !personId) {
         return res.status(400).json({ error: 'Dienst en persoon zijn verplicht' });
       }
