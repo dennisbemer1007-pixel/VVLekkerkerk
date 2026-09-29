@@ -82,6 +82,7 @@ export function publicPerson(person, options = {}) {
     active: person.active !== false,
     obligation,
     exempted: Boolean(person.exempted),
+    exemptedUntil: person.exemptedUntil ? new Date(person.exemptedUntil).toISOString().slice(0, 10) : null,
     makeupDue: person.makeupDue ?? 0,
     teamId: person.teamId ?? null,
     team,

@@ -5,6 +5,7 @@ import {
   occupancyStatus,
 } from '../utils/formatDate.js';
 import { unenrollActions } from '../utils/uitschrijven.js';
+import { occupancyFraction, teamSpotLines } from '../utils/teamLines.js';
 
 function obligationMark(person) {
   if (!person) return '';
@@ -78,15 +79,9 @@ export default function DienstCard({
     .filter(Boolean)
     .join(', ');
   const teamOnlyLeft = Boolean(capacity) && capacity.personalOpen <= 0 && capacity.teamOpen > 0;
-  const unnamedTeamSpots = teamDuties
-    .map((d) => {
-      const named = (dienst.enrollments || []).filter(
-        (e) => e.kind === 'TEAM' && Number(e.forTeamId || e.forTeam?.id) === Number(d.teamId) && !e.noShow,
-      ).length;
-      const left = Math.max(0, Number(d.reserved || 0) - named);
-      return left > 0 ? { id: d.id || d.teamId, name: d.team?.name || 'Team', left } : null;
-    })
-    .filter(Boolean);
+  const spotLines = teamSpotLines(dienst);
+  const teamLineIds = new Set(spotLines.map((line) => line.enrollment?.id).filter(Boolean));
+  const hasOpenTeamLine = spotLines.some((line) => line.team);
   const servicePast = startOfDay(new Date(dienst.date)) < startOfDay(new Date());
   const showNoShow = Boolean(allowNoShow && servicePast);
   const canOverride = adminMode || committeeOverride;
@@ -96,8 +91,8 @@ export default function DienstCard({
     !isDraft &&
     !actingEnrollment &&
     status !== 'full' &&
-    !teamOnlyLeft &&
-    !(isLocked && !canOverride);
+    !teamOnlyLeft;
+  const canUnenroll = !isLocked || canOverride;
 
   if (compact) {
     return (
@@ -114,7 +109,7 @@ export default function DienstCard({
           })}{' '}
           · {dienst.time} · {dienst.location || type}
           {teamNames ? ` · ${teamNames}` : ''}
-          {` · ${enrolled}/${required}`}
+          {` · ${occupancyFraction(dienst)}`}
           {myEnrollment ? ' · jij staat hier' : ''}
         </button>
         <div className="flex items-center gap-2">
@@ -195,22 +190,35 @@ export default function DienstCard({
       </div>
 
       <p className="text-sm">
-        Bezetting: <strong>{enrolled}</strong> van <strong>{required}</strong>
+        Bezetting: <strong>{occupancyFraction(dienst)}</strong>
         {inactive ? ' · uitgeschakeld' : ''}
         {isLocked ? ' · officieel' : ''}
       </p>
 
-      {dienst.enrollments?.length > 0 || unnamedTeamSpots.length > 0 ? (
+      {dienst.enrollments?.length > 0 || spotLines.length > 0 ? (
         <ul className="space-y-1 border-t border-vvl-border pt-3 text-sm">
-          {unnamedTeamSpots.map((spot) => (
-            <li key={`team-${spot.id}`} className="font-semibold">
-              {spot.name}
-              <span className="block text-xs font-normal text-gray-600">
-                {spot.left} plek{spot.left === 1 ? '' : 'ken'} zonder naam
+          {spotLines.map((line) => (
+            <li key={line.key} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
+              <span>
+                {line.label}
+                {line.team ? (
+                  <span className="block text-xs font-normal text-gray-600">Teamplek, nog zonder naam</span>
+                ) : line.enrollment?.reason ? (
+                  <span className="block text-xs font-normal text-gray-600">{line.enrollment.reason}</span>
+                ) : null}
               </span>
+              {adminMode && line.enrollment && onAdminRemoveEnrollment ? (
+                <button
+                  type="button"
+                  className="min-h-[44px] text-xs font-bold uppercase text-red-700 hover:underline"
+                  onClick={() => onAdminRemoveEnrollment(line.enrollment.id)}
+                >
+                  Verwijder
+                </button>
+              ) : null}
             </li>
           ))}
-          {dienst.enrollments?.map((e) => {
+          {dienst.enrollments?.filter((e) => !teamLineIds.has(e.id)).map((e) => {
             const reason = displayReason(e.reason, adminMode);
             return (
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
@@ -261,22 +269,24 @@ export default function DienstCard({
         <p className="text-sm text-gray-500">Nog niemand ingeschreven.</p>
       )}
 
-      {showActions && !inactive && !isDraft && !(isLocked && !canOverride) ? (
+      {showActions && !inactive && !isDraft ? (
         <div className="pt-1">
           {!myPersonId && unenroll.length === 0 ? (
             <p className="text-sm text-gray-600">Je moet ingelogd zijn om in te schrijven.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {unenroll.map((action) => (
-                <button
-                  key={action.enrollmentId}
-                  type="button"
-                  className="vvl-btn-outline min-h-11 w-full whitespace-normal text-center text-xs"
-                  onClick={() => onUitschrijven?.(action.enrollmentId)}
-                >
-                  {action.label}
-                </button>
-              ))}
+              {canUnenroll
+                ? unenroll.map((action) => (
+                    <button
+                      key={action.enrollmentId}
+                      type="button"
+                      className="vvl-btn-outline min-h-11 w-full whitespace-normal text-center text-xs"
+                      onClick={() => onUitschrijven?.(action.enrollmentId)}
+                    >
+                      {action.label}
+                    </button>
+                  ))
+                : null}
               {canSelfEnroll ? (
                 <button
                   type="button"
@@ -286,13 +296,11 @@ export default function DienstCard({
                   Inschrijven
                 </button>
               ) : null}
-              {!canSelfEnroll && unenroll.length === 0 && status === 'full' ? (
+              {!canSelfEnroll && unenroll.length === 0 && status === 'full' && !hasOpenTeamLine ? (
                 <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
               ) : null}
-              {!canSelfEnroll && unenroll.length === 0 && capacity && capacity.personalOpen <= 0 && capacity.teamOpen > 0 ? (
-                <p className="text-sm text-gray-700">
-                  De open plekken zijn voor het jeugdteam.
-                </p>
+              {hasOpenTeamLine ? (
+                <p className="text-sm text-gray-700">De bardienstcoördinator vult de teamplekken.</p>
               ) : null}
             </div>
           )}
@@ -300,7 +308,9 @@ export default function DienstCard({
       ) : null}
 
       {isLocked && showActions && !canOverride ? (
-        <p className="text-xs text-gray-600">Officieel rooster — alleen de barcommissie kan nog wijzigen.</p>
+        <p className="text-xs text-gray-600">
+          Officieel rooster: inschrijven op een open plek mag nog. Uitschrijven niet meer. Ruilen mag wel.
+        </p>
       ) : null}
     </article>
   );

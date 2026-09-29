@@ -106,7 +106,7 @@ router.post(
   '/',
   admin(async (req, res, next) => {
     try {
-      const { date, time, note, required, location, active, draft, slot, assignedTeamId, type, locked, kind } =
+      const { date, time, note, required, location, active, draft, slot, assignedTeamId, type, locked, kind, matchId } =
         req.body;
       if (!date || !time?.trim()) {
         return res.status(400).json({ error: 'Datum en tijd zijn verplicht' });
@@ -128,6 +128,7 @@ router.post(
           origin: 'MANUAL',
           slot: slot?.trim() || 'EXTRA',
           assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
+          matchId: matchId ? Number(matchId) : null,
         },
         include: serviceInclude,
       });
@@ -142,7 +143,7 @@ router.put(
   '/:id',
   admin(async (req, res, next) => {
     try {
-      const { type, date, time, note, required, location, active, draft, slot, assignedTeamId, locked, kind } =
+      const { type, date, time, note, required, location, active, draft, slot, assignedTeamId, locked, kind, matchId } =
         req.body;
       const service = await prisma.service.update({
         where: { id: Number(req.params.id) },
@@ -161,10 +162,50 @@ router.put(
           ...(assignedTeamId !== undefined && {
             assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
           }),
+          ...(matchId !== undefined && { matchId: matchId ? Number(matchId) : null }),
         },
         include: serviceInclude,
       });
       res.json(mapService(service));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.put(
+  '/:id/team-duties/:dutyId',
+  admin(async (req, res, next) => {
+    try {
+      const duty = await prisma.serviceTeamDuty.findUnique({ where: { id: Number(req.params.dutyId) } });
+      if (!duty || duty.serviceId !== Number(req.params.id)) {
+        return res.status(404).json({ error: 'Teamplek niet gevonden' });
+      }
+      const data = {};
+      if (req.body.teamId) data.teamId = Number(req.body.teamId);
+      if (req.body.reserved != null) data.reserved = Math.max(1, Number(req.body.reserved) || 1);
+      const updated = await prisma.serviceTeamDuty.update({
+        where: { id: duty.id },
+        data,
+        include: { team: true },
+      });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/:id/team-duties/:dutyId',
+  admin(async (req, res, next) => {
+    try {
+      const duty = await prisma.serviceTeamDuty.findUnique({ where: { id: Number(req.params.dutyId) } });
+      if (!duty || duty.serviceId !== Number(req.params.id)) {
+        return res.status(404).json({ error: 'Teamplek niet gevonden' });
+      }
+      await prisma.serviceTeamDuty.delete({ where: { id: duty.id } });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

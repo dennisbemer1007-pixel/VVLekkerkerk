@@ -13,6 +13,7 @@ const empty = {
   location: '',
   locked: false,
   note: '',
+  barRequired: '',
 };
 
 export default function ActiviteitenBeheer() {
@@ -146,6 +147,20 @@ export default function ActiviteitenBeheer() {
             onChange={(e) => setForm({ ...form, location: e.target.value })}
           />
         </div>
+        <div>
+          <label className="vvl-label">Bardiensten nodig</label>
+          <input
+            type="number"
+            min={0}
+            className="vvl-input"
+            value={form.barRequired}
+            onChange={(e) => setForm({ ...form, barRequired: e.target.value })}
+            placeholder="bijv. 2"
+          />
+          <p className="mt-1 text-xs text-gray-600">
+            Optioneel. Vooraf ingeplande namen tellen mee. Het rooster toont dan bijvoorbeeld 1/2 tot de dienst vol is.
+          </p>
+        </div>
         <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
           <input
             type="checkbox"
@@ -229,6 +244,7 @@ export default function ActiviteitenBeheer() {
                 </p>
                 <p className="text-sm text-gray-600">
                   {new Date(a.date).toLocaleDateString('nl-NL')} {a.startTime}–{a.endTime}
+                  {a.barRequired ? ` · bardiensten nodig: ${a.barRequired}` : ''}
                   {a.locked ? ' · vastgezet' : ''}
                 </p>
                 {names.length ? (
@@ -250,6 +266,7 @@ export default function ActiviteitenBeheer() {
                       location: a.location || '',
                       locked: Boolean(a.locked),
                       note: a.note || '',
+                      barRequired: a.barRequired ?? '',
                     });
                     const enrolled = [
                       ...new Set(

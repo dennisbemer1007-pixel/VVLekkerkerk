@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
-import ServiceLine, { openSpots } from '../components/ServiceLine.jsx';
+import ServiceLine from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
 import { serviceTileStatus, tileGroups } from '../utils/tiles.js';
+import { occupancyFraction } from '../utils/teamLines.js';
 
 function serviceStatus(s) {
   return serviceTileStatus(s);
@@ -36,13 +37,14 @@ export default function Planning({ variant = 'rooster' }) {
   const [selectedId, setSelectedId] = useState(null);
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
-  const [weekServices, setWeekServices] = useState([]);
+  const [mineOnly, setMineOnly] = useState(false);
   const isCommittee = can('beheer');
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
 
   const load = useCallback(() => {
     const params = {};
-    if (variant !== 'open' && filter) params.filter = filter;
+    if (variant === 'open') params.filter = 'week';
+    else if (filter) params.filter = filter;
     if (kind) params.type = kind;
     if (filter === 'mine' && personId) params.personId = personId;
     if (listFilters.from) params.from = listFilters.from;
@@ -69,17 +71,6 @@ export default function Planning({ variant = 'rooster' }) {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (variant !== 'open') return undefined;
-    const params = { filter: 'week' };
-    if (kind) params.type = kind;
-    api
-      .getPlanning(params)
-      .then((data) => setWeekServices(data.services || []))
-      .catch(() => setWeekServices([]));
-    return undefined;
-  }, [variant, kind]);
 
   useEffect(() => {
     if (variant !== 'open' || !isCommittee) return undefined;
@@ -230,13 +221,14 @@ export default function Planning({ variant = 'rooster' }) {
     return services.filter((s) => {
       if (variant === 'open') {
         if (statusFilter) return serviceStatus(s) === statusFilter;
-        return serviceStatus(s) !== 'full';
+        return true;
       }
+      if (mineOnly && !(s.enrollments || []).some((e) => Number(e.personId) === Number(personId))) return false;
       if (statusFilter && serviceStatus(s) !== statusFilter) return false;
       if (onlyNoShow && !(s.enrollments || []).some((e) => e.noShow)) return false;
       return true;
     });
-  }, [services, statusFilter, onlyNoShow, variant]);
+  }, [services, statusFilter, onlyNoShow, variant, mineOnly, personId]);
 
   const counts = {
     full: groups.full.length,
@@ -274,9 +266,21 @@ export default function Planning({ variant = 'rooster' }) {
 
   return (
     <div className="space-y-6">
+      {variant === 'open' ? (
+        <WeekTiles counts={counts} active={statusFilter} onToggle={toggleTile} />
+      ) : null}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-heading text-xl font-black uppercase">{variant === 'open' ? 'Open' : 'Rooster'}</h1>
+          <h1 className="font-heading text-xl font-black uppercase">{variant === 'open' ? 'Deze week' : 'Rooster'}</h1>
+          {variant === 'rooster' ? (
+            <p className="mt-1 max-w-xl text-sm text-gray-700">
+              Dit is het inschrijfrooster: wie er staat en waar nog plek is. Je eigen diensten open je met Mijn diensten.
+            </p>
+          ) : (
+            <p className="mt-1 max-w-xl text-sm text-gray-700">
+              Eerst het overzicht, daaronder de diensten van deze week. Een tegel filtert die lijst.
+            </p>
+          )}
           {period ? (
             <p className="text-sm font-semibold text-gray-800">
               {period.from} t/m {period.to}
@@ -328,20 +332,6 @@ export default function Planning({ variant = 'rooster' }) {
         </div>
       </header>
 
-      {variant === 'open' ? (
-        <WeekTiles
-          weekServices={weekServices}
-          counts={counts}
-          active={statusFilter}
-          onToggle={toggleTile}
-          onOpen={(service) => {
-            const status = serviceStatus(service);
-            if (status === 'full' || (statusFilter && statusFilter !== status)) setStatusFilter(status);
-            pick(service.id);
-          }}
-        />
-      ) : null}
-
       <ListFilters {...listFilters} onChange={setListFilters}>
         {variant === 'open' ? (
           <label className="block min-w-0">
@@ -366,6 +356,13 @@ export default function Planning({ variant = 'rooster' }) {
       </ListFilters>
       {variant === 'rooster' ? (
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={mineOnly ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
+            onClick={() => setMineOnly((value) => !value)}
+          >
+            {mineOnly ? 'Alle diensten' : 'Mijn diensten'}
+          </button>
           <button type="button" className="vvl-btn-outline text-xs" onClick={showPast}>
             Voorbije diensten
           </button>
@@ -385,6 +382,25 @@ export default function Planning({ variant = 'rooster' }) {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
+      {variant === 'rooster' ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {shown.length === 0 ? (
+            <p className="vvl-card text-sm text-gray-600 md:col-span-2">Geen diensten in deze selectie.</p>
+          ) : (
+            shown.map((s) => (
+              <DienstCard
+                key={s.id}
+                dienst={s}
+                myPersonId={personId}
+                showActions={isCommittee}
+                committeeOverride={isCommittee}
+                onInschrijven={isCommittee ? handleInschrijven : undefined}
+                onUitschrijven={isCommittee ? handleUitschrijven : undefined}
+              />
+            ))
+          )}
+        </div>
+      ) : (
       <MasterDetail
         selected={selectedId}
         onBack={() => {
@@ -403,7 +419,7 @@ export default function Planning({ variant = 'rooster' }) {
                     service={s}
                     selected={selectedId === s.id}
                     onSelect={() => pick(s.id)}
-                    actionLabel={variant === 'open' ? 'Wijs toe' : undefined}
+                    actionLabel={variant === 'open' ? 'Vrijwilliger kiezen' : undefined}
                     onAction={() => pick(s.id)}
                   />
                 </li>
@@ -439,6 +455,7 @@ export default function Planning({ variant = 'rooster' }) {
             ),
           )}
       />
+      )}
       <VoorWieDialog
         open={Boolean(pendingId)}
         choices={choices}
@@ -459,45 +476,10 @@ const TILES = [
   { key: 'open', label: 'Open', border: 'border-l-red-500' },
 ];
 
-function weekStatusLabel(status) {
-  if (status === 'full') return 'Vol';
-  if (status === 'almost') return 'Nog 1';
-  return 'Open';
-}
-
-function WeekTiles({ weekServices, counts, active, onToggle, onOpen }) {
+function WeekTiles({ counts, active, onToggle }) {
   return (
     <section className="space-y-2" data-testid="deze-week">
       <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Deze week</h2>
-      {weekServices.length === 0 ? (
-        <p className="text-sm text-gray-600">Geen diensten deze week.</p>
-      ) : (
-        <ul className="max-h-32 divide-y divide-vvl-border overflow-y-auto rounded-sm border border-vvl-border bg-white">
-          {weekServices.map((service) => {
-            const status = serviceStatus(service);
-            const when = new Date(service.date).toLocaleDateString('nl-NL', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-            });
-            const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
-            return (
-              <li key={service.id}>
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm"
-                  onClick={() => onOpen(service)}
-                >
-                  <span className="min-w-0 truncate">
-                    {when} · {service.time} · {type}
-                  </span>
-                  <span className="shrink-0 text-xs font-bold uppercase">{weekStatusLabel(status)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
       <div className="grid grid-cols-3 gap-2">
         {TILES.map((tile) => (
           <button
@@ -536,9 +518,12 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
   return (
     <div className="vvl-card space-y-3">
       <header>
-        <h2 className="font-heading text-lg font-black uppercase">Toewijzen</h2>
+        <h2 className="font-heading text-lg font-black uppercase">Vrijwilliger kiezen</h2>
         <p className="text-sm text-gray-700">
-          {when} · {service.time} · {type} · nog {openSpots(service)}
+          {when} · {service.time} · {type} · {occupancyFraction(service)}
+        </p>
+        <p className="text-sm text-gray-700">
+          Dit zijn vrijwilligers. Kies een naam om die persoon op deze dienst te zetten. Een teamplek vult de bardienstcoördinator.
         </p>
       </header>
       {(service.enrollments || []).length ? (

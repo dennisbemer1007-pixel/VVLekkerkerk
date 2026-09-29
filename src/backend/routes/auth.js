@@ -268,7 +268,7 @@ router.post(
   '/invite',
   requireRole(...INVITE_ROLES)(async (req, res, next) => {
     try {
-      const { name, email, phone, role, obligation, mandatoryBar, teamId, guardianId } = req.body;
+      const { name, email, phone, role, obligation, mandatoryBar, teamId, guardianId, exempted, exemptedUntil } = req.body;
       if (!name?.trim() || !email?.trim()) {
         return res.status(400).json({ error: 'Naam en e-mail zijn verplicht' });
       }
@@ -316,6 +316,8 @@ router.post(
             obligation: chosenObligation,
             teamId: chosenTeamId,
             guardianId: chosenGuardianId,
+            exempted: Boolean(exempted),
+            exemptedUntil: Boolean(exempted) && exemptedUntil ? new Date(exemptedUntil) : null,
             inviteToken: token,
             inviteExpiresAt: expiresAt,
             active: true,
@@ -332,6 +334,8 @@ router.post(
             obligation: chosenObligation,
             teamId: chosenTeamId,
             guardianId: chosenGuardianId,
+            exempted: Boolean(exempted),
+            exemptedUntil: Boolean(exempted) && exemptedUntil ? new Date(exemptedUntil) : null,
             inviteToken: token,
             inviteExpiresAt: expiresAt,
           },

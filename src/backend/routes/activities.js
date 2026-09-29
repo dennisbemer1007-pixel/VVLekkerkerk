@@ -26,7 +26,36 @@ function parseActivity(body) {
     location: body.location?.trim() || null,
     locked: Boolean(body.locked),
     note: body.note?.trim() || null,
+    barRequired: body.barRequired === '' || body.barRequired == null ? null : Math.max(0, Number(body.barRequired) || 0),
   };
+}
+
+async function ensureActivityBarShift(activity) {
+  const needed = Number(activity.barRequired) || 0;
+  if (needed < 1) return null;
+  const time = `${activity.startTime} - ${activity.endTime}`;
+  const existing = await prisma.service.findFirst({
+    where: { activityId: activity.id, origin: 'MANUAL', type: 'BAR' },
+  });
+  if (existing) {
+    return prisma.service.update({
+      where: { id: existing.id },
+      data: { required: needed, time, date: activity.date, active: true, draft: false },
+    });
+  }
+  return prisma.service.create({
+    data: {
+      type: 'BAR',
+      date: activity.date,
+      time,
+      location: 'Bar',
+      required: needed,
+      origin: 'MANUAL',
+      slot: 'EXTRA',
+      activityId: activity.id,
+      active: true,
+    },
+  });
 }
 
 function parsePersonIds(body) {
@@ -35,11 +64,15 @@ function parsePersonIds(body) {
   return [...new Set(raw.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
-async function enrollPeopleOnActivity(activityId, personIds, actorId) {
+async function enrollPeopleOnActivity(activityId, personIds, actorId, { onlyServiceId = null } = {}) {
   const ids = parsePersonIds({ personIds });
   if (!ids.length) return { assigned: 0 };
   const services = await prisma.service.findMany({
-    where: { activityId, active: true },
+    where: {
+      activityId,
+      active: true,
+      ...(onlyServiceId ? { id: onlyServiceId } : {}),
+    },
     include: serviceInclude,
     orderBy: [{ date: 'asc' }, { time: 'asc' }],
   });
@@ -119,7 +152,10 @@ router.post(
         from: startOfDay(activity.date),
         to: endOfDay(activity.date),
       });
-      const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id);
+      const quota = await ensureActivityBarShift(activity);
+      const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id, {
+        onlyServiceId: quota?.id || null,
+      });
       res.status(201).json({
         ...activity,
         planningCreated: planning.created ?? 0,
@@ -153,7 +189,10 @@ router.put(
         from: startOfDay(activity.date),
         to: endOfDay(activity.date),
       });
-      const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id);
+      const quota = await ensureActivityBarShift(activity);
+      const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id, {
+        onlyServiceId: quota?.id || null,
+      });
       res.json({ ...activity, peopleAssigned: people.assigned });
     } catch (err) {
       next(err);

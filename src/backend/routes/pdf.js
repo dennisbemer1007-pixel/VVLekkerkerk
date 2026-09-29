@@ -1,9 +1,9 @@
 import PDFDocument from 'pdfkit';
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
+import { endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { getPersonFromRequest } from '../lib/auth.js';
-import { renderPlanningRoster, servicesForRoster } from '../lib/pdfRoster.js';
+import { renderPlanningRoster, servicesForRoster, sixWeekRosterWindow } from '../lib/pdfRoster.js';
 import { planningIsOfficial } from '../lib/official.js';
 
 const router = Router();
@@ -25,22 +25,11 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
   try {
     const now = startOfDay(new Date());
     const clubhouse = req.query.clubhouse === 'true' || req.query.week === 'current';
-    const hasExplicitRange = Boolean(req.query.from || req.query.to);
-    // Standaard (geen clubhuisprint, geen expliciete van/tot): komende 6 weken.
-    // `weeks=6` (of geen weeks-parameter) geeft hetzelfde resultaat.
-    const useSixWeeksDefault = !clubhouse && !hasExplicitRange;
-    const from = req.query.from
-      ? startOfDay(new Date(req.query.from))
-      : clubhouse
-        ? startOfWeek(now)
-        : now;
-    const to = req.query.to
-      ? endOfDay(new Date(req.query.to))
-      : clubhouse
-        ? endOfWeek(from)
-        : endOfDay(new Date(addWeeks(from, 6).getTime() - 24 * 60 * 60 * 1000));
-    // Niet-clubhuis: standaard/6-wekenpad blijft altijd binnen 6 weken.
-    const maxWeeks = clubhouse ? 1 : useSixWeeksDefault ? 6 : 60;
+    // Gewone download: altijd 6 weken vanaf vandaag, ook als de aanvraag de hele planning meestuurt.
+    const rosterWindow = sixWeekRosterWindow(now);
+    const from = clubhouse ? startOfWeek(now) : rosterWindow.from;
+    const to = clubhouse ? endOfWeek(from) : rosterWindow.to;
+    const maxWeeks = clubhouse ? 1 : rosterWindow.maxWeeks;
 
     const services = await prisma.service.findMany({
       where: {

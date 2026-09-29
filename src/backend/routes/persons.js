@@ -405,12 +405,34 @@ router.delete(
 
 async function runPersonImport(req, res, next, rows) {
   const teams = await prisma.team.findMany({ select: { id: true, name: true } });
-  const validated = validatePersonRows(rows, { teams });
+  let validated = validatePersonRows(rows, { teams });
   if (!validated.ok) {
+    const onlyUnknownTeams =
+      validated.unknownTeams.length > 0 &&
+      validated.invalidRows.every((row) => /onbekend team/i.test(row.error || ''));
+    if (onlyUnknownTeams && req.body?.createMissingTeams) {
+      for (const name of validated.unknownTeams) {
+        const exists = await prisma.team.findFirst({ where: { name } });
+        if (!exists) await prisma.team.create({ data: { name } });
+      }
+      const teamsNow = await prisma.team.findMany({ select: { id: true, name: true } });
+      validated = validatePersonRows(rows, { teams: teamsNow });
+    }
+  }
+  if (!validated.ok) {
+    const rowErrors = validated.invalidRows.map((row) => ({
+      row: row.__row || null,
+      name: row.name || '',
+      team: row.team || '',
+      error: row.error,
+    }));
     return res.status(400).json({
-      error: 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.',
-      invalidRows: validated.invalidRows,
+      error: validated.unknownTeams.length
+        ? 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.'
+        : 'Niet alle rijen zijn geldig.',
+      invalidRows: rowErrors,
       unknownTeams: validated.unknownTeams,
+      canCreateTeams: validated.unknownTeams.length > 0 && validated.invalidRows.every((row) => /onbekend team/i.test(row.error || '')),
     });
   }
 
@@ -565,6 +587,7 @@ router.post(
           role: normalizeRole(role, 'Vrijwilliger'),
           teamId: teamId ? Number(teamId) : null,
           exempted: Boolean(exempted),
+          exemptedUntil: Boolean(exempted) && req.body.exemptedUntil ? new Date(req.body.exemptedUntil) : null,
           guardianId: cleanGuardianId,
           ...preferenceFieldsFromBody(req.body),
         },
@@ -643,6 +666,9 @@ router.put(
         ...(phone !== undefined && { phone: phone?.trim() || null }),
         ...(role !== undefined && { role: normalizeRole(role, 'Vrijwilliger') }),
         ...(exempted !== undefined && { exempted: Boolean(exempted) }),
+        ...(exempted !== undefined && {
+          exemptedUntil: Boolean(exempted) && req.body.exemptedUntil ? new Date(req.body.exemptedUntil) : null,
+        }),
         ...(teamId !== undefined && { teamId: teamId ? Number(teamId) : null }),
         ...(guardianId !== undefined && { guardianId: cleanGuardianId }),
         ...preferenceFieldsFromBody(req.body),

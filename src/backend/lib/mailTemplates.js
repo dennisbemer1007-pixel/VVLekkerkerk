@@ -79,17 +79,56 @@ export function resolveMailTemplates(raw) {
   return out;
 }
 
-export function serializeMailTemplates(input) {
-  const resolved = resolveMailTemplates(input);
-  for (const key of MAIL_TEMPLATE_KEYS) {
-    if (resolved[key].subject.length > 200) {
-      throw new Error('Onderwerp is te lang (maximaal 200 tekens)');
-    }
-    if (resolved[key].body.length > 4000) {
-      throw new Error('Mailtekst is te lang (maximaal 4000 tekens)');
+function storedObject(raw) {
+  if (raw && typeof raw === 'object') return raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
     }
   }
-  return JSON.stringify(resolved);
+  return {};
+}
+
+/** Eigen teksten van de barcommissie. Systeemteksten blijven apart staan. */
+export function customMailTemplates(raw) {
+  const list = Array.isArray(storedObject(raw).custom) ? storedObject(raw).custom : [];
+  return list
+    .map((item, index) => ({
+      id: String(item?.id || `eigen-${index + 1}`).slice(0, 40),
+      name: String(item?.name || '').trim().slice(0, 80),
+      subject: String(item?.subject || '').trim(),
+      body: String(item?.body || ''),
+    }))
+    .filter((item) => item.name && item.subject && item.body);
+}
+
+export function serializeMailTemplates(input) {
+  const resolved = resolveMailTemplates(input);
+  const custom = customMailTemplates(input);
+  const check = (subject, body) => {
+    if (subject.length > 200) throw new Error('Onderwerp is te lang (maximaal 200 tekens)');
+    if (body.length > 4000) throw new Error('Mailtekst is te lang (maximaal 4000 tekens)');
+  };
+  for (const key of MAIL_TEMPLATE_KEYS) check(resolved[key].subject, resolved[key].body);
+  for (const item of custom) check(item.subject, item.body);
+  return JSON.stringify({ ...resolved, custom });
+}
+
+/** audience: volunteers | team | shift */
+export function filterMailAudience(people, { audience, teamId, serviceId } = {}) {
+  const withMail = (people || []).filter((person) => person && person.active !== false && String(person.email || '').includes('@'));
+  if (audience === 'team') {
+    return withMail.filter((person) => Number(person.teamId) === Number(teamId));
+  }
+  if (audience === 'shift') {
+    return withMail.filter((person) => (person.serviceIds || []).map(Number).includes(Number(serviceId)));
+  }
+  if (audience === 'volunteers') {
+    return withMail.filter((person) => person.role === 'Vrijwilliger' || person.role === 'Teamcoördinator');
+  }
+  return [];
 }
 
 export function renderMail(template, vars = {}) {

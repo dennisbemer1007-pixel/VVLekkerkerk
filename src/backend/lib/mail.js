@@ -4,6 +4,7 @@ import { canonicalAccessRole } from './roles.js';
 import { sealSecret, unsealSecret } from './secrets.js';
 import { resolvePublicAppUrl } from './appUrl.js';
 import {
+  customMailTemplates,
   dienstLabel,
   formatDutyDate,
   renderMail,
@@ -43,7 +44,10 @@ export function publicMailSettings(settings) {
     fromName: settings.fromName,
     passwordSet: Boolean(settings.password),
     isReady: isMailReady(settings),
-    templates: resolveMailTemplates(settings.templates),
+    templates: {
+      ...resolveMailTemplates(settings.templates),
+      custom: customMailTemplates(settings.templates),
+    },
   };
 }
 

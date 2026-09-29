@@ -3,7 +3,7 @@ import { resolvePlanningPeriod, periodFromRound } from './planningPeriod.js';
 import { notifyPlanningReady } from './mail.js';
 
 export const OFFICIAL_DECISION =
-  'Officieel maken zet het rooster vast voor de kantine: vrijwilligers kunnen zich daarna niet meer zelf in- of uitschrijven. Onderling ruilen van twee persoonlijke diensten blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Wie een account heeft, krijgt dan de mail “planning klaar” als SMTP aanstaat. Officieel maken kan de barcommissie later weer terugdraaien.';
+  'Officieel maken zet het rooster vast voor de kantine. Vrijwilligers kunnen zich daarna nog wel inschrijven op een open plek, maar niet meer zelf uitschrijven. Onderling ruilen van twee persoonlijke diensten blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Wie een account heeft, krijgt dan de mail “planning klaar” als SMTP aanstaat. Officieel maken kan de barcommissie later weer terugdraaien.';
 
 export async function markPlanningOfficial({ from, to, weeks } = {}) {
   const before = await prisma.planningRound.findUnique({ where: { id: 1 } });

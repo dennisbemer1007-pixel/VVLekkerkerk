@@ -2,6 +2,7 @@ import prisma from './prisma.js';
 import { addWeeks, startOfDay } from './dates.js';
 import {
   executedCountForObligation,
+  isExemptedOn,
   isUnavailableOn,
   OBLIGATIONS,
   personalEnrollmentCount,
@@ -120,7 +121,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     const eligible = [];
     for (const row of state) {
       const { person } = row;
-      if (person.exempted) continue;
+      if (isExemptedOn(person, service.date)) continue;
       if (row.remaining <= 0) continue;
       if (already.has(person.id) || enrolledToday.has(`${person.id}:${dayIso}`)) continue;
       if (isUnavailableOn(person, service.date)) continue;

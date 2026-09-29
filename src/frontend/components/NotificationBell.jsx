@@ -72,7 +72,8 @@ export default function NotificationBell() {
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        aria-label={hasNew ? `${unreadCount} nieuwe notificaties` : 'Notificaties'}
+        title="Ruilverzoeken. Bijvoorbeeld: iemand vraagt of jij een dienst wilt overnemen."
+        aria-label={hasNew ? `${unreadCount} ruilverzoeken` : 'Ruilverzoeken'}
         aria-expanded={open}
         onClick={() => {
           setOpen((v) => !v);
@@ -97,7 +98,7 @@ export default function NotificationBell() {
       {open ? (
         <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-sm border border-vvl-border bg-white text-vvl-primary shadow-lg">
           <div className="flex items-center justify-between gap-2 border-b border-vvl-border bg-vvl-secondary px-3 py-2">
-            <p className="text-xs font-bold uppercase tracking-wide">Notificaties</p>
+            <p className="text-xs font-bold uppercase tracking-wide">Ruilverzoeken</p>
             {hasNew ? (
               <button
                 type="button"
@@ -110,7 +111,9 @@ export default function NotificationBell() {
           </div>
           {error ? <p className="px-3 py-2 text-xs text-red-700">{error}</p> : null}
           {items.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-gray-600">Geen notificaties.</p>
+            <p className="px-3 py-4 text-sm text-gray-600">
+              Nog geen ruilverzoeken. Een voorbeeld: Lisa vraagt of jij haar bardienst van zaterdag wilt overnemen.
+            </p>
           ) : (
             <ul className="max-h-80 overflow-y-auto divide-y divide-vvl-border">
               {items.map((item) => (
