@@ -316,10 +316,8 @@ export function friendlyEnrollmentReason(source, { makeup = false, obligation } 
   if (source === 'GUARDIAN') return 'Ingeschreven door ouder';
   if (source === 'AUTO') {
     if (makeup) return 'Automatisch ingepland: openstaande inhaaldienst.';
-    if (obligation === 'VR18') {
-      return 'Automatisch ingepland: VR18+ (1 bardienst per 12 weken) stond nog open.';
-    }
-    return 'Automatisch ingepland: verplichte bardienst (1 per 6 weken) stond nog open.';
+    // Was open shift filled by auto-planning — keep the label short in the rooster.
+    return 'open';
   }
   return null;
 }

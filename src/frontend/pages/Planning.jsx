@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
@@ -38,8 +37,18 @@ export default function Planning({ variant = 'rooster' }) {
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
   const [mineOnly, setMineOnly] = useState(false);
+  const [showAllRooster, setShowAllRooster] = useState(false);
   const isCommittee = can('beheer');
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
+  const roosterFiltered = Boolean(
+    showAllRooster ||
+      statusFilter ||
+      mineOnly ||
+      onlyNoShow ||
+      listFilters.person.trim() ||
+      listFilters.from ||
+      listFilters.to,
+  );
 
   const load = useCallback(() => {
     const params = {};
@@ -265,36 +274,13 @@ export default function Planning({ variant = 'rooster' }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {variant === 'open' ? (
         <WeekTiles counts={counts} active={statusFilter} onToggle={toggleTile} />
       ) : null}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-heading text-xl font-black uppercase">{variant === 'open' ? 'Deze week' : 'Rooster'}</h1>
-          {variant === 'rooster' ? (
-            <p className="mt-1 max-w-xl text-sm text-gray-700">
-              Dit is het inschrijfrooster: wie er staat en waar nog plek is. Je eigen diensten open je met Mijn diensten.
-            </p>
-          ) : (
-            <p className="mt-1 max-w-xl text-sm text-gray-700">
-              Eerst het overzicht, daaronder de diensten van deze week. Een tegel filtert die lijst.
-            </p>
-          )}
-          {period ? (
-            <p className="text-sm font-semibold text-gray-800">
-              {period.from} t/m {period.to}
-              {round?.official ? ' · officieel' : ''}
-            </p>
-          ) : null}
-        </div>
-        {variant === 'rooster' ? (
-          <p className="text-sm font-semibold">
-            Vol {counts.full} · Nog 1 {counts.almost} · Open {counts.open}
-          </p>
-        ) : null}
+      {variant === 'rooster' ? (
         <div className="flex flex-wrap gap-2">
-          {isCommittee && variant === 'rooster' ? (
+          {isCommittee ? (
             <button
               type="button"
               className="vvl-btn-outline min-h-[44px] text-center"
@@ -304,36 +290,27 @@ export default function Planning({ variant = 'rooster' }) {
               {updateBusy ? 'Bijwerken…' : 'Diensten bijwerken'}
             </button>
           ) : null}
-          {isCommittee && variant === 'rooster' ? (
-            <Link to="/beheer?tab=diensten" className="vvl-btn-outline inline-flex min-h-[44px] items-center">
-              + Dienst
-            </Link>
-          ) : null}
-          {variant === 'rooster' ? (
-            <>
-              <button
-                type="button"
-                className="vvl-btn-outline min-h-[44px] text-center"
-                disabled={excelBusy}
-                onClick={downloadExcel}
-              >
-                {excelBusy ? 'Excel laden…' : 'Excel'}
-              </button>
-              <button
-                type="button"
-                className="vvl-btn-primary min-h-[44px] text-center"
-                disabled={pdfBusy}
-                onClick={downloadPdf}
-              >
-                {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
-              </button>
-            </>
-          ) : null}
+          <button
+            type="button"
+            className="vvl-btn-outline min-h-[44px] text-center"
+            disabled={excelBusy}
+            onClick={downloadExcel}
+          >
+            {excelBusy ? 'Excel laden…' : 'Excel'}
+          </button>
+          <button
+            type="button"
+            className="vvl-btn-primary min-h-[44px] text-center"
+            disabled={pdfBusy}
+            onClick={downloadPdf}
+          >
+            {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
+          </button>
         </div>
-      </header>
+      ) : null}
 
-      <ListFilters {...listFilters} onChange={setListFilters}>
-        {variant === 'open' ? (
+      {variant === 'open' ? (
+        <ListFilters {...listFilters} onChange={setListFilters} hidePerson>
           <label className="block min-w-0">
             <span className="vvl-label">Soort</span>
             <select className="vvl-input" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Soort">
@@ -342,36 +319,83 @@ export default function Planning({ variant = 'rooster' }) {
               <option value="KITCHEN">Keuken</option>
             </select>
           </label>
-        ) : (
-          <label className="block min-w-0">
-            <span className="vvl-label">Status</span>
-            <select className="vvl-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-              <option value="">Alle</option>
-              <option value="open">Open</option>
-              <option value="almost">Nog 1</option>
-              <option value="full">Vol</option>
-            </select>
-          </label>
-        )}
-      </ListFilters>
-      {variant === 'rooster' ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={mineOnly ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
-            onClick={() => setMineOnly((value) => !value)}
+        </ListFilters>
+      ) : (
+        <>
+          <ListFilters
+            {...listFilters}
+            onChange={(next) => {
+              setShowAllRooster(false);
+              setListFilters(next);
+            }}
           >
-            {mineOnly ? 'Alle diensten' : 'Mijn diensten'}
-          </button>
-          <button type="button" className="vvl-btn-outline text-xs" onClick={showPast}>
-            Voorbije diensten
-          </button>
-          <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" className="h-5 w-5" checked={onlyNoShow} onChange={(e) => setOnlyNoShow(e.target.checked)} />
-            No-show
-          </label>
-        </div>
-      ) : null}
+            <label className="block min-w-0">
+              <span className="vvl-label">Status</span>
+              <select
+                className="vvl-input"
+                value={statusFilter}
+                onChange={(e) => {
+                  setShowAllRooster(false);
+                  setStatusFilter(e.target.value);
+                }}
+                aria-label="Status"
+              >
+                <option value="">—</option>
+                <option value="open">Open</option>
+                <option value="almost">Nog 1</option>
+                <option value="full">Vol</option>
+              </select>
+            </label>
+          </ListFilters>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={showAllRooster ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
+              onClick={() => {
+                setShowAllRooster(true);
+                setStatusFilter('');
+                setMineOnly(false);
+                setOnlyNoShow(false);
+                setListFilters({ person: '', from: '', to: '' });
+              }}
+            >
+              Alles tonen
+            </button>
+            <button
+              type="button"
+              className={mineOnly ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
+              onClick={() => {
+                setShowAllRooster(false);
+                setMineOnly((value) => !value);
+              }}
+            >
+              {mineOnly ? 'Alle diensten' : 'Mijn diensten'}
+            </button>
+            <button
+              type="button"
+              className="vvl-btn-outline text-xs"
+              onClick={() => {
+                setShowAllRooster(false);
+                showPast();
+              }}
+            >
+              Voorbije diensten
+            </button>
+            <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                className="h-5 w-5"
+                checked={onlyNoShow}
+                onChange={(e) => {
+                  setShowAllRooster(false);
+                  setOnlyNoShow(e.target.checked);
+                }}
+              />
+              No-show
+            </label>
+          </div>
+        </>
+      )}
 
       {msg ? (
         <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -384,7 +408,11 @@ export default function Planning({ variant = 'rooster' }) {
 
       {variant === 'rooster' ? (
         <div className="grid gap-4 md:grid-cols-2">
-          {shown.length === 0 ? (
+          {!roosterFiltered ? (
+            <p className="vvl-card text-sm text-gray-600 md:col-span-2">
+              Kies een filter of klik Alles tonen.
+            </p>
+          ) : shown.length === 0 ? (
             <p className="vvl-card text-sm text-gray-600 md:col-span-2">Geen diensten in deze selectie.</p>
           ) : (
             shown.map((s) => (
@@ -478,8 +506,7 @@ const TILES = [
 
 function WeekTiles({ counts, active, onToggle }) {
   return (
-    <section className="space-y-2" data-testid="deze-week">
-      <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Deze week</h2>
+    <section className="space-y-2" data-testid="deze-week" aria-label="Overzicht deze week">
       <div className="grid grid-cols-3 gap-2">
         {TILES.map((tile) => (
           <button
@@ -504,10 +531,13 @@ function WeekTiles({ counts, active, onToggle }) {
 function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, onRemove }) {
   const enrolledIds = new Set((service.enrollments || []).map((e) => e.personId));
   const q = query.trim().toLowerCase();
-  const options = (people || [])
-    .filter((p) => p.active !== false && !enrolledIds.has(p.id))
-    .filter((p) => !q || p.name.toLowerCase().includes(q))
-    .slice(0, 8);
+  const options =
+    q.length < 2
+      ? []
+      : (people || [])
+          .filter((p) => p.active !== false && !enrolledIds.has(p.id))
+          .filter((p) => p.name.toLowerCase().includes(q))
+          .slice(0, 5);
   const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
   const when = new Date(service.date).toLocaleDateString('nl-NL', {
     weekday: 'short',
@@ -518,12 +548,9 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
   return (
     <div className="vvl-card space-y-3">
       <header>
-        <h2 className="font-heading text-lg font-black uppercase">Vrijwilliger kiezen</h2>
-        <p className="text-sm text-gray-700">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Vrijwilliger kiezen</h2>
+        <p className="text-sm font-semibold text-gray-800">
           {when} · {service.time} · {type} · {occupancyFraction(service)}
-        </p>
-        <p className="text-sm text-gray-700">
-          Dit zijn vrijwilligers. Kies een naam om die persoon op deze dienst te zetten. Een teamplek vult de bardienstcoördinator.
         </p>
       </header>
       {(service.enrollments || []).length ? (
@@ -537,26 +564,33 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-sm text-gray-600">Nog niemand ingeschreven.</p>
-      )}
+      ) : null}
       <label className="block">
-        <span className="vvl-label">Zoek persoon</span>
-        <input className="vvl-input" value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Naam" />
+        <span className="vvl-label">Zoek naam</span>
+        <input
+          className="vvl-input"
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Typ minstens 2 letters"
+          autoFocus
+        />
       </label>
-      <ul className="space-y-2">
-        {options.map((p) => (
-          <li key={p.id} className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-sm">
-              {p.name}{' '}
-              <span className="text-gray-500">{seasonCounts[p.id] ?? 0}× dit seizoen</span>
-            </span>
-            <button type="button" className="vvl-btn-primary shrink-0 px-3 text-xs" onClick={() => onAssign(p.id)}>
-              Zet {p.name.split(' ')[0]}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {q.length >= 2 ? (
+        <ul className="space-y-2">
+          {options.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-sm">
+                {p.name}{' '}
+                <span className="text-gray-500">{seasonCounts[p.id] ?? 0}×</span>
+              </span>
+              <button type="button" className="vvl-btn-primary shrink-0 px-3 text-xs" onClick={() => onAssign(p.id)}>
+                Zet
+              </button>
+            </li>
+          ))}
+          {options.length === 0 ? <li className="text-sm text-gray-600">Geen namen.</li> : null}
+        </ul>
+      ) : null}
     </div>
   );
 }

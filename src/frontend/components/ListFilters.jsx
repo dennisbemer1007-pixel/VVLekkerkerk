@@ -7,14 +7,15 @@ export default function ListFilters({
   to = '',
   onChange,
   personLabel = 'Persoon',
+  hidePerson = false,
   children = null,
 }) {
   const [open, setOpen] = useState(false);
   const set = (patch) => onChange({ person, from, to, ...patch });
-  const active = Boolean(person.trim() || from || to);
+  const active = Boolean((!hidePerson && person.trim()) || from || to);
   const personPlaceholder = personLabel === 'Persoon' ? 'Zoek persoon' : personLabel;
 
-  const personField = (
+  const personField = hidePerson ? null : (
     <label className="block min-w-0 md:w-56 md:shrink-0">
       <span className="vvl-label md:sr-only">{personLabel}</span>
       <input
