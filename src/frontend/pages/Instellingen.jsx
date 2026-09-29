@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import SettingsNavList from '../components/SettingsNavList.jsx';
 import { api } from '../hooks/useApi.js';
 import { isAdminRoleName } from '../navConfig.js';
 
@@ -112,20 +112,20 @@ function OpschonenDialog({ onClose }) {
             )}
             {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
           </div>
-          <div className="flex flex-col gap-2 border-t border-vvl-border p-3">
-            <button type="button" className="vvl-btn-outline w-full" data-testid="opschonen-cancel" onClick={onClose}>
-              {result ? 'Sluiten' : 'Annuleren'}
-            </button>
+          <div className="flex flex-col gap-2 border-t border-vvl-border p-3 sm:flex-row-reverse">
             {result ? null : (
               <button
                 type="submit"
                 data-testid="opschonen-submit"
                 disabled={!ready || busy || !preview}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-red-700 px-5 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-40"
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-sm bg-red-700 px-5 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-40"
               >
                 {busy ? 'Bezig…' : 'Definitief opschonen'}
               </button>
             )}
+            <button type="button" className="vvl-btn-outline flex-1" data-testid="opschonen-cancel" onClick={onClose}>
+              {result ? 'Sluiten' : 'Annuleren'}
+            </button>
           </div>
         </form>
       </div>
@@ -139,30 +139,24 @@ export default function Instellingen() {
   const admin = isAdminRoleName(user?.role);
 
   return (
-    <div className="space-y-4">
-      <h1 className="font-heading text-xl font-black uppercase">Instellingen</h1>
-      <ul className="space-y-2">
-        {LINKS.map((item) => (
-          <li key={item.to}>
-            <Link to={item.to} className="vvl-btn-primary w-full">
-              {item.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <div className="mx-auto max-w-xl space-y-6">
+      <div>
+        <h1 className="font-heading text-xl font-black uppercase">Instellingen</h1>
+        <p className="mt-1 text-sm text-vvl-accent">Beheer clubinstellingen en planningregels.</p>
+      </div>
+
+      <SettingsNavList items={LINKS} />
+
       {admin ? (
-        <section
-          className="space-y-3 rounded-sm border-2 border-red-700 bg-red-50 p-4"
-          data-testid="opschonen-blok"
-        >
-          <h2 className="font-heading text-sm font-black uppercase text-red-800">Omgeving opschonen</h2>
-          <p className="text-sm text-red-950">
+        <section className="space-y-3 border-t border-vvl-border pt-6" data-testid="opschonen-blok">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Omgeving opschonen</h2>
+          <p className="text-sm text-gray-700">
             Dit wist diensten, inschrijvingen, ruilen, wedstrijden en alle personen zonder barcommissie- of adminrol, voor de officiële livegang.
           </p>
           <button
             type="button"
             data-testid="opschonen-open"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-red-700 px-5 text-sm font-bold uppercase tracking-wide text-white"
+            className="inline-flex min-h-11 items-center justify-center rounded-sm border border-red-700 px-4 text-sm font-semibold uppercase tracking-wide text-red-800 transition hover:bg-red-50"
             onClick={() => setOpen(true)}
           >
             Omgeving opschonen

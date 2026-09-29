@@ -1,6 +1,7 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { mobileNavForRole, navForRole, navItemActive } from '../navConfig.js';
+import BrandMark from './BrandMark.jsx';
 import NotificationBell from './NotificationBell.jsx';
 
 function TabIcon({ name }) {
@@ -77,26 +78,24 @@ export default function Layout({ children }) {
   const active = (item) => navItemActive(item, location.pathname, location.search, user?.role);
 
   const linkClass = (isActive) =>
-    `flex min-h-11 items-center border-l-4 px-4 text-sm font-bold uppercase tracking-wide ${
-      isActive ? 'border-vvl-gold bg-white/10 text-vvl-gold' : 'border-transparent text-white hover:bg-white/10'
+    `flex min-h-11 items-center border-l-2 px-4 text-sm font-bold uppercase tracking-wide ${
+      isActive ? 'border-white bg-white/10 text-white' : 'border-transparent text-white/75 hover:bg-white/10 hover:text-white'
     }`;
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-vvl-muted">
-      <header className="sticky top-0 z-30 border-b-4 border-vvl-gold bg-black text-white">
+      <header className="sticky top-0 z-30 border-b border-white/15 bg-black text-white">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
-          <Link to={isLoggedIn ? homePath : '/login'} className="truncate font-black uppercase tracking-wide">
-            V.V. Lekkerkerk
-          </Link>
+          <BrandMark to={isLoggedIn ? homePath : '/login'} compact />
           {isLoggedIn ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
-              <span className="hidden max-w-[14rem] truncate text-xs sm:inline">{user?.name}</span>
+              <span className="hidden max-w-[14rem] truncate text-xs text-white/80 sm:inline">{user?.name}</span>
             </div>
           ) : (
-            <Link to="/login" className="text-sm font-bold uppercase">
+            <NavLink to="/login" className="text-sm font-bold uppercase text-white/90 hover:text-white">
               Inloggen
-            </Link>
+            </NavLink>
           )}
         </div>
       </header>
@@ -104,7 +103,7 @@ export default function Layout({ children }) {
       <div className="flex w-full flex-1">
         {isLoggedIn && items.length ? (
           <nav className="hidden w-52 shrink-0 flex-col bg-black text-white md:flex" aria-label="Menu">
-            <ul className="flex-1 space-y-1 p-3">
+            <ul className="flex-1 space-y-0.5 p-3">
               {items.map((item) => (
                 <li key={item.to}>
                   <NavLink to={item.to} className={() => linkClass(active(item))}>
@@ -126,7 +125,7 @@ export default function Layout({ children }) {
 
       {isLoggedIn && mobileItems.length ? (
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 border-t-4 border-vvl-gold bg-black text-white md:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-white/15 bg-black text-white md:hidden"
           aria-label="Tabbladen"
         >
           <ul className="grid" style={{ gridTemplateColumns: `repeat(${mobileItems.length}, minmax(0, 1fr))` }}>
@@ -134,8 +133,8 @@ export default function Layout({ children }) {
               <li key={item.to} className="min-w-0">
                 <NavLink
                   to={item.to}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 border-b-4 px-1 py-1 text-[10px] font-bold uppercase leading-none ${
-                    active(item) ? 'border-vvl-gold text-vvl-gold' : 'border-transparent text-white'
+                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 border-b-2 px-1 py-1 text-[10px] font-bold uppercase leading-none ${
+                    active(item) ? 'border-white text-white' : 'border-transparent text-white/70'
                   }`}
                 >
                   <TabIcon name={item.icon} />

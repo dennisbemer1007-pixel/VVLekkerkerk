@@ -18,19 +18,19 @@
 
 @layer components {
   .vvl-btn-primary {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-vvl-primary bg-vvl-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-vvl-primary bg-vvl-primary px-4 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-vvl-accent;
   }
 
   .vvl-btn-outline {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-vvl-primary bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-vvl-primary transition hover:bg-vvl-primary hover:text-white;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-vvl-primary bg-transparent px-4 py-2 text-sm font-bold uppercase tracking-wide text-vvl-primary transition hover:bg-vvl-primary hover:text-white;
   }
 
   .vvl-btn-outline-light {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-white bg-transparent px-5 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-white/80 bg-transparent px-4 py-2 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-vvl-primary;
   }
 
   .vvl-card {
-    @apply rounded-sm border border-vvl-border bg-vvl-background p-4 shadow-sm;
+    @apply rounded-sm border border-vvl-border bg-vvl-background p-4;
   }
 
   .vvl-input {
@@ -47,10 +47,9 @@
 
   .vvl-logo {
     @apply bg-transparent;
-    mix-blend-mode: multiply;
   }
 
   .notification-bell-pulse {
-    @apply animate-bell-pulse text-vvl-gold;
+    @apply animate-bell-pulse text-white;
   }
 }

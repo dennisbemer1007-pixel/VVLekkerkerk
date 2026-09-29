@@ -71,18 +71,21 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-vvl-muted">
-      <header className="border-b-4 border-vvl-gold bg-black px-4 py-3 text-center font-black uppercase tracking-wide text-white">
-        V.V. Lekkerkerk
+      <header className="flex h-14 items-center justify-center border-b border-white/15 bg-black px-4 text-white">
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="" width={36} height={38} className="h-9 w-9 object-contain" />
+          <span className="font-black uppercase tracking-wide">V.V. Lekkerkerk</span>
+        </div>
       </header>
       <div className="px-4 py-10">
       <div className="mx-auto max-w-md space-y-6">
         <header className="text-center">
-          <img src="/logo.png" alt="V.V. Lekkerkerk" className="vvl-logo mx-auto mb-4 h-24 w-24 object-contain" />
+          <img src="/logo.png" alt="V.V. Lekkerkerk" className="vvl-logo mx-auto mb-4 h-28 w-28 object-contain" />
           <PageTitle className="justify-center" {...PAGE_HELP.login}>
             Inloggen
           </PageTitle>
           <p className="mt-2 text-sm text-gray-700">
-            VVL Planning App — gebruik je e-mail en wachtwoord.
+            Planning bar- en keukendiensten — gebruik je e-mail en wachtwoord.
           </p>
         </header>
 

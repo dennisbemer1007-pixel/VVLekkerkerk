@@ -6,12 +6,13 @@ export default {
       colors: {
         vvl: {
           primary: '#000000',
-          secondary: '#d1d1d1',
-          accent: '#333333',
+          secondary: '#e6e6e6',
+          accent: '#444444',
           background: '#ffffff',
-          muted: '#f5f5f5',
-          border: '#cccccc',
-          gold: '#c9a227',
+          muted: '#f3f3f3',
+          border: '#d4d4d4',
+          // Legacy alias; clubstyle is zwart/wit/grijs
+          gold: '#ffffff',
         },
       },
       keyframes: {
