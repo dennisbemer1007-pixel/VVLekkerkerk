@@ -53,14 +53,13 @@ export default function Dashboard({ focus = 'week' }) {
     return counts.list.filter((s) => serviceStatus(s) === statusFilter);
   }, [counts.list, statusFilter]);
 
-  const notSelf = stats?.notSelfEnrolled || [];
-  const noShows = stats?.noShowPeople || [];
+  const notSelf = (stats?.notSelfEnrolled || []).filter(
+    (p) => p.obligation === 'FULL' || p.obligation === 'VR18',
+  );
+  const noShows = (stats?.noShowPeople || []).filter(
+    (p) => p.obligation === 'FULL' || p.obligation === 'VR18',
+  );
   const dutyStats = stats?.dutyStats || [];
-
-  const splitByObligation = (people) => ({
-    mandatory: people.filter((p) => p.obligation === 'FULL' || p.obligation === 'VR18'),
-    voluntary: people.filter((p) => p.obligation !== 'FULL' && p.obligation !== 'VR18'),
-  });
 
   const byQuery = (people) =>
     people.filter((p) => {
@@ -69,8 +68,8 @@ export default function Dashboard({ focus = 'week' }) {
       return true;
     });
 
-  const notSelfSplit = splitByObligation(byQuery(notSelf));
-  const noShowSplit = splitByObligation(byQuery(noShows));
+  const notSelfList = byQuery(notSelf);
+  const noShowList = byQuery(noShows);
 
   const toggleFilter = (key) => setStatusFilter((cur) => (cur === key ? null : key));
 
@@ -79,7 +78,7 @@ export default function Dashboard({ focus = 'week' }) {
       <div className="space-y-4">
         <h1 className="font-heading text-xl font-black uppercase">Aandacht</h1>
         <p className="text-sm text-gray-700">
-          Mensen die extra aandacht nodig hebben. Dit is geen dienstenlijst.
+          Alleen verplichte vrijwilligers die extra aandacht nodig hebben.
         </p>
         {error ? <p className="text-sm text-red-800">{error}</p> : null}
         <label className="block max-w-sm">
@@ -93,16 +92,15 @@ export default function Dashboard({ focus = 'week' }) {
         </label>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <AttentionBlock
-            title="Niet zelf ingeschreven"
-            text="Deze mensen staan wel op een dienst. Ze hebben zich niet zelf ingeschreven: de barcommissie of de automatische planning heeft ze gezet."
-            mandatory={notSelfSplit.mandatory}
-            voluntary={notSelfSplit.voluntary}
+            title="Niet ingepland"
+            text="Verplicht, maar in deze planning nog nergens gezet (niet zelf, niet automatisch, niet door de barcommissie)."
+            people={notSelfList}
           />
           <AttentionBlock
             title="No-show gehad"
-            text="Deze mensen zijn een keer niet komen opdagen bij een dienst."
-            mandatory={noShowSplit.mandatory}
-            voluntary={noShowSplit.voluntary}
+            text="Verplicht en minstens één keer niet komen opdagen."
+            people={noShowList}
+            showNoShowMeta
           />
         </div>
       </div>
@@ -197,14 +195,14 @@ export default function Dashboard({ focus = 'week' }) {
           <h2 className="font-heading text-base font-black uppercase">Aandacht</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <AttentionBlock
-              title="Niet zelf ingeschreven"
-              mandatory={notSelfSplit.mandatory}
-              voluntary={notSelfSplit.voluntary}
+              title="Niet ingepland"
+              text="Verplicht, maar in deze planning nog nergens gezet."
+              people={notSelfList}
             />
             <AttentionBlock
               title="No-show gehad"
-              mandatory={noShowSplit.mandatory}
-              voluntary={noShowSplit.voluntary}
+              people={noShowList}
+              showNoShowMeta
             />
           </div>
         </section>
@@ -239,29 +237,37 @@ export default function Dashboard({ focus = 'week' }) {
   );
 }
 
-function AttentionBlock({ title, text, mandatory, voluntary }) {
+function AttentionBlock({ title, text, people, showNoShowMeta = false }) {
   return (
     <div className="vvl-card space-y-3">
       <h3 className="font-heading text-sm font-black uppercase">{title}</h3>
       {text ? <p className="text-sm text-gray-700">{text}</p> : null}
-      <PersonList heading="Verplicht" people={mandatory} />
-      <PersonList heading="Vrijwillig" people={voluntary} />
+      <PersonList people={people} showNoShowMeta={showNoShowMeta} />
     </div>
   );
 }
 
-function PersonList({ heading, people }) {
+function PersonList({ people, showNoShowMeta = false }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase text-vvl-accent">{heading}</p>
       {people.length === 0 ? (
         <p className="text-sm text-gray-600">Geen.</p>
       ) : (
         <ul className="divide-y divide-vvl-border">
           {people.map((p) => (
             <li key={p.id} className="flex min-h-[44px] items-center justify-between gap-2 py-2 text-sm">
-              <Link to="/mensen" className="font-semibold underline">{p.name}</Link>
-              <span className="text-gray-600">{p.role || OBLIGATION_SHORT[p.obligation] || '—'}</span>
+              <Link to="/mensen" className="font-semibold underline">
+                {p.name}
+              </Link>
+              <span className="text-right text-gray-600">
+                {showNoShowMeta && p.noShowCount
+                  ? `${p.noShowCount}×${
+                      p.lastNoShowDate
+                        ? ` · ${new Date(p.lastNoShowDate).toLocaleDateString('nl-NL')}`
+                        : ''
+                    }`
+                  : OBLIGATION_SHORT[p.obligation] || p.role || '—'}
+              </span>
             </li>
           ))}
         </ul>

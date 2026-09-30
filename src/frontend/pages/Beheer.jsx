@@ -1514,22 +1514,6 @@ const MAIL_PRESETS = [
     secure: false,
     tip: 'Gebruik een Google “app-wachtwoord” (niet je normale wachtwoord).',
   },
-  {
-    id: 'outlook',
-    label: 'Outlook / Microsoft 365',
-    host: 'smtp.office365.com',
-    port: 587,
-    secure: false,
-    tip: 'Gebruik je werk- of Outlook.com-account.',
-  },
-  {
-    id: 'custom',
-    label: 'Eigen server',
-    host: '',
-    port: 587,
-    secure: false,
-    tip: 'Vraag host, poort en inloggegevens aan je hosting of club-IT.',
-  },
 ];
 
 function MailBeheer() {

@@ -162,6 +162,11 @@ router.post(
           });
         }
       }
+      if (servicePreview && startOfDay(servicePreview.date) < startOfDay(new Date())) {
+        return res.status(400).json({
+          error: 'Inschrijven in het verleden kan niet.',
+        });
+      }
       const requestedTeamId = req.body.forTeamId ? Number(req.body.forTeamId) : null;
       const fillingTeamDuty = intendsTeamDuty(servicePreview, person, req.person, requestedTeamId);
       const coordinatorNamingTeam =

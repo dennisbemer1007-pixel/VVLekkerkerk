@@ -537,7 +537,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
       : (people || [])
           .filter((p) => p.active !== false && !enrolledIds.has(p.id))
           .filter((p) => p.name.toLowerCase().includes(q))
-          .slice(0, 5);
+          .slice(0, 25);
   const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
   const when = new Date(service.date).toLocaleDateString('nl-NL', {
     weekday: 'short',

@@ -1039,10 +1039,10 @@ assert(
 );
 
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
-assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Ik');
-assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Ik');
-assert('menu barcommissie', labels('Barcommissie') === 'Open|Rooster|Mensen|Mijn ruilen|Beheer');
-assert('menu admin', labels('Admin') === 'Open|Rooster|Mensen|Mijn ruilen|Instellingen|Beheer');
+assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Mijn gegevens');
+assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Mijn gegevens');
+assert('menu barcommissie', labels('Barcommissie') === 'Dashboard|Diensten|Mijn diensten|Personen|Mijn ruilen|Beheer');
+assert('menu admin', labels('Admin') === 'Dashboard|Diensten|Mijn diensten|Personen|Mijn ruilen|Instellingen|Beheer');
 assert(
   'admin-instellingen niet onder Meer',
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&

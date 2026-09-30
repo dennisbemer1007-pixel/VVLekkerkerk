@@ -404,7 +404,7 @@ export default function PersonenBeheer() {
   const [inviteResult, setInviteResult] = useState(null);
   const [copied, setCopied] = useState(false);
   const [copiedPersonId, setCopiedPersonId] = useState(null);
-  const [showNameless, setShowNameless] = useState(false);
+  const [showNameless, setShowNameless] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterName, setFilterName] = useState('');
   const [filterRole, setFilterRole] = useState('');
@@ -769,8 +769,11 @@ export default function PersonenBeheer() {
                 />
               </th>
               <th className="p-2 font-bold">Naam</th>
-              <th className="hidden w-28 p-2 font-bold sm:table-cell">Rol</th>
-              <th className="hidden w-28 p-2 font-bold lg:table-cell">Team</th>
+              <th className="hidden w-36 p-2 font-bold md:table-cell">E-mail</th>
+              <th className="hidden w-28 p-2 font-bold lg:table-cell">Telefoon</th>
+              <th className="hidden w-24 p-2 font-bold sm:table-cell">Rol</th>
+              <th className="hidden w-24 p-2 font-bold xl:table-cell">Team</th>
+              <th className="hidden w-20 p-2 font-bold lg:table-cell">Vrijgest.</th>
               <th className="w-16 p-2 font-bold sm:w-20">Acc.</th>
               <th className="w-[5.5rem] p-2 font-bold"> </th>
             </tr>
@@ -791,13 +794,17 @@ export default function PersonenBeheer() {
                 <td className="truncate p-2 font-semibold">
                   {p.name}
                   {!p.active ? ' (inactief)' : ''}
-                  <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 sm:hidden">
-                    {p.role}
-                    {p.team?.name ? ` · ${p.team.name}` : ''}
+                  <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 md:hidden">
+                    {p.email || 'geen e-mail'}
+                    {p.phone ? ` · ${p.phone}` : ''}
+                    {p.exempted ? ' · vrijgesteld' : ''}
                   </span>
                 </td>
+                <td className="hidden truncate p-2 md:table-cell">{p.email || '—'}</td>
+                <td className="hidden truncate p-2 lg:table-cell">{p.phone || '—'}</td>
                 <td className="hidden truncate p-2 sm:table-cell">{p.role}</td>
-                <td className="hidden truncate p-2 lg:table-cell">{p.team?.name || '—'}</td>
+                <td className="hidden truncate p-2 xl:table-cell">{p.team?.name || '—'}</td>
+                <td className="hidden truncate p-2 lg:table-cell">{p.exempted ? 'Ja' : 'Nee'}</td>
                 <td className="truncate p-2 text-xs sm:text-sm">
                   {p.hasAccount ? 'Wel' : p.invitePending ? 'Open' : 'Geen'}
                 </td>
@@ -922,7 +929,6 @@ export default function PersonenBeheer() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required={!editId && !form.guardianId}
-                  disabled={Boolean(editId)}
                 />
               </div>
               <div>
@@ -962,12 +968,14 @@ export default function PersonenBeheer() {
                   ))}
                 </select>
               </div>
-              <GuardianPicker
-                persons={persons}
-                value={form.guardianId}
-                onChange={(v) => setForm({ ...form, guardianId: v })}
-                excludeId={editId}
-              />
+              {editId ? (
+                <GuardianPicker
+                  persons={persons}
+                  value={form.guardianId}
+                  onChange={(v) => setForm({ ...form, guardianId: v })}
+                  excludeId={editId}
+                />
+              ) : null}
               {editId ? (
                 <p className="text-xs text-gray-600 sm:col-span-2">
                   Dit seizoen: {seasonCounts[editId] ?? 0}×
@@ -975,7 +983,7 @@ export default function PersonenBeheer() {
               ) : null}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <button type="submit" className="vvl-btn-primary min-h-[44px]">
-                  {editId ? 'Opslaan' : 'Toevoegen / uitnodigen'}
+                  {editId ? 'Opslaan' : 'Opslaan en uitnodigen'}
                 </button>
                 <button type="button" className="vvl-btn-outline min-h-[44px]" onClick={closeForm}>
                   Annuleren
