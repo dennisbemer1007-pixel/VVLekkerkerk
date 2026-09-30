@@ -13,6 +13,15 @@ import {
 } from '../utils/formatDate.js';
 import { PAGE_HELP } from '../utils/pageHelp.js';
 
+const emptyForm = {
+  date: todayInputValue(),
+  time: '',
+  home: true,
+  opponent: '',
+  note: '',
+  teamId: '',
+};
+
 export default function Wedstrijden() {
   const { can } = useAuth();
   const isAdmin = can('beheer');
@@ -21,20 +30,13 @@ export default function Wedstrijden() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({
     team: '',
     from: '',
     to: '',
-  });
-  const [form, setForm] = useState({
-    date: todayInputValue(),
-    time: '',
-    home: true,
-    opponent: '',
-    note: '',
-    teamId: '',
-    matchNumber: '',
-    playLevel: '',
   });
 
   const load = () => {
@@ -69,33 +71,53 @@ export default function Wedstrijden() {
     });
   }, [matches, filters, showAll]);
 
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditId(null);
+    setForm({ ...emptyForm, date: todayInputValue() });
+  };
+
+  const openAdd = () => {
+    setEditId(null);
+    setForm({ ...emptyForm, date: todayInputValue() });
+    setFormOpen(true);
+  };
+
+  const openEdit = (m) => {
+    setEditId(m.id);
+    setForm({
+      date: toDateInputValue(m.date),
+      time: m.time || '',
+      home: Boolean(m.home),
+      opponent: m.opponent || '',
+      note: m.note || '',
+      teamId: m.teamId ? String(m.teamId) : m.team?.id ? String(m.team.id) : '',
+    });
+    setFormOpen(true);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     setMsg('');
     try {
-      const created = await api.createMatch({
+      const payload = {
         ...form,
         teamId: form.teamId || null,
         time: form.time || null,
-        matchNumber: form.matchNumber || null,
-        playLevel: form.playLevel || null,
-      });
-      setForm({
-        date: todayInputValue(),
-        time: '',
-        home: true,
-        opponent: '',
-        note: '',
-        teamId: '',
-        matchNumber: '',
-        playLevel: '',
-      });
-      setMsg(
-        created?.planningCreated
-          ? 'Wedstrijd opgeslagen. De bardienst voor dit dagdeel staat in de planning.'
-          : 'Wedstrijd opgeslagen.',
-      );
+      };
+      if (editId) {
+        await api.updateMatch(editId, payload);
+        setMsg('Wedstrijd bijgewerkt.');
+      } else {
+        const created = await api.createMatch(payload);
+        setMsg(
+          created?.planningCreated
+            ? 'Wedstrijd opgeslagen. De bardienst voor dit dagdeel staat in de planning.'
+            : 'Wedstrijd opgeslagen.',
+        );
+      }
+      closeForm();
       await load();
     } catch (err) {
       setError(err.message);
@@ -113,11 +135,18 @@ export default function Wedstrijden() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <PageTitle {...PAGE_HELP.wedstrijden}>Wedstrijden</PageTitle>
-        <p className="mt-1 text-sm text-gray-700">
-          Overzicht van alle clubwedstrijden. Standaard zie je alleen komende wedstrijden.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <PageTitle {...PAGE_HELP.wedstrijden}>Wedstrijden</PageTitle>
+          <p className="mt-1 text-sm text-gray-700">
+            Overzicht van alle clubwedstrijden. Standaard zie je alleen komende wedstrijden.
+          </p>
+        </div>
+        {isAdmin ? (
+          <button type="button" className="vvl-btn-primary min-h-11" onClick={openAdd}>
+            + Wedstrijd
+          </button>
+        ) : null}
       </header>
 
       <div className="vvl-card space-y-4">
@@ -180,9 +209,16 @@ export default function Wedstrijden() {
               {m.time || '—'} · {m.home ? 'Thuis' : 'Uit'} vs {m.opponent || '—'}
             </p>
             {isAdmin ? (
-              <button type="button" className="vvl-btn-outline mt-2 text-xs" onClick={() => remove(m.id)}>
-                Verwijder
-              </button>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {isFutureMatchDate(m.date) ? (
+                  <button type="button" className="vvl-btn-outline text-xs" onClick={() => openEdit(m)}>
+                    Bewerk
+                  </button>
+                ) : null}
+                <button type="button" className="vvl-btn-outline text-xs" onClick={() => remove(m.id)}>
+                  Verwijder
+                </button>
+              </div>
             ) : null}
           </li>
         ))}
@@ -218,9 +254,16 @@ export default function Wedstrijden() {
                   <td className="p-3">{m.matchType || '—'}</td>
                   {isAdmin ? (
                     <td className="p-3 text-right">
-                      <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => remove(m.id)}>
-                        Verwijder
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        {isFutureMatchDate(m.date) ? (
+                          <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => openEdit(m)}>
+                            Bewerk
+                          </button>
+                        ) : null}
+                        <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => remove(m.id)}>
+                          Verwijder
+                        </button>
+                      </div>
                     </td>
                   ) : null}
                 </tr>
@@ -230,72 +273,94 @@ export default function Wedstrijden() {
         </table>
       </div>
 
-      {isAdmin ? (
-        <>
-          <form onSubmit={submit} className="vvl-card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <h2 className="sm:col-span-2 lg:col-span-3 font-heading text-lg font-black uppercase">
-              Wedstrijd toevoegen
-            </h2>
-            <div>
-              <label className="vvl-label">Datum</label>
-              <input
-                type="date"
-                className="vvl-input"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                required
-              />
+      {isAdmin && formOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label={editId ? 'Wedstrijd bewerken' : 'Wedstrijd toevoegen'}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeForm();
+          }}
+        >
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-sm bg-white p-4 shadow-lg">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-heading text-lg font-black uppercase">
+                {editId ? 'Wedstrijd bewerken' : 'Wedstrijd toevoegen'}
+              </h2>
+              <button type="button" className="vvl-btn-outline text-xs" onClick={closeForm}>
+                Sluiten
+              </button>
             </div>
-            <div>
-              <label className="vvl-label">Tijd</label>
-              <input
-                type="time"
-                className="vvl-input"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="vvl-label">Team</label>
-              <select
-                className="vvl-input"
-                value={form.teamId}
-                onChange={(e) => setForm({ ...form, teamId: e.target.value })}
-              >
-                <option value="">— Kies team —</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="vvl-label">Tegenstander</label>
-              <input
-                className="vvl-input"
-                value={form.opponent}
-                onChange={(e) => setForm({ ...form, opponent: e.target.value })}
-                placeholder="Optioneel"
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">
-              <input
-                type="checkbox"
-                checked={form.home}
-                onChange={(e) => setForm({ ...form, home: e.target.checked })}
-              />
-              Thuiswedstrijd
-            </label>
-            <button type="submit" className="vvl-btn-primary sm:w-fit">
-              Wedstrijd opslaan
-            </button>
-          </form>
+            <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="vvl-label">Datum</label>
+                <input
+                  type="date"
+                  className="vvl-input"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="vvl-label">Tijd</label>
+                <input
+                  type="time"
+                  className="vvl-input"
+                  value={form.time}
+                  onChange={(e) => setForm({ ...form, time: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="vvl-label">Team</label>
+                <select
+                  className="vvl-input"
+                  value={form.teamId}
+                  onChange={(e) => setForm({ ...form, teamId: e.target.value })}
+                >
+                  <option value="">— Kies team —</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="vvl-label">Tegenstander</label>
+                <input
+                  className="vvl-input"
+                  value={form.opponent}
+                  onChange={(e) => setForm({ ...form, opponent: e.target.value })}
+                  placeholder="Optioneel"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.home}
+                  onChange={(e) => setForm({ ...form, home: e.target.checked })}
+                />
+                Thuiswedstrijd
+              </label>
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <button type="submit" className="vvl-btn-primary min-h-[44px]">
+                  {editId ? 'Opslaan' : 'Wedstrijd opslaan'}
+                </button>
+                <button type="button" className="vvl-btn-outline min-h-[44px]" onClick={closeForm}>
+                  Annuleren
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
-          <DesktopOnly>
-            <CsvMatchImport onImported={load} />
-          </DesktopOnly>
-        </>
+      {isAdmin ? (
+        <DesktopOnly>
+          <CsvMatchImport onImported={load} />
+        </DesktopOnly>
       ) : null}
     </div>
   );

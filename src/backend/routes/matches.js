@@ -126,6 +126,53 @@ router.post(
   }),
 );
 
+router.put(
+  '/:id',
+  admin(async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await prisma.match.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: 'Wedstrijd niet gevonden' });
+      const day = new Date(existing.date);
+      day.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (day < today) {
+        return res.status(400).json({ error: 'Wedstrijden in het verleden kun je niet meer bewerken.' });
+      }
+      const { date, time, home, opponent, note, teamId, matchNumber, matchType, playLevel } =
+        req.body;
+      if (!date) return res.status(400).json({ error: 'Datum is verplicht' });
+      const parsed = storedDate(date, time);
+      if (!parsed) return res.status(400).json({ error: 'Ongeldige datum' });
+      const nextDay = new Date(parsed);
+      nextDay.setHours(0, 0, 0, 0);
+      if (nextDay < today) {
+        return res.status(400).json({ error: 'Zet geen wedstrijd in het verleden.' });
+      }
+      const match = await prisma.match.update({
+        where: { id },
+        data: {
+          date: parsed,
+          time: time?.trim() || null,
+          home: home !== false,
+          opponent: opponent?.trim() || null,
+          note: note?.trim() || null,
+          matchNumber: matchNumber?.toString().trim() || null,
+          matchType: matchType?.trim() || null,
+          playLevel: playLevel?.trim() || null,
+          teamId: teamId ? Number(teamId) : null,
+        },
+        include: { team: true },
+      });
+      const planning = home !== false ? await trySyncPlanningFromMatches() : { created: 0 };
+      res.json({ ...match, planningCreated: planning.created });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
 function resolveRows(body) {
   if (body?.xlsxBase64) {
     try {

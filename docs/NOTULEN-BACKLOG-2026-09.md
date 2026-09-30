@@ -2,7 +2,7 @@
 
 Bron: notulen sessie (september/oktober 2026).
 
-## Meegenomen in deze release
+## Meegenomen
 
 ### Vrijwilliger
 - Diensten: scroll naar boven bij aanklikken
@@ -17,22 +17,18 @@ Bron: notulen sessie (september/oktober 2026).
 - Mijn diensten in barcommissie-nav
 - Geen inschrijven in het verleden (UI + API)
 - Dashboard-aandacht: alleen verplichte; no-show met aantal + laatste datum
-- “Niet zelf ingeschreven” = verplicht en nergens op de planning
+- “Niet ingepland” = verplicht en nergens op de planning
 - Personen: kolommen telefoon, e-mail, vrijgesteld; e-mail bewerkbaar
-- Kind van / ouder alleen bij bewerken (niet bij nieuw)
-- E-mailpresets: Outlook en eigen server weg
-- Wedstrijd toevoegen: wedstrijdnummer en spelniveau weg uit het formulier
+- Kind van / ouder alleen bij bewerken
+- E-mailpresets: Outlook / eigen server weg
+- Wedstrijd toevoegen: wedstrijdnummer en spelniveau weg; **+ popup**; bewerken alleen toekomst
+- **Meerdere planningperiodes** + switch op Dashboard / Open / Beheer → Planning
+- Open/Rooster: MasterDetail-lijst (zelfde feel als vrijwilliger)
+- Officieel: locks synchroon met actieve periode; nieuwe diensten tijdens official worden locked
+- Opslaan vs **Opslaan en uitnodigen**
+- Teamplekken: duidelijkere tekst (alleen coördinator / Beheer teamplek)
+- Namen zonder account standaard zichtbaar
 
-## Later / groter
-
-| Item | Toelichting |
-|------|-------------|
-| Meerdere planningperiodes | Nu 1 `PlanningRound`. Nodig: meerdere periodes (bijv. t/m 20 okt én 21 okt–1 jan) + switch op dashboard |
-| Zelfde look & feel Open/Rooster als vrijwilliger | MasterDetail overal |
-| Plusje + popup voor wedstrijd/dienst toevoegen | Personen heeft al een modal |
-| Officieel 24 okt wel/niet | Nader onderzoek: welke dienst/status inconsistent |
-| Alle personen-bug | AssignPanel limiet / filters nalopen |
-| Uitnodigen-knop | Restcases (geen mailserver / geen token) |
-| Teamdienst alleen via teamcoördinator | Al grotendeels zo; UI-copy aanscherpen |
-| Opslaan vs Opslaan+uitnodigen | Knoppen splitsen |
-| Vol = geen inschrijfoptie | Al grotendeels; edge-cases checken |
+## Optioneel later
+- Dienst toevoegen ook als + popup (personen/wedstrijden hebben dat al)
+- Uitnodigen-knop edge cases zonder SMTP verder polijsten

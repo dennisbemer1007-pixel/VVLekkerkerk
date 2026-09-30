@@ -1115,8 +1115,17 @@ function PlanningStep({ number, title, children, done = false }) {
   );
 }
 
+function planningRoundDatesLabel(r) {
+  if (!r?.fromDate && !r?.toDate) return '';
+  const from = r.fromDate ? toDateInputValue(r.fromDate) : '—';
+  const to = r.toDate ? toDateInputValue(r.toDate) : '—';
+  return ` (${from} t/m ${to})`;
+}
+
 function PlanningBeheer() {
   const [round, setRound] = useState(null);
+  const [rounds, setRounds] = useState([]);
+  const [newRound, setNewRound] = useState({ label: '', from: todayInputValue(), to: defaultPlanningEndInput() });
   const [drafts, setDrafts] = useState([]);
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
@@ -1131,11 +1140,13 @@ function PlanningBeheer() {
   const load = () =>
     Promise.all([
       api.getPlanningRound(),
+      api.getPlanningRounds(),
       api.getPlanning({ includeDraft: 'true' }),
       api.getPlanning({}),
     ])
-      .then(([r, withDrafts, published]) => {
+      .then(([r, allRounds, withDrafts, published]) => {
         setRound(r);
+        setRounds(allRounds);
         setDrafts((withDrafts.services || []).filter((s) => s.draft));
         const open = (published.services || []).filter(
           (s) => !s.draft && (s.enrolled ?? s.enrollments?.length ?? 0) < (s.required ?? 0),
@@ -1148,6 +1159,43 @@ function PlanningBeheer() {
         if (r?.toDate) setToDate(toDateInputValue(r.toDate));
       })
       .catch((e) => setError(e.message));
+
+  const activateRound = async (id) => {
+    if (!id || String(round?.id) === String(id)) return;
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      await api.activatePlanningRound(id);
+      await load();
+      setMsg('Actieve planningperiode gewijzigd.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createRound = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      await api.createPlanningRound({
+        label: newRound.label.trim() || 'Planning',
+        from: newRound.from,
+        to: newRound.to,
+      });
+      setNewRound({ label: '', from: todayInputValue(), to: defaultPlanningEndInput() });
+      await load();
+      setMsg('Nieuwe planningperiode aangemaakt.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -1185,8 +1233,76 @@ function PlanningBeheer() {
   const step3Done =
     isOfficial || round?.status === 'CLOSED' || (isPublished && publishedOpen === 0);
 
+  const activeRoundId = round?.id ? String(round.id) : '';
+
   return (
     <section className="space-y-4">
+      <div className="vvl-card space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-vvl-secondary px-3 py-1 text-xs font-bold uppercase">
+            Actieve planning: {round?.label || '—'}
+          </span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div>
+            <label className="vvl-label">Planningperiode</label>
+            <select
+              className="vvl-input"
+              value={activeRoundId}
+              disabled={busy || !rounds.length}
+              onChange={(e) => activateRound(e.target.value)}
+              aria-label="Actieve planningperiode kiezen"
+            >
+              {rounds.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label || 'Planning'}
+                  {planningRoundDatesLabel(r)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <form onSubmit={createRound} className="grid gap-3 border-t border-vvl-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
+          <p className="text-sm font-semibold text-gray-800 sm:col-span-2 lg:col-span-4">
+            Nieuwe periode aanmaken (wordt alleen automatisch actief als dit de eerste is).
+          </p>
+          <div>
+            <label className="vvl-label">Label</label>
+            <input
+              className="vvl-input"
+              value={newRound.label}
+              onChange={(e) => setNewRound({ ...newRound, label: e.target.value })}
+              placeholder="bijv. Okt–dec"
+            />
+          </div>
+          <div>
+            <label className="vvl-label">Van</label>
+            <input
+              type="date"
+              className="vvl-input"
+              value={newRound.from}
+              onChange={(e) => setNewRound({ ...newRound, from: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="vvl-label">Tot en met</label>
+            <input
+              type="date"
+              className="vvl-input"
+              value={newRound.to}
+              onChange={(e) => setNewRound({ ...newRound, to: e.target.value })}
+              required
+            />
+          </div>
+          <div className="flex items-end">
+            <button type="submit" className="vvl-btn-outline w-full sm:w-auto" disabled={busy}>
+              Periode aanmaken
+            </button>
+          </div>
+        </form>
+      </div>
+
       <div className="vvl-card space-y-3 bg-vvl-secondary/40">
         <h2 className="font-heading text-lg font-black uppercase">
           Zo maak je de barplanning

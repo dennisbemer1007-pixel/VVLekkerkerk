@@ -299,7 +299,13 @@ export default function DienstCard({
               {!canSelfEnroll && unenroll.length === 0 && status === 'full' && !hasOpenTeamLine ? (
                 <p className="text-sm font-semibold text-emerald-800">Deze dienst is vol.</p>
               ) : null}
-              {hasOpenTeamLine ? (
+              {teamOnlyLeft ? (
+                <p className="text-sm text-gray-700">
+                  {canOverride
+                    ? 'De resterende plekken zijn teamplekken. Vul ze in via Beheer → Diensten (teamplek) of laat de bardienstcoördinator de ouders invullen.'
+                    : 'De open plekken zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.'}
+                </p>
+              ) : hasOpenTeamLine ? (
                 <p className="text-sm text-gray-700">De bardienstcoördinator vult de teamplekken.</p>
               ) : null}
             </div>

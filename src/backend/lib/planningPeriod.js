@@ -1,4 +1,5 @@
 import { addWeeks, endOfDay, startOfDay, toIsoDate } from './dates.js';
+import { getActiveRound } from './planningRounds.js';
 
 const MAX_DAYS = 400;
 
@@ -36,18 +37,26 @@ export function resolvePlanningPeriod({ from, to, weeks } = {}, now = new Date()
 }
 
 export async function periodFromRound(prisma, fallbackNow = new Date()) {
-  const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+  const round = await getActiveRound(prisma);
   if (round?.fromDate && round?.toDate) {
     return {
       from: startOfDay(round.fromDate),
       to: endOfDay(round.toDate),
+      roundId: round.id,
+      label: round.label || 'Planning',
+      official: Boolean(round.official),
     };
   }
-  return resolvePlanningPeriod({}, fallbackNow);
+  return { ...resolvePlanningPeriod({}, fallbackNow), roundId: round?.id, label: round?.label || 'Planning', official: false };
 }
 
 export function periodJson(period) {
-  return { from: toIsoDate(period.from), to: toIsoDate(period.to) };
+  return {
+    from: toIsoDate(period.from),
+    to: toIsoDate(period.to),
+    ...(period.roundId ? { roundId: period.roundId } : {}),
+    ...(period.label ? { label: period.label } : {}),
+  };
 }
 
 /** True als de dienstkalenderdag binnen de planningsronde valt (van t/m tot). */

@@ -2,6 +2,7 @@ import { generateServicesFromRules } from './serviceGeneration.js';
 import prisma from './prisma.js';
 import { addWeeks, endOfDay } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import { getActiveRound } from './planningRounds.js';
 
 /**
  * Maak/bijwerken van diensten op basis van configureerbare dienstregels,
@@ -56,17 +57,10 @@ export async function publishDraftServices({ volunteerDeadline, from, to, weeks 
     throw err;
   }
 
-  await prisma.planningRound.upsert({
-    where: { id: 1 },
-    create: {
-      id: 1,
-      fromDate: period.from,
-      toDate: period.to,
-      status: 'VOLUNTEER_OPEN',
-      volunteerDeadline: deadline,
-      publishedAt: new Date(),
-    },
-    update: {
+  const round = await getActiveRound(prisma);
+  await prisma.planningRound.update({
+    where: { id: round.id },
+    data: {
       fromDate: period.from,
       toDate: period.to,
       status: 'VOLUNTEER_OPEN',

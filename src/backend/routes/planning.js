@@ -19,6 +19,14 @@ import { writeAudit } from '../lib/audit.js';
 import { markPlanningOfficial, unmarkPlanningOfficial } from '../lib/official.js';
 import { runDutyReminders } from '../lib/reminders.js';
 import { periodFromRound, periodJson, resolvePlanningPeriod } from '../lib/planningPeriod.js';
+import {
+  activatePlanningRound,
+  createPlanningRound,
+  getActiveRound,
+  listPlanningRounds,
+  publicRound,
+  updatePlanningRound,
+} from '../lib/planningRounds.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
@@ -81,7 +89,7 @@ router.get(
       orderBy: { name: 'asc' },
     });
 
-    const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+    const round = await getActiveRound(prisma);
 
     const dutyStats = people.map((p) => {
       const last6 = personalEnrollmentCount(p.enrollments, sixWeeksAgo, endOfDay(now));
@@ -210,18 +218,86 @@ router.get(
 );
 
 router.get(
+  '/rounds',
+  requireAuth(async (_req, res, next) => {
+    try {
+      const rounds = await listPlanningRounds(prisma);
+      res.json(rounds.map(publicRound));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
   '/round',
   requireAuth(async (_req, res, next) => {
   try {
-    let round = await prisma.planningRound.findUnique({ where: { id: 1 } });
-    if (!round) {
-      round = await prisma.planningRound.create({ data: { id: 1, status: 'DRAFT' } });
-    }
-    res.json(round);
+    const round = await getActiveRound(prisma);
+    res.json(publicRound(round));
   } catch (err) {
     next(err);
   }
 }),
+);
+
+router.post(
+  '/rounds',
+  admin(async (req, res, next) => {
+    try {
+      const round = await createPlanningRound(prisma, {
+        label: req.body?.label,
+        from: req.body?.from,
+        to: req.body?.to,
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'planning.round.create',
+        entity: 'PlanningRound',
+        entityId: round.id,
+        detail: `${round.label}: ${round.fromDate?.toISOString?.()?.slice(0, 10)} t/m ${round.toDate?.toISOString?.()?.slice(0, 10)}`,
+      });
+      res.status(201).json(publicRound(round));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/rounds/:id/activate',
+  admin(async (req, res, next) => {
+    try {
+      const round = await activatePlanningRound(prisma, req.params.id);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'planning.round.activate',
+        entity: 'PlanningRound',
+        entityId: round.id,
+        detail: round.label,
+      });
+      res.json(publicRound(round));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.put(
+  '/rounds/:id',
+  admin(async (req, res, next) => {
+    try {
+      const round = await updatePlanningRound(prisma, req.params.id, {
+        label: req.body?.label,
+        from: req.body?.from,
+        to: req.body?.to,
+        volunteerDeadline: req.body?.volunteerDeadline,
+      });
+      res.json(publicRound(round));
+    } catch (err) {
+      next(err);
+    }
+  }),
 );
 
 router.get(
@@ -391,15 +467,14 @@ router.post(
   '/notify-volunteers',
   admin(async (req, res, next) => {
     try {
-      const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+      const round = await getActiveRound(prisma);
       const mail = await notifyVolunteers({
         deadline: round?.volunteerDeadline,
         appUrl: resolvePublicAppUrl(),
       });
-      await prisma.planningRound.upsert({
-        where: { id: 1 },
-        create: { id: 1, status: 'VOLUNTEER_OPEN', volunteerNotifiedAt: new Date() },
-        update: { volunteerNotifiedAt: new Date(), status: 'VOLUNTEER_OPEN' },
+      await prisma.planningRound.update({
+        where: { id: round.id },
+        data: { volunteerNotifiedAt: new Date(), status: 'VOLUNTEER_OPEN' },
       });
       res.json({ ok: true, mail });
     } catch (err) {
@@ -414,10 +489,10 @@ router.post(
   admin(async (req, res, next) => {
     try {
       const mail = await notifyMandatory({ appUrl: resolvePublicAppUrl() });
-      await prisma.planningRound.upsert({
-        where: { id: 1 },
-        create: { id: 1, status: 'MANDATORY_OPEN', mandatoryNotifiedAt: new Date() },
-        update: { status: 'MANDATORY_OPEN', mandatoryNotifiedAt: new Date() },
+      const round = await getActiveRound(prisma);
+      await prisma.planningRound.update({
+        where: { id: round.id },
+        data: { status: 'MANDATORY_OPEN', mandatoryNotifiedAt: new Date() },
       });
       res.json({ ok: true, mail });
     } catch (err) {

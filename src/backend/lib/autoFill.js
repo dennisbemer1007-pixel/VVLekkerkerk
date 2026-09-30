@@ -14,6 +14,7 @@ import { writeAudit } from './audit.js';
 import { trySendScheduledConfirmation } from './mail.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import { getActiveRound } from './planningRounds.js';
 import { friendlyEnrollmentReason, serviceCapacity } from './teamDutyPlanning.js';
 import { serviceInclude } from './serviceHelpers.js';
 
@@ -205,17 +206,17 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       };
     });
 
-  await prisma.planningRound.upsert({
-    where: { id: 1 },
-    create: { id: 1, status: 'CLOSED' },
-    update: { status: 'CLOSED' },
+  const round = await getActiveRound(prisma);
+  await prisma.planningRound.update({
+    where: { id: round.id },
+    data: { status: 'CLOSED' },
   });
 
   await writeAudit({
     actorId,
     action: 'planning.auto_fill',
     entity: 'PlanningRound',
-    entityId: 1,
+    entityId: round.id,
     detail: `${filled} automatisch ingepland, ${unfilled.length} verplichting(en) open`,
   });
 

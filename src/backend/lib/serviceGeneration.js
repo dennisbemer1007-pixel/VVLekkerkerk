@@ -10,6 +10,7 @@ import {
 } from './serviceRuleLogic.js';
 import { startOfDay } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import { getActiveRound } from './planningRounds.js';
 import {
   eligibleTeamDutyCandidates,
   keepTeamIdFromExisting,
@@ -270,22 +271,29 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     removed += 1;
   }
 
-  const existingRound = await prisma.planningRound.findUnique({ where: { id: 1 } });
+  const existingRound = await getActiveRound(prisma);
   const preserveStatus = existingRound?.status && existingRound.status !== 'DRAFT';
-  await prisma.planningRound.upsert({
-    where: { id: 1 },
-    create: {
-      id: 1,
-      fromDate: start,
-      toDate: end,
-      status: 'DRAFT',
-    },
-    update: {
+  await prisma.planningRound.update({
+    where: { id: existingRound.id },
+    data: {
       fromDate: start,
       toDate: end,
       ...(preserveStatus ? {} : { status: existingRound?.status || 'DRAFT' }),
     },
   });
+
+  // Officiële periode: nieuw aangemaakte diensten meteen vergrendelen.
+  if (existingRound.official) {
+    await prisma.service.updateMany({
+      where: {
+        active: true,
+        draft: false,
+        date: { gte: start, lte: end },
+        locked: false,
+      },
+      data: { locked: true },
+    });
+  }
 
   const teamDuties = [...needed.values()].filter((s) => s.kind === 'TEAM' || s.kind === 'MIXED').length;
 

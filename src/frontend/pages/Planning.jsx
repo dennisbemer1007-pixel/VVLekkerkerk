@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
+import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
 import ServiceLine from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -37,7 +38,8 @@ export default function Planning({ variant = 'rooster' }) {
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
   const [mineOnly, setMineOnly] = useState(false);
-  const [showAllRooster, setShowAllRooster] = useState(false);
+  const [showAllRooster, setShowAllRooster] = useState(true);
+  const detailTopRef = useRef(null);
   const isCommittee = can('beheer');
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
   const roosterFiltered = Boolean(
@@ -73,9 +75,13 @@ export default function Planning({ variant = 'rooster' }) {
     api.getMyChildren().then(setChildren).catch(() => setChildren([]));
   }, [isCommittee]);
 
-  useEffect(() => {
+  const loadRound = useCallback(() => {
     api.getPlanningRound().then(setRound).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadRound();
+  }, [loadRound]);
 
   useEffect(() => {
     load();
@@ -261,6 +267,10 @@ export default function Planning({ variant = 'rooster' }) {
     cleared.current = false;
     setSelectedId(id);
     setAssignQuery('');
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      detailTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const showPast = () => {
@@ -273,8 +283,22 @@ export default function Planning({ variant = 'rooster' }) {
     setOnlyNoShow(false);
   };
 
+  const reloadPlanningContext = () => {
+    loadRound();
+    load();
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={detailTopRef}>
+      {round?.label ? (
+        <p className="text-xs font-bold uppercase text-vvl-accent">
+          Periode: {round.label}
+          {period?.from && period?.to ? ` · ${period.from} t/m ${period.to}` : ''}
+        </p>
+      ) : null}
+      {isCommittee ? (
+        <PlanningRoundSwitcher onActivated={reloadPlanningContext} />
+      ) : null}
       {variant === 'open' ? (
         <WeekTiles counts={counts} active={statusFilter} onToggle={toggleTile} />
       ) : null}
@@ -406,29 +430,6 @@ export default function Planning({ variant = 'rooster' }) {
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
 
-      {variant === 'rooster' ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {!roosterFiltered ? (
-            <p className="vvl-card text-sm text-gray-600 md:col-span-2">
-              Kies een filter of klik Alles tonen.
-            </p>
-          ) : shown.length === 0 ? (
-            <p className="vvl-card text-sm text-gray-600 md:col-span-2">Geen diensten in deze selectie.</p>
-          ) : (
-            shown.map((s) => (
-              <DienstCard
-                key={s.id}
-                dienst={s}
-                myPersonId={personId}
-                showActions={isCommittee}
-                committeeOverride={isCommittee}
-                onInschrijven={isCommittee ? handleInschrijven : undefined}
-                onUitschrijven={isCommittee ? handleUitschrijven : undefined}
-              />
-            ))
-          )}
-        </div>
-      ) : (
       <MasterDetail
         selected={selectedId}
         onBack={() => {
@@ -437,8 +438,12 @@ export default function Planning({ variant = 'rooster' }) {
         }}
         emptyDetail="Kies een dienst."
         list={
-          shown.length === 0 ? (
-            <p className="vvl-card text-sm text-gray-600">Geen diensten in deze periode.</p>
+          variant === 'rooster' && !roosterFiltered ? (
+            <p className="vvl-card text-sm text-gray-600">Kies een filter of klik Alles tonen.</p>
+          ) : shown.length === 0 ? (
+            <p className="vvl-card text-sm text-gray-600">
+              {variant === 'open' ? 'Geen diensten in deze periode.' : 'Geen diensten in deze selectie.'}
+            </p>
           ) : (
             <ul className="space-y-2">
               {shown.map((s) => (
@@ -467,7 +472,7 @@ export default function Planning({ variant = 'rooster' }) {
                 query={assignQuery}
                 onQuery={setAssignQuery}
                 busy={false}
-                onAssign={(person) => enrollAs(s.id, person)}
+                onAssign={(personId) => enrollAs(s.id, personId)}
                 onRemove={handleUitschrijven}
               />
             ) : (
@@ -483,7 +488,6 @@ export default function Planning({ variant = 'rooster' }) {
             ),
           )}
       />
-      )}
       <VoorWieDialog
         open={Boolean(pendingId)}
         choices={choices}
@@ -529,6 +533,8 @@ function WeekTiles({ counts, active, onToggle }) {
 }
 
 function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, onRemove }) {
+  const capacity = service.capacity;
+  const teamOnlyLeft = Boolean(capacity) && capacity.personalOpen <= 0 && capacity.teamOpen > 0;
   const enrolledIds = new Set((service.enrollments || []).map((e) => e.personId));
   const q = query.trim().toLowerCase();
   const options =
@@ -565,6 +571,11 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           ))}
         </ul>
       ) : null}
+      {teamOnlyLeft ? (
+        <p className="text-sm text-amber-900">
+          De open plekken zijn teamplekken. Alleen de bardienstcoördinator vult hier ouders in.
+        </p>
+      ) : null}
       <label className="block">
         <span className="vvl-label">Zoek naam</span>
         <input
@@ -573,6 +584,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Typ minstens 2 letters"
           autoFocus
+          disabled={teamOnlyLeft}
         />
       </label>
       {q.length >= 2 ? (
@@ -583,7 +595,12 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
                 {p.name}{' '}
                 <span className="text-gray-500">{seasonCounts[p.id] ?? 0}×</span>
               </span>
-              <button type="button" className="vvl-btn-primary shrink-0 px-3 text-xs" onClick={() => onAssign(p.id)}>
+              <button
+                type="button"
+                className="vvl-btn-primary shrink-0 px-3 text-xs"
+                disabled={teamOnlyLeft}
+                onClick={() => onAssign(p.id)}
+              >
                 Zet
               </button>
             </li>
