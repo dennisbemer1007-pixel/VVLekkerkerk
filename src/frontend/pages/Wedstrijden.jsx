@@ -279,24 +279,6 @@ export default function Wedstrijden() {
                 placeholder="Optioneel"
               />
             </div>
-            <div>
-              <label className="vvl-label">Wedstrijdnummer</label>
-              <input
-                className="vvl-input"
-                value={form.matchNumber}
-                onChange={(e) => setForm({ ...form, matchNumber: e.target.value })}
-                placeholder="Optioneel"
-              />
-            </div>
-            <div>
-              <label className="vvl-label">Spelniveau</label>
-              <input
-                className="vvl-input"
-                value={form.playLevel}
-                onChange={(e) => setForm({ ...form, playLevel: e.target.value })}
-                placeholder="Optioneel"
-              />
-            </div>
             <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">
               <input
                 type="checkbox"

@@ -96,6 +96,7 @@ export default function DienstCard({
     !inactive &&
     !isDraft &&
     !actingEnrollment &&
+    !servicePast &&
     status !== 'full' &&
     !teamOnlyLeft;
   const canUnenroll = !isLocked || canOverride;

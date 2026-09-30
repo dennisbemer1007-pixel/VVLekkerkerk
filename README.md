@@ -17,7 +17,7 @@ Als je ziet: *running scripts is disabled*, gebruik één van deze opties:
 
 In de app: **Beheer → E-mail**.
 
-1. Kies een voorinstelling (Gmail / Outlook / eigen server)
+1. Kies Gmail (of vul zelf SMTP-host in)
 2. Vul host, poort, gebruikersnaam, wachtwoord en afzender in
 3. Zet **E-mail versturen** aan → **Opslaan**
 4. Stuur een **testmail**

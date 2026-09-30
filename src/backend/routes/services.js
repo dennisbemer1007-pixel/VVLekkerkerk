@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
+import { endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpers.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
@@ -24,7 +24,7 @@ function buildServiceWhere(query) {
   } else if (filter === 'week') {
     where.date = { gte: startOfWeek(now), lte: endOfWeek(now) };
   } else if (filter === 'mine') {
-    where.date = { gte: startOfDay(addWeeks(now, -8)) };
+    where.date = { gte: startOfDay(now) };
   } else if (from || to) {
     where.date = {};
     if (from) where.date.gte = startOfDay(new Date(from));

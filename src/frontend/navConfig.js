@@ -8,12 +8,37 @@ const VOLUNTEER = [
   { to: '/diensten', label: 'Diensten', short: 'Diensten', icon: 'calendar', match: ['/diensten'] },
   { to: '/mijn-diensten', label: 'Mijn diensten', short: 'Mijn', icon: 'list', match: ['/mijn-diensten'] },
   { to: '/ruilen', label: 'Ruilen', short: 'Ruilen', icon: 'swap', match: ['/ruilen'] },
-  { to: '/ik', label: 'Ik', short: 'Ik', icon: 'person', match: ['/ik', '/kinderen'] },
+  {
+    to: '/mijn-gegevens',
+    label: 'Mijn gegevens',
+    short: 'Gegevens',
+    icon: 'person',
+    match: ['/mijn-gegevens', '/ik', '/kinderen'],
+  },
 ];
 
-const OPEN = { to: '/open', label: 'Open', short: 'Open', icon: 'dot', match: ['/open'] };
-const ROOSTER = { to: '/rooster', label: 'Rooster', short: 'Rooster', icon: 'calendar', match: ['/rooster', '/planning'] };
-const MENSEN = { to: '/mensen', label: 'Mensen', short: 'Mensen', icon: 'people', match: ['/mensen', '/uitnodigen'] };
+const DASHBOARD = { to: '/open', label: 'Dashboard', short: 'Dash', icon: 'dot', match: ['/open', '/aandacht'] };
+const DIENSTEN = {
+  to: '/rooster',
+  label: 'Diensten',
+  short: 'Diensten',
+  icon: 'calendar',
+  match: ['/rooster', '/planning'],
+};
+const MIJN_DIENSTEN = {
+  to: '/mijn-diensten',
+  label: 'Mijn diensten',
+  short: 'Mijn',
+  icon: 'list',
+  match: ['/mijn-diensten'],
+};
+const PERSONEN = {
+  to: '/mensen',
+  label: 'Personen',
+  short: 'Personen',
+  icon: 'people',
+  match: ['/mensen', '/uitnodigen'],
+};
 const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', short: 'Ruilen', icon: 'swap', match: ['/mijn-ruilen'] };
 const MEER = { to: '/meer', label: 'Beheer', short: 'Beheer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/beheer'] };
 const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', short: 'Instel.', icon: 'gear', match: ['/instellingen'], desktopOnly: true };
@@ -31,8 +56,8 @@ export function navForRole(role) {
       VOLUNTEER[3],
     ];
   }
-  if (r === 'Barcommissie') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, MEER];
-  if (r === 'Admin') return [OPEN, ROOSTER, MENSEN, MIJN_RUILEN, INSTELLINGEN, MEER];
+  if (r === 'Barcommissie') return [DASHBOARD, DIENSTEN, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, MEER];
+  if (r === 'Admin') return [DASHBOARD, DIENSTEN, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, INSTELLINGEN, MEER];
   return VOLUNTEER;
 }
 

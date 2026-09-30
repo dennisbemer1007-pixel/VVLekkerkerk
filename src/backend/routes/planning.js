@@ -127,16 +127,21 @@ router.get(
         select: { id: true },
       });
       const serviceIds = roundServices.map((s) => s.id);
-      const selfEnrolled = serviceIds.length
+      const enrollmentsInPeriod = serviceIds.length
         ? await prisma.enrollment.findMany({
-            where: { serviceId: { in: serviceIds }, source: 'SELF' },
-            select: { personId: true },
-            distinct: ['personId'],
+            where: { serviceId: { in: serviceIds } },
+            select: { personId: true, source: true, noShow: true, service: { select: { date: true } } },
           })
         : [];
-      const selfIds = new Set(selfEnrolled.map((e) => e.personId));
+      const enrolledAnyIds = new Set(enrollmentsInPeriod.map((e) => e.personId));
+      // Verplicht, maar nergens op deze planning gezet (niet zelf, niet auto, niet barcommissie).
       notSelfEnrolled = people
-        .filter((p) => !selfIds.has(p.id))
+        .filter(
+          (p) =>
+            (p.obligation === 'FULL' || p.obligation === 'VR18') &&
+            !p.exempted &&
+            !enrolledAnyIds.has(p.id),
+        )
         .map((p) => ({
           id: p.id,
           name: p.name,
@@ -147,19 +152,33 @@ router.get(
 
       const noShowRows = await prisma.enrollment.findMany({
         where: { noShow: true },
-        select: { personId: true },
-        distinct: ['personId'],
+        select: {
+          personId: true,
+          service: { select: { date: true } },
+        },
+        orderBy: { service: { date: 'desc' } },
       });
-      const noShowIds = new Set(noShowRows.map((e) => e.personId));
+      const noShowByPerson = new Map();
+      for (const row of noShowRows) {
+        const cur = noShowByPerson.get(row.personId) || { count: 0, dates: [] };
+        cur.count += 1;
+        if (row.service?.date) cur.dates.push(row.service.date);
+        noShowByPerson.set(row.personId, cur);
+      }
       noShowPeople = people
-        .filter((p) => noShowIds.has(p.id))
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          role: p.role,
-          team: p.team?.name ?? null,
-          obligation: p.obligation,
-        }));
+        .filter((p) => noShowByPerson.has(p.id) && (p.obligation === 'FULL' || p.obligation === 'VR18'))
+        .map((p) => {
+          const info = noShowByPerson.get(p.id);
+          return {
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            team: p.team?.name ?? null,
+            obligation: p.obligation,
+            noShowCount: info.count,
+            lastNoShowDate: info.dates[0] || null,
+          };
+        });
     }
 
     res.json({

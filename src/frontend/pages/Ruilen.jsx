@@ -137,7 +137,7 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
       <form onSubmit={submit} className="vvl-card space-y-4">
         <h2 className="font-heading text-lg font-black uppercase">Nieuw ruilverzoek</h2>
         <div>
-          <label className="vvl-label">Jouw dienst</label>
+          <label className="vvl-label">Jouw dienst (die je afgeeft)</label>
           <select className="vvl-input" value={fromId} onChange={(e) => setFromId(e.target.value)} required>
             <option value="">Kies een van jouw komende diensten</option>
             {mine.map((enrollment) => (
@@ -148,7 +148,7 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
           </select>
         </div>
         <div>
-          <label className="vvl-label">Dienst van iemand anders</label>
+          <label className="vvl-label">Dienst die je ervoor terugkrijgt</label>
           <input
             className="vvl-input mb-2"
             value={toQuery}
@@ -156,7 +156,7 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
             placeholder="Zoek op naam, datum of tijd"
           />
           <select className="vvl-input" value={toId} onChange={(e) => setToId(e.target.value)} required>
-            <option value="">Kies de dienst waarmee je wilt ruilen</option>
+            <option value="">Kies de dienst van iemand anders</option>
             {filteredOthers.map((enrollment) => (
               <option key={enrollment.id} value={enrollment.id}>
                 {personName(enrollment)} · {serviceLabel(enrollment)}
@@ -215,8 +215,16 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
               <p className="text-sm">
                 {swap.requester?.name} wil ruilen met {swap.counterparty?.name}
               </p>
-              <p className="text-sm text-gray-700">{serviceLabel(swap.fromEnrollment)}</p>
-              <p className="text-sm text-gray-700">{serviceLabel(swap.toEnrollment)}</p>
+              <div className="space-y-1 rounded-sm border border-vvl-border bg-vvl-muted/40 p-3 text-sm">
+                <p>
+                  <span className="font-bold">Afgeven:</span> {serviceLabel(swap.fromEnrollment)}
+                  {swap.fromEnrollment?.person?.name ? ` (${swap.fromEnrollment.person.name})` : ''}
+                </p>
+                <p>
+                  <span className="font-bold">Terugkrijgen:</span> {serviceLabel(swap.toEnrollment)}
+                  {swap.toEnrollment?.person?.name ? ` (${swap.toEnrollment.person.name})` : ''}
+                </p>
+              </div>
               {swap.rejectReason ? (
                 <p className="text-sm text-red-800">Reden weigering: {swap.rejectReason}</p>
               ) : null}

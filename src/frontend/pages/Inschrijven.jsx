@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
@@ -19,8 +18,8 @@ export default function Inschrijven({ mode = 'open' }) {
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(mode === 'open');
-  const [stood, setStood] = useState(null);
   const cleared = useRef(false);
+  const detailTopRef = useRef(null);
 
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
 
@@ -48,22 +47,6 @@ export default function Inschrijven({ mode = 'open' }) {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (mode !== 'mine' || !personId) return undefined;
-    const now = new Date();
-    const year = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    api
-      .getServices({
-        filter: 'mine',
-        personId,
-        from: `${year}-08-01`,
-        to: now.toISOString().slice(0, 10),
-      })
-      .then((list) => setStood(Array.isArray(list) ? list.length : 0))
-      .catch(() => setStood(null));
-    return undefined;
-  }, [mode, personId]);
-
   const enroll = async (serviceId, targetId) => {
     setMsg('');
     setError('');
@@ -78,14 +61,27 @@ export default function Inschrijven({ mode = 'open' }) {
     }
   };
 
+  const selectService = (serviceId) => {
+    cleared.current = false;
+    setSelectedId(serviceId);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      detailTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const handleInschrijven = async (serviceId, clickMode) => {
     if (clickMode === 'expand') {
-      setSelectedId((id) => (id === serviceId ? null : serviceId));
+      if (selectedId === serviceId) {
+        setSelectedId(null);
+      } else {
+        selectService(serviceId);
+      }
       return;
     }
     if (needsVoorWiePopup(choices)) {
       setPendingId(serviceId);
-      setSelectedId(serviceId);
+      selectService(serviceId);
       return;
     }
     await enroll(serviceId, personId);
@@ -115,10 +111,7 @@ export default function Inschrijven({ mode = 'open' }) {
   }, [services, selectedId]);
 
   return (
-    <div className="space-y-4">
-      {mode === 'mine' && stood != null ? (
-        <p className="text-sm text-gray-700">Gestaan dit seizoen: {stood}</p>
-      ) : null}
+    <div className="space-y-4" ref={detailTopRef}>
       {mode === 'open' ? (
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
           <input type="checkbox" className="h-5 w-5" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
@@ -146,10 +139,7 @@ export default function Inschrijven({ mode = 'open' }) {
                   <ServiceLine
                     service={s}
                     selected={selectedId === s.id}
-                    onSelect={() => {
-                      cleared.current = false;
-                      setSelectedId(s.id);
-                    }}
+                    onSelect={() => selectService(s.id)}
                   />
                 </li>
               ))}
@@ -169,11 +159,6 @@ export default function Inschrijven({ mode = 'open' }) {
                   onInschrijven={handleInschrijven}
                   onUitschrijven={handleUitschrijven}
                 />
-                {mode === 'mine' ? (
-                  <Link to="/ruilen/nieuw" className="vvl-btn-outline inline-flex">
-                    Ruilen
-                  </Link>
-                ) : null}
               </div>
             ))
         }

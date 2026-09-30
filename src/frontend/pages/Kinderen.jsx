@@ -20,7 +20,7 @@ export default function Kinderen() {
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="font-heading text-xl font-black uppercase">Mijn kinderen</h1>
-        <Link to="/ik" className="vvl-btn-outline text-xs">
+        <Link to="/mijn-gegevens" className="vvl-btn-outline text-xs">
           Terug
         </Link>
       </header>
