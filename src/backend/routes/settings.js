@@ -87,7 +87,26 @@ router.post(
       if (!publicSettings.isReady) {
         return res.status(400).json({
           error:
-            'Mailtest mislukt: zet “E-mail versturen” aan, vul host + afzender in, en klik Opslaan.',
+            'Mailtest mislukt: zet “E-mail versturen” aan, vul host, Gmail-adres, app-wachtwoord en afzender in, en klik Opslaan.',
+        });
+      }
+
+      if (!settings.user?.trim() || !settings.password) {
+        return res.status(400).json({
+          error:
+            'Mailtest mislukt: vul gebruikersnaam (je Gmail) en het app-wachtwoord in, en klik Opslaan.',
+        });
+      }
+
+      const fromNorm = String(settings.fromEmail || '')
+        .trim()
+        .toLowerCase();
+      const userNorm = String(settings.user || '')
+        .trim()
+        .toLowerCase();
+      if (fromNorm && userNorm && fromNorm !== userNorm) {
+        return res.status(400).json({
+          error: `Mailtest mislukt: afzender (${settings.fromEmail}) moet hetzelfde zijn als gebruikersnaam (${settings.user}). Bij Gmail anders komt de mail vaak niet aan.`,
         });
       }
 
@@ -106,11 +125,21 @@ router.post(
 
       res.json({
         ok: true,
-        message: `Verbinding ok. Testmail verstuurd naar ${to}. Kijk ook in Spam/Ongewenst.`,
+        messageId: sent.messageId || null,
+        message: `Verbinding ok. Testmail verstuurd naar ${to}. Staat hij niet in Inbox/Spam? Kijk in Gmail onder Verzonden. Komt hij daar ook niet? Dan is hij niet echt weggegaan — controleer app-wachtwoord en of “E-mail versturen” aanstaat.`,
       });
     } catch (err) {
+      const raw = String(err.message || err);
+      let hint = raw;
+      if (/Invalid login|Username and Password not accepted|EAUTH/i.test(raw)) {
+        hint =
+          'Gmail weigert de login. Gebruik een app-wachtwoord (niet je gewone wachtwoord), zet 2-stapsverificatie aan, en sla opnieuw op.';
+      } else if (/CERTIFICATE|TLS|SSL|ECONNECTION|ETIMEDOUT|ENOTFOUND/i.test(raw)) {
+        hint =
+          'Geen verbinding met smtp.gmail.com. Controleer host smtp.gmail.com, poort 587, en laat “Beveiligde verbinding” uit.';
+      }
       res.status(400).json({
-        error: `Mailtest mislukt: ${err.message}`,
+        error: `Mailtest mislukt: ${hint}`,
       });
     }
   }),

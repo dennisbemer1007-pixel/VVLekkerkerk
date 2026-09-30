@@ -56,7 +56,9 @@ export function isMailReady(settings) {
     settings?.enabled &&
       settings.host?.trim() &&
       settings.port &&
-      settings.fromEmail?.trim(),
+      settings.fromEmail?.trim() &&
+      settings.user?.trim() &&
+      settings.password,
   );
 }
 
@@ -80,7 +82,7 @@ export async function saveMailSettings(input) {
 
   // Leeg wachtwoordveld = bestaand wachtwoord behouden
   if (input.password !== undefined && String(input.password).length > 0) {
-    data.password = sealSecret(String(input.password));
+    data.password = sealSecret(String(input.password).replace(/\s+/g, ''));
   }
   if (input.templates !== undefined) {
     data.templates = serializeMailTemplates(input.templates);
@@ -115,7 +117,7 @@ function buildTransport(settings) {
   if (settings.user) {
     options.auth = {
       user: settings.user,
-      pass: password || undefined,
+      pass: String(password || '').replace(/\s+/g, '') || undefined,
     };
   }
   return nodemailer.createTransport(options);
@@ -126,12 +128,15 @@ export async function sendMail({ to, subject, text, html }) {
   if (!isMailReady(settings)) {
     return { sent: false, reason: 'Mailserver staat uit of is niet volledig ingesteld' };
   }
+  if (!settings.user?.trim() || !settings.password) {
+    return { sent: false, reason: 'Vul gebruikersnaam en app-wachtwoord in' };
+  }
 
   const transporter = buildTransport(settings);
   const fromName = sanitizeFromName(settings.fromName);
   const from = fromName ? `"${fromName}" <${settings.fromEmail}>` : settings.fromEmail;
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from,
     to,
     subject,
@@ -139,7 +144,22 @@ export async function sendMail({ to, subject, text, html }) {
     html: html || text.replace(/\n/g, '<br>'),
   });
 
-  return { sent: true };
+  const rejected = Array.isArray(info.rejected) ? info.rejected.filter(Boolean) : [];
+  if (rejected.length) {
+    return {
+      sent: false,
+      reason: `Server weigerde ontvanger: ${rejected.join(', ')}`,
+      messageId: info.messageId || null,
+      response: info.response || '',
+    };
+  }
+
+  return {
+    sent: true,
+    messageId: info.messageId || null,
+    accepted: info.accepted || [],
+    response: info.response || '',
+  };
 }
 
 export async function verifyMailConnection(settingsOverride) {

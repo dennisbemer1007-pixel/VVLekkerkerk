@@ -1663,13 +1663,20 @@ function MailBeheer() {
       </div>
 
       <form onSubmit={save} className="vvl-card grid gap-3 sm:grid-cols-2">
-        <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
+        <label className="flex items-start gap-2 text-sm font-semibold sm:col-span-2 rounded-sm border border-amber-300 bg-amber-50 p-3">
           <input
             type="checkbox"
+            className="mt-1"
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
           />
-          E-mail versturen inschakelen
+          <span>
+            E-mail versturen inschakelen
+            <span className="block text-xs font-normal text-amber-950/80">
+              Zonder dit vinkje zegt de app soms “ok”, maar gaat er geen mail weg. Zet dit aan en klik
+              Opslaan.
+            </span>
+          </span>
         </label>
 
         <div>
@@ -1691,36 +1698,36 @@ function MailBeheer() {
           />
         </div>
         <div>
-          <label className="vvl-label">Gebruikersnaam</label>
+          <label className="vvl-label">Gebruikersnaam (je Gmail) *</label>
           <input
             className="vvl-input"
             value={form.user}
             onChange={(e) => setForm({ ...form, user: e.target.value })}
-            placeholder="vaak hetzelfde als afzender"
+            placeholder="naam@gmail.com"
             autoComplete="off"
           />
         </div>
         <div>
           <label className="vvl-label">
-            Wachtwoord {passwordSet ? '(ingevuld — leeg laten = behouden)' : ''}
+            App-wachtwoord * {passwordSet ? '(ingevuld — leeg laten = behouden)' : ''}
           </label>
           <input
             type="password"
             className="vvl-input"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder={passwordSet ? '••••••••' : ''}
+            placeholder={passwordSet ? '••••••••' : '16 letters van Google'}
             autoComplete="new-password"
           />
         </div>
         <div>
-          <label className="vvl-label">Afzender e-mail *</label>
+          <label className="vvl-label">Afzender e-mail * (zelfde als Gmail)</label>
           <input
             type="email"
             className="vvl-input"
             value={form.fromEmail}
             onChange={(e) => setForm({ ...form, fromEmail: e.target.value })}
-            placeholder="planning@vvlekkerkerk.nl"
+            placeholder="naam@gmail.com"
           />
         </div>
         <div>
@@ -1748,8 +1755,8 @@ function MailBeheer() {
         <div className="sm:col-span-2 grid gap-3 rounded-sm border border-vvl-border bg-vvl-muted/40 p-3 sm:grid-cols-2">
           <h3 className="font-heading text-base font-black uppercase sm:col-span-2">Testmail</h3>
           <p className="text-sm text-gray-700 sm:col-span-2">
-            Vul je eigen adres in en klik op testen. Je ziet meteen groen (gelukt) of rood (mislukt).
-            Kijk ook in Spam/Ongewenst.
+            Stuur naar jezelf. Komt hij niet in Inbox/Spam? Open Gmail → map <strong>Verzonden</strong>.
+            Staat “Testmail VVL Planning App” daar niet, dan is hij niet echt verstuurd.
           </p>
           <div>
             <label className="vvl-label">Stuur test naar</label>
