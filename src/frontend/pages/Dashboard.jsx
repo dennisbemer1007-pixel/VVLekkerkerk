@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
 import { api } from '../hooks/useApi.js';
 import { occupancyStatus } from '../utils/formatDate.js';
 
@@ -23,6 +24,14 @@ export default function Dashboard({ focus = 'week' }) {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState(null);
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+
+  const loadPlanningPeriod = () => {
+    if (!can('beheer')) return Promise.resolve();
+    return api
+      .getPlanning({})
+      .then((planning) => setPeriodServices(planning?.services || []))
+      .catch((e) => setError(e.message));
+  };
 
   useEffect(() => {
     Promise.all([
@@ -112,6 +121,8 @@ export default function Dashboard({ focus = 'week' }) {
       {error ? (
         <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : null}
+
+      {can('beheer') ? <PlanningRoundSwitcher onActivated={loadPlanningPeriod} /> : null}
 
       <section className="space-y-3">
         <h2 className="font-heading text-base font-black uppercase">Deze week</h2>

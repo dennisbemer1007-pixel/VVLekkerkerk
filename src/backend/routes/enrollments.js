@@ -18,6 +18,7 @@ import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
 import { isWithinPlanningPeriod, periodFromRound } from '../lib/planningPeriod.js';
+import { getActiveRound } from '../lib/planningRounds.js';
 
 const router = Router();
 
@@ -481,7 +482,7 @@ router.delete(
 
       // Beheer mag altijd omgooien; vrijwilligers niet na deadline / CLOSED / verplichte fase
       if (!isAdminRole(req.person.role) && (req.person.id === enrollment.personId || guardianActing)) {
-        const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+        const round = await getActiveRound(prisma);
         const status = round?.status || '';
         if (status === 'CLOSED' || status === 'MANDATORY_OPEN') {
           return res.status(403).json({

@@ -466,7 +466,7 @@ export default function PersonenBeheer() {
     setFormOpen(true);
   };
 
-  const submit = async (e) => {
+  const submit = async (e, mode = 'save') => {
     e.preventDefault();
     setError('');
     setInviteResult(null);
@@ -474,6 +474,10 @@ export default function PersonenBeheer() {
     const email = form.email.trim();
     if (!editId && !email && !form.guardianId) {
       setError('Vul een e-mailadres in, of koppel aan een ouder.');
+      return;
+    }
+    if (!editId && mode === 'invite' && !email) {
+      setError('Vul een e-mailadres in om uit te nodigen.');
       return;
     }
     try {
@@ -485,7 +489,7 @@ export default function PersonenBeheer() {
       if (editId) {
         await api.updatePerson(editId, data);
         closeForm();
-      } else if (email) {
+      } else if (mode === 'invite') {
         const res = await api.invitePerson(data);
         setInviteResult(res);
         setCopied(false);
@@ -534,6 +538,7 @@ export default function PersonenBeheer() {
   const resend = async (p) => {
     setError('');
     setBulkMsg('');
+    setInviteResult(null);
     try {
       const res = await api.resendInvite(p.id);
       setInviteResult(res);
@@ -544,7 +549,7 @@ export default function PersonenBeheer() {
           : `Link klaargezet voor ${p.email}. Stuur hem handmatig of kopieer hieronder.`,
       );
     } catch (err) {
-      setError(err.message);
+      setError(`Uitnodiging opnieuw sturen mislukt: ${err.message}`);
     }
   };
 
@@ -885,7 +890,7 @@ export default function PersonenBeheer() {
               </div>
             ) : null}
             <form
-              onSubmit={submit}
+              onSubmit={(e) => submit(e, 'save')}
               className={`grid gap-3 sm:grid-cols-2 ${inviteResult && !editId ? 'hidden' : ''}`}
             >
               <div className="sm:col-span-2">
@@ -982,9 +987,25 @@ export default function PersonenBeheer() {
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
-                <button type="submit" className="vvl-btn-primary min-h-[44px]">
-                  {editId ? 'Opslaan' : 'Opslaan en uitnodigen'}
-                </button>
+                {editId ? (
+                  <button type="submit" className="vvl-btn-primary min-h-[44px]">
+                    Opslaan
+                  </button>
+                ) : (
+                  <>
+                    <button type="submit" className="vvl-btn-primary min-h-[44px]">
+                      Opslaan
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline min-h-[44px]"
+                      disabled={!form.email.trim()}
+                      onClick={(e) => submit(e, 'invite')}
+                    >
+                      Opslaan en uitnodigen
+                    </button>
+                  </>
+                )}
                 <button type="button" className="vvl-btn-outline min-h-[44px]" onClick={closeForm}>
                   Annuleren
                 </button>

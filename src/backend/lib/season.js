@@ -1,4 +1,5 @@
 import prisma from './prisma.js';
+import { getActiveRound } from './planningRounds.js';
 
 export const SEASON_DECISION =
   'Seizoen loopt 1 augustus t/m 31 juli. Rollover zet een nieuw label, archiveert teamkoppelingen van het oude seizoen en maakt actieve koppelingen opnieuw. Historie (diensten, inschrijvingen, no-shows) blijft staan. Inhaaldiensten blijven open.';
@@ -44,7 +45,7 @@ export async function getClubSettings() {
 
 export async function publicClubSettings() {
   const s = await getClubSettings();
-  const round = await prisma.planningRound.findUnique({ where: { id: 1 } });
+  const round = await getActiveRound(prisma);
   return {
     seasonLabel: s.seasonLabel,
     seasonStartMonth: s.seasonStartMonth,
@@ -53,6 +54,8 @@ export async function publicClubSettings() {
     nextSeasonLabel: nextSeasonLabel(s.seasonLabel),
     official: Boolean(round?.official),
     planningStatus: round?.status ?? 'DRAFT',
+    planningLabel: round?.label || 'Planning',
+    planningRoundId: round?.id || null,
   };
 }
 

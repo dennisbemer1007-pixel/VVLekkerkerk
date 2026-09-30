@@ -291,7 +291,9 @@ enum ServiceType {
 }
 
 model PlanningRound {
-  id                    Int       @id @default(1)
+  id                    Int       @id @default(autoincrement())
+  /** Korte naam, bijv. "t/m 20 okt" of "najaar" */
+  label                 String    @default("Planning")
   fromDate              DateTime?
   toDate                DateTime?
   status                String    @default("DRAFT")
@@ -300,6 +302,8 @@ model PlanningRound {
   mandatoryNotifiedAt   DateTime?
   publishedAt           DateTime?
   official              Boolean   @default(false)
+  /** Actieve periode voor dashboard, Open, Rooster en auto-planning */
+  active                Boolean   @default(false)
   updatedAt             DateTime  @updatedAt
 }
 

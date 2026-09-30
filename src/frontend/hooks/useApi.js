@@ -203,6 +203,7 @@ export const api = {
   deleteTeam: (id) => json(`/teams/${id}`, { method: 'DELETE' }),
   getMatches: (params = {}) => json(`/matches${qs(params)}`),
   createMatch: (data) => json('/matches', { method: 'POST', body: JSON.stringify(data) }),
+  updateMatch: (id, data) => json(`/matches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteMatch: (id) => json(`/matches/${id}`, { method: 'DELETE' }),
   downloadMatchTemplateXlsx: async () => {
     const headers = {};
@@ -243,6 +244,13 @@ export const api = {
     }),
   fillMandatory: (data) => json('/planning/fill-mandatory', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   getPlanningRound: () => json('/planning/round'),
+  getPlanningRounds: () => json('/planning/rounds'),
+  createPlanningRound: (data) =>
+    json('/planning/rounds', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  activatePlanningRound: (id) =>
+    json(`/planning/rounds/${id}/activate`, { method: 'POST', body: '{}' }),
+  updatePlanningRound: (id, data) =>
+    json(`/planning/rounds/${id}`, { method: 'PUT', body: JSON.stringify(data ?? {}) }),
   importMatches: (data) => json('/matches/import', { method: 'POST', body: JSON.stringify(data) }),
   validateMatchCsv: (data) =>
     json('/matches/import/validate', { method: 'POST', body: JSON.stringify(data) }),

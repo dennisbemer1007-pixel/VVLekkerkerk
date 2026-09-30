@@ -328,14 +328,19 @@ async function wipeInside(tx, { actorId, backupFilename }) {
   });
   await tx.person.deleteMany({ where: { id: { notIn: keptList } } });
 
+  await tx.planningRound.updateMany({ data: { active: false } });
+  await tx.planningRound.deleteMany({ where: { id: { not: 1 } } });
   await tx.planningRound.upsert({
     where: { id: 1 },
     create: {
       id: 1,
+      label: 'Planning',
       status: 'DRAFT',
       official: false,
+      active: true,
     },
     update: {
+      label: 'Planning',
       fromDate: null,
       toDate: null,
       status: 'DRAFT',
@@ -344,6 +349,7 @@ async function wipeInside(tx, { actorId, backupFilename }) {
       mandatoryNotifiedAt: null,
       publishedAt: null,
       official: false,
+      active: true,
     },
   });
 
