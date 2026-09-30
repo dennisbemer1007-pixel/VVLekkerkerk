@@ -292,7 +292,30 @@ function PersonImport({ onDone }) {
           >
             Sjabloon downloaden
           </button>
-          <p>Leeg Excel-bestand met de kolommen en de teamnamen die al in de app staan.</p>
+          <p>
+            Excel met mockdata én de teamnamen die al in de app staan. Pas de teamkolom aan naar jullie
+            echte teams (exacte naam). Tabblad “Uitleg” en “Toegestane waarden” helpen bij fouten.
+          </p>
+        </li>
+        <li>
+          <button
+            type="button"
+            className="vvl-btn-outline mb-1 text-xs min-h-[44px]"
+            onClick={async () => {
+              clearResult();
+              try {
+                downloadBlob(await api.downloadPersonCsvExample(), 'voorbeeld-personen.csv');
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+          >
+            Voorbeeld-CSV downloaden
+          </button>
+          <p>
+            Zelfde mockdata als platte CSV (puntkomma). Teamnamen JO15-1 / JO13-2 / JO11-1 moeten
+            bestaan, of kies “ontbrekende teams aanmaken” als de app dat aanbiedt.
+          </p>
         </li>
         <li>
           <button

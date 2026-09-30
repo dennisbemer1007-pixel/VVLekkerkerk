@@ -29,11 +29,23 @@ const EXEMPTED_YES = new Set(['ja', 'yes', 'true', '1', 'waar']);
 
 const MAX_ROWS = 1000;
 
-export const PERSON_IMPORT_COLUMNS = 'naam;email;telefoon;team;rol;verplichting';
+export const PERSON_IMPORT_COLUMNS = 'naam;email;telefoon;team;rol;verplichting;hoort_bij;vrijgesteld';
 
+/**
+ * Voorbeeld-CSV met mockdata.
+ * Let op: teamnamen moeten al in Beheer → Teams staan (tenzij je ontbrekende teams aanmaakt).
+ * verplichting: NONE | FULL | VR18 (of: geen | verplicht | vr18+)
+ * rol: Vrijwilliger | Teamcoördinator | Barcommissie | Admin
+ * hoort_bij: e-mail of naam van de ouder/verantwoordelijke (optioneel)
+ * vrijgesteld: ja | nee (optioneel)
+ */
 export const PERSON_IMPORT_EXAMPLE = `${PERSON_IMPORT_COLUMNS}
-Anna de Vries;anna@example.nl;0612345678;JO15-1;Vrijwilliger;verplicht
-Piet Jansen;piet@example.nl;;JO13-2;Teamcoördinator;geen
+Anna de Vries;anna.mock@example.nl;0612345678;JO15-1;Vrijwilliger;FULL;;nee
+Piet Jansen;piet.mock@example.nl;0698765432;JO13-2;Teamcoördinator;NONE;;nee
+Sara Bakker;sara.mock@example.nl;;JO15-1;Vrijwilliger;VR18;;nee
+Mark de Boer;mark.mock@example.nl;0611223344;;Barcommissie;geen;;nee
+Lisa Mock Kind;;0611002200;JO15-1;Vrijwilliger;geen;anna.mock@example.nl;nee
+Jan Vrijgesteld;jan.mock@example.nl;;JO11-1;Vrijwilliger;verplicht;;ja
 `;
 
 export function mapPersonHeader(value) {

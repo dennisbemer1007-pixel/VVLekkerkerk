@@ -72,7 +72,7 @@ Na **Maak officieel** worden gepubliceerde diensten in de **gekozen periode** ve
 Seizoen loopt **1 augustus t/m 31 juli**, label `YYYY-YYYY`. Rollover archiveert actieve `PersonTeam`-rijen (oud label, inactief) en kopieert ze naar het nieuwe label. `Person.teamId`, diensten, inschrijvingen, no-shows en inhaaldiensten blijven staan.
 
 ### Personenimport
-CSV `naam;email;telefoon;team;rol;verplichting`. Voorbeeldbestand via **Voorbeeld-CSV downloaden** in Beheer → Personen. **Maakt geen teams aan**; onbekend team → hele import geweigerd. Bestaand e-mailadres → bijwerken. Optioneel uitnodigingsmail als SMTP aanstaat.
+CSV `naam;email;telefoon;team;rol;verplichting` (optioneel ook `hoort_bij;vrijgesteld`). Voorbeeldbestand via **Voorbeeld-CSV downloaden** of **Sjabloon downloaden** in Beheer → Personen (met mockdata). **Maakt geen teams aan** tenzij je dat bij import expliciet kiest; onbekend team → hele import geweigerd. Bestaand e-mailadres → bijwerken. Optioneel uitnodigingsmail als SMTP aanstaat. Verplichting: `NONE`/`geen`, `FULL`/`verplicht`, `VR18`/`vr18+`.
 
 Namen die een bardienstcoördinator alleen op naam toevoegt (geen e-mail, geen account) staan niet in het beheeroverzicht, zodat dezelfde persoon niet dubbel voorkomt naast een vrijwilligersaccount. Bestaat de naam al, dan koppelt Mijn team dat account in plaats van een tweede persoon te maken.
 

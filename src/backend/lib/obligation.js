@@ -11,11 +11,31 @@ export const OBLIGATION_LABELS = {
   VR18: 'VR18+ (min. 1× / 12 weken)',
 };
 
+/** Nederlandse / leesbare waarden die in CSV of Excel mogen staan. */
+const OBLIGATION_ALIASES = {
+  none: OBLIGATIONS.NONE,
+  geen: OBLIGATIONS.NONE,
+  vrijwillig: OBLIGATIONS.NONE,
+  vrijwilliger: OBLIGATIONS.NONE,
+  full: OBLIGATIONS.FULL,
+  verplicht: OBLIGATIONS.FULL,
+  ja: OBLIGATIONS.FULL,
+  half: OBLIGATIONS.FULL,
+  vr18: OBLIGATIONS.VR18,
+  'vr18+': OBLIGATIONS.VR18,
+  vr18plus: OBLIGATIONS.VR18,
+};
+
 export function normalizeObligation(value, legacyMandatoryBar) {
   if (value === 'HALF') return OBLIGATIONS.FULL;
   if (value === OBLIGATIONS.FULL || value === OBLIGATIONS.NONE || value === OBLIGATIONS.VR18) {
     return value;
   }
+  const key = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
+  if (key && OBLIGATION_ALIASES[key]) return OBLIGATION_ALIASES[key];
   if (legacyMandatoryBar === true) return OBLIGATIONS.FULL;
   if (legacyMandatoryBar === false) return OBLIGATIONS.NONE;
   return OBLIGATIONS.NONE;
