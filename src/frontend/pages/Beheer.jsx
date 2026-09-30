@@ -1564,6 +1564,15 @@ function MailBeheer() {
     serviceId: '',
   });
   const [preview, setPreview] = useState(null);
+  const statusRef = useRef(null);
+
+  const showStatus = (nextMsg = '', nextError = '') => {
+    setMsg(nextMsg);
+    setError(nextError);
+    requestAnimationFrame(() => {
+      statusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
 
   useEffect(() => {
     api
@@ -1583,7 +1592,7 @@ function MailBeheer() {
         setPasswordSet(s.passwordSet);
         setTestTo(s.fromEmail || '');
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => showStatus('', e.message));
     api.getTeams().then(setTeams).catch(() => {});
     api.getServices().then((list) => setShifts((list || []).slice(0, 40))).catch(() => {});
   }, []);
@@ -1595,39 +1604,36 @@ function MailBeheer() {
       port: preset.port,
       secure: preset.secure,
     }));
-    setMsg(preset.tip);
+    showStatus(preset.tip);
   };
 
   const save = async (e) => {
     e.preventDefault();
-    setError('');
-    setMsg('');
     setLoading(true);
     try {
       const saved = await api.saveMailSettings(form);
       setPasswordSet(saved.passwordSet);
       setForm((f) => ({ ...f, password: '' }));
-      setMsg(
+      showStatus(
         saved.isReady
           ? 'Opgeslagen. Uitnodigingen worden nu automatisch gemaild.'
           : 'Opgeslagen. Zet “E-mail versturen” aan en vul host + afzender in om te activeren.',
       );
     } catch (err) {
-      setError(err.message);
+      showStatus('', err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const test = async () => {
-    setError('');
-    setMsg('');
     setLoading(true);
+    showStatus('Bezig met testen…');
     try {
       const res = await api.testMail(testTo);
-      setMsg(res.message);
+      showStatus(res.message || 'Verbinding ok. Testmail verstuurd.');
     } catch (err) {
-      setError(err.message);
+      showStatus('', err.message || 'Mailtest mislukt.');
     } finally {
       setLoading(false);
     }
@@ -1657,13 +1663,20 @@ function MailBeheer() {
       </div>
 
       <form onSubmit={save} className="vvl-card grid gap-3 sm:grid-cols-2">
-        <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
+        <label className="flex items-start gap-2 text-sm font-semibold sm:col-span-2 rounded-sm border border-amber-300 bg-amber-50 p-3">
           <input
             type="checkbox"
+            className="mt-1"
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
           />
-          E-mail versturen inschakelen
+          <span>
+            E-mail versturen inschakelen
+            <span className="block text-xs font-normal text-amber-950/80">
+              Zonder dit vinkje zegt de app soms “ok”, maar gaat er geen mail weg. Zet dit aan en klik
+              Opslaan.
+            </span>
+          </span>
         </label>
 
         <div>
@@ -1685,36 +1698,36 @@ function MailBeheer() {
           />
         </div>
         <div>
-          <label className="vvl-label">Gebruikersnaam</label>
+          <label className="vvl-label">Gebruikersnaam (je Gmail) *</label>
           <input
             className="vvl-input"
             value={form.user}
             onChange={(e) => setForm({ ...form, user: e.target.value })}
-            placeholder="vaak hetzelfde als afzender"
+            placeholder="naam@gmail.com"
             autoComplete="off"
           />
         </div>
         <div>
           <label className="vvl-label">
-            Wachtwoord {passwordSet ? '(ingevuld — leeg laten = behouden)' : ''}
+            App-wachtwoord * {passwordSet ? '(ingevuld — leeg laten = behouden)' : ''}
           </label>
           <input
             type="password"
             className="vvl-input"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder={passwordSet ? '••••••••' : ''}
+            placeholder={passwordSet ? '••••••••' : '16 letters van Google'}
             autoComplete="new-password"
           />
         </div>
         <div>
-          <label className="vvl-label">Afzender e-mail *</label>
+          <label className="vvl-label">Afzender e-mail * (zelfde als Gmail)</label>
           <input
             type="email"
             className="vvl-input"
             value={form.fromEmail}
             onChange={(e) => setForm({ ...form, fromEmail: e.target.value })}
-            placeholder="planning@vvlekkerkerk.nl"
+            placeholder="naam@gmail.com"
           />
         </div>
         <div>
@@ -1733,6 +1746,46 @@ function MailBeheer() {
           />
           Beveiligde verbinding — alleen bij poort 465 (bij Gmail/587 uit laten)
         </label>
+        <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+          <button type="submit" className="vvl-btn-primary" disabled={loading}>
+            {loading ? 'Bezig…' : 'Opslaan'}
+          </button>
+          <p className="text-xs text-gray-600">Eerst opslaan, daarna hieronder testen.</p>
+        </div>
+        <div className="sm:col-span-2 grid gap-3 rounded-sm border border-vvl-border bg-vvl-muted/40 p-3 sm:grid-cols-2">
+          <h3 className="font-heading text-base font-black uppercase sm:col-span-2">Testmail</h3>
+          <p className="text-sm text-gray-700 sm:col-span-2">
+            Stuur naar jezelf. Komt hij niet in Inbox/Spam? Open Gmail → map <strong>Verzonden</strong>.
+            Staat “Testmail VVL Planning App” daar niet, dan is hij niet echt verstuurd.
+          </p>
+          <div>
+            <label className="vvl-label">Stuur test naar</label>
+            <input
+              type="email"
+              className="vvl-input"
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+              placeholder="jouw@email.nl"
+            />
+          </div>
+          <div className="flex items-end">
+            <button type="button" className="vvl-btn-outline" onClick={test} disabled={loading}>
+              {loading ? 'Bezig met testen…' : 'Verbinding testen'}
+            </button>
+          </div>
+          <div ref={statusRef} className="space-y-2 sm:col-span-2">
+            {msg ? (
+              <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+                {msg}
+              </p>
+            ) : null}
+            {error ? (
+              <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        </div>
         <div className="sm:col-span-2 space-y-4 border-t border-vvl-border pt-4">
           <h3 className="font-heading text-base font-black uppercase">E-mailteksten</h3>
           <p className="text-xs text-gray-600">
@@ -1836,7 +1889,7 @@ function MailBeheer() {
                 const subject = ownDraft.subject.trim();
                 const body = ownDraft.body.trim();
                 if (!name || !subject || !body) {
-                  setError('Vul naam, onderwerp en tekst in.');
+                  showStatus('', 'Vul naam, onderwerp en tekst in.');
                   return;
                 }
                 const id = ownDraft.id || `eigen-${Date.now()}`;
@@ -1847,8 +1900,7 @@ function MailBeheer() {
                   : [...current, next];
                 setForm({ ...form, templates: { ...form.templates, custom } });
                 setOwnDraft({ id: '', name: '', subject: '', body: '' });
-                setError('');
-                setMsg('Eigen tekst toegevoegd. Klik Opslaan om hem te bewaren.');
+                showStatus('Eigen tekst toegevoegd. Klik Opslaan om hem te bewaren.');
               }}
             >
               {ownDraft.id ? 'Tekst bijwerken' : 'Eigen tekst toevoegen'}
@@ -1857,29 +1909,10 @@ function MailBeheer() {
         </div>
         <div className="sm:col-span-2">
           <button type="submit" className="vvl-btn-primary" disabled={loading}>
-            {loading ? 'Bezig…' : 'Opslaan'}
+            {loading ? 'Bezig…' : 'Teksten opslaan'}
           </button>
         </div>
       </form>
-
-      <div className="vvl-card grid gap-3 sm:grid-cols-2">
-        <h3 className="font-heading text-base font-black uppercase sm:col-span-2">Testmail</h3>
-        <div>
-          <label className="vvl-label">Stuur test naar</label>
-          <input
-            type="email"
-            className="vvl-input"
-            value={testTo}
-            onChange={(e) => setTestTo(e.target.value)}
-            placeholder="jouw@email.nl"
-          />
-        </div>
-        <div className="flex items-end">
-          <button type="button" className="vvl-btn-outline" onClick={test} disabled={loading}>
-            Verbinding testen
-          </button>
-        </div>
-      </div>
 
       <div className="vvl-card space-y-3">
         <h3 className="font-heading text-base font-black uppercase">Eigen tekst versturen</h3>
@@ -1949,7 +1982,6 @@ function MailBeheer() {
             className="vvl-btn-outline text-xs"
             disabled={loading || !sendForm.templateId}
             onClick={async () => {
-              setError('');
               setPreview(null);
               setLoading(true);
               try {
@@ -1967,9 +1999,9 @@ function MailBeheer() {
                   serviceId: sendForm.serviceId || undefined,
                 });
                 setPreview(result);
-                setMsg(`Voorbeeld voor ${result.count} personen. Nog niets verstuurd.`);
+                showStatus(`Voorbeeld voor ${result.count} personen. Nog niets verstuurd.`);
               } catch (err) {
-                setError(err.message);
+                showStatus('', err.message);
               } finally {
                 setLoading(false);
               }
@@ -1984,7 +2016,6 @@ function MailBeheer() {
               disabled={loading || !preview.count}
               onClick={async () => {
                 setLoading(true);
-                setError('');
                 try {
                   const result = await api.sendOwnMail({
                     templateId: sendForm.templateId,
@@ -1994,9 +2025,9 @@ function MailBeheer() {
                     confirm: true,
                   });
                   setPreview(null);
-                  setMsg(`Verstuurd naar ${result.sent} van ${result.count}.`);
+                  showStatus(`Verstuurd naar ${result.sent} van ${result.count}.`);
                 } catch (err) {
-                  setError(err.message);
+                  showStatus('', err.message);
                 } finally {
                   setLoading(false);
                 }
@@ -2017,15 +2048,6 @@ function MailBeheer() {
           </div>
         ) : null}
       </div>
-
-      {msg ? (
-        <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
-          {msg}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
-      ) : null}
     </section>
   );
 }
