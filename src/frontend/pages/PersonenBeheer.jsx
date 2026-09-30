@@ -293,8 +293,8 @@ function PersonImport({ onDone }) {
             Sjabloon downloaden
           </button>
           <p>
-            Excel met mockdata én de teamnamen die al in de app staan. Pas de teamkolom aan naar jullie
-            echte teams (exacte naam). Tabblad “Uitleg” en “Toegestane waarden” helpen bij fouten.
+            Excel met mockdata én de teamnamen die al in de app staan (app is leidend). Staat in Excel
+            “Lekkerkerk JO15-1” en in de app “JO15-1”? Dat mag; de import koppelt ze automatisch.
           </p>
         </li>
         <li>

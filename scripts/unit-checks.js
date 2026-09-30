@@ -466,6 +466,21 @@ assert(
   'person csv unknown team rejected',
   personBad.ok === false && personBad.unknownTeams.includes('JO15-1'),
 );
+const personClubPrefix = validatePersonRows(
+  [{ __row: 2, name: 'Kees', email: 'kees@vvl.demo', team: 'Lekkerkerk JO15-1', role: 'Vrijwilliger' }],
+  { teams: [{ id: 1, name: 'JO15-1' }] },
+);
+assert(
+  'person csv Lekkerkerk-prefix matcht app-team',
+  personClubPrefix.ok &&
+    personClubPrefix.rows[0].teamId === 1 &&
+    personClubPrefix.rows[0].teamName === 'JO15-1',
+);
+const personJoAlias = validatePersonRows(
+  [{ __row: 3, name: 'Inge', email: 'inge@vvl.demo', team: 'Lekkerkerk O15-1' }],
+  { teams: [{ id: 9, name: 'JO15-1' }] },
+);
+assert('person csv O15/JO15 alias', personJoAlias.ok && personJoAlias.rows[0].teamId === 9);
 const personMail = validatePersonRows(
   parsePersonCsv('naam;email\nPiet;niet-email').rows,
   { teams: [] },

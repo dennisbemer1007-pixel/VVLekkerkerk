@@ -1,7 +1,7 @@
 import { compactHeader } from './csvMatches.js';
 import { normalizeObligation } from './obligation.js';
 import { normalizeRole } from './appUrl.js';
-
+import { buildTeamIndex, clubTeamLabel, findTeamInIndex } from './knvbTeams.js';
 const HEADER_MAP = {
   naam: 'name',
   name: 'name',
@@ -124,7 +124,8 @@ export function parsePersonCsv(text) {
 }
 
 export function validatePersonRows(parsedRows, { teams = [] } = {}) {
-  const teamByKey = new Map(teams.map((t) => [compactHeader(t.name), t]));
+  // App-teams zijn leidend: "Lekkerkerk JO15-1" in Excel mag matchen op "JO15-1" in de app.
+  const teamIndex = buildTeamIndex(teams);
   const rows = [];
   const invalidRows = [];
   const unknownTeams = [];
@@ -143,14 +144,19 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
     const phone = String(raw.phone || '').trim() || null;
     const teamName = String(raw.team || '').trim();
     let teamId = null;
+    let matchedTeamName = null;
     if (teamName) {
-      const team = teamByKey.get(compactHeader(teamName));
+      const team = findTeamInIndex(teamIndex, teamName);
       if (!team) {
         unknownTeams.push(teamName);
-        invalidRows.push({ ...raw, error: `Onbekend team: ${teamName}` });
+        invalidRows.push({
+          ...raw,
+          error: `Onbekend team: ${teamName} (gebruik exact de teamnaam uit de app, of zonder clubprefix)`,
+        });
         continue;
       }
       teamId = team.id;
+      matchedTeamName = team.name;
     }
     const exemptedRaw = String(raw.exempted ?? '').trim().toLowerCase();
     const guardianRef = String(raw.guardian ?? '').trim() || null;
@@ -158,7 +164,7 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       name,
       email,
       phone,
-      teamName: teamName || null,
+      teamName: matchedTeamName || teamName || null,
       teamId,
       role: normalizeRole(raw.role, 'Vrijwilliger'),
       obligation: normalizeObligation(raw.obligation),
@@ -173,4 +179,9 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
     invalidRows,
     unknownTeams: [...new Set(unknownTeams)],
   };
+}
+
+/** Normaliseer een teamnaam uit Excel naar de app-vorm vóór aanmaken. */
+export function normalizeImportedTeamName(name) {
+  return clubTeamLabel(name);
 }

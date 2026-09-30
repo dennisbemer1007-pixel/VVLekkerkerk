@@ -72,7 +72,7 @@ export function personTemplateSheets(teams = []) {
         ['telefoon', 'Optioneel.'],
         [
           'team',
-          'Moet exact overeenkomen met een team in Beheer → Teams (tenzij je ontbrekende teams aanmaakt bij import).',
+          'Leidend: exacte naam uit Beheer → Teams. “Lekkerkerk JO15-1” in Excel mag matchen op “JO15-1” in de app.',
         ],
         ['rol', 'Vrijwilliger | Teamcoördinator | Barcommissie | Admin'],
         ['verplichting', 'NONE / geen | FULL / verplicht | VR18 / vr18+'],
