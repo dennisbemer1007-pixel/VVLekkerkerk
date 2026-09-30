@@ -466,6 +466,21 @@ assert(
   'person csv unknown team rejected',
   personBad.ok === false && personBad.unknownTeams.includes('JO15-1'),
 );
+const personClubPrefix = validatePersonRows(
+  [{ __row: 2, name: 'Kees', email: 'kees@vvl.demo', team: 'Lekkerkerk JO15-1', role: 'Vrijwilliger' }],
+  { teams: [{ id: 1, name: 'JO15-1' }] },
+);
+assert(
+  'person csv Lekkerkerk-prefix matcht app-team',
+  personClubPrefix.ok &&
+    personClubPrefix.rows[0].teamId === 1 &&
+    personClubPrefix.rows[0].teamName === 'JO15-1',
+);
+const personJoAlias = validatePersonRows(
+  [{ __row: 3, name: 'Inge', email: 'inge@vvl.demo', team: 'Lekkerkerk O15-1' }],
+  { teams: [{ id: 9, name: 'JO15-1' }] },
+);
+assert('person csv O15/JO15 alias', personJoAlias.ok && personJoAlias.rows[0].teamId === 9);
 const personMail = validatePersonRows(
   parsePersonCsv('naam;email\nPiet;niet-email').rows,
   { teams: [] },
@@ -567,6 +582,23 @@ assert('voorbeeld csv heeft kolommen', PERSON_IMPORT_EXAMPLE.startsWith('naam;em
 assert('naam normaliseren', normalizePersonName('José  van Dijk') === 'jose van dijk');
 assert('naamloos niet in beheer', isNamelessRosterPerson({ email: null, passwordHash: null }) === true);
 assert('account wel in beheer', isNamelessRosterPerson({ email: 'a@b.c', passwordHash: 'x' }) === false);
+assert('verplichting alias verplicht→FULL', normalizeObligation('verplicht') === 'FULL');
+assert('verplichting alias geen→NONE', normalizeObligation('geen') === 'NONE');
+assert('verplichting alias vr18+→VR18', normalizeObligation('vr18+') === 'VR18');
+const exampleParsed = parsePersonCsv(PERSON_IMPORT_EXAMPLE);
+assert('voorbeeld csv heeft mockrijen', exampleParsed.rows.length >= 5);
+const exampleValidated = validatePersonRows(exampleParsed.rows, {
+  teams: [
+    { id: 1, name: 'JO15-1' },
+    { id: 2, name: 'JO13-2' },
+    { id: 3, name: 'JO11-1' },
+  ],
+});
+assert('voorbeeld csv valideert met bekende teams', exampleValidated.ok === true);
+assert(
+  'voorbeeld csv verplichting FULL',
+  exampleValidated.rows.some((r) => r.email === 'anna.mock@example.nl' && r.obligation === 'FULL'),
+);
 
 const swapMail = swapCommitteeEmailContent({
   name: 'Mark',
@@ -862,11 +894,12 @@ assert('tegel Nog 1 nodig: aantal = gefilterde lijst', tiles.almost.length === 1
 
 const personSheets = personTemplateSheets([{ name: 'JO11-1' }]);
 assert(
-  'personen template: 2 tabbladen (headers + waarden)',
-  personSheets.length === 2 &&
+  'personen template: mockdata + waarden + uitleg',
+  personSheets.length === 3 &&
     personSheets[0].headers.join(';') === PERSON_TEMPLATE_HEADERS.join(';') &&
-    personSheets[0].rows.length === 0 &&
-    personSheets[1].headers.includes('rol'),
+    personSheets[0].rows.length >= 5 &&
+    personSheets[1].headers.includes('rol') &&
+    personSheets[2].name === 'Uitleg',
 );
 const exportSheets = personExportRowsSheets(
   [

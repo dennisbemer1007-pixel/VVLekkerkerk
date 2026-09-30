@@ -15,7 +15,7 @@ import { normalizeRole, resolvePublicAppUrl } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { writeAudit } from '../lib/audit.js';
-import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows } from '../lib/csvPersons.js';
+import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, normalizeImportedTeamName, personRowsFromObjects } from '../lib/csvPersons.js';
 import { isNamelessRosterPerson } from '../lib/personMatch.js';
 import { trySendInviteEmail } from '../lib/mail.js';
 import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/privacy.js';
@@ -25,7 +25,6 @@ import { getClubSettings } from '../lib/season.js';
 import { normalizeAbsenceRange } from '../lib/absences.js';
 import { endOfDay, startOfDay } from '../lib/dates.js';
 import { queryText } from '../lib/listFilters.js';
-import { personRowsFromObjects } from '../lib/csvPersons.js';
 import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
 import { importPersonRows } from '../lib/personImport.js';
 
@@ -412,8 +411,13 @@ async function runPersonImport(req, res, next, rows) {
       validated.invalidRows.every((row) => /onbekend team/i.test(row.error || ''));
     if (onlyUnknownTeams && req.body?.createMissingTeams) {
       for (const name of validated.unknownTeams) {
-        const exists = await prisma.team.findFirst({ where: { name } });
-        if (!exists) await prisma.team.create({ data: { name } });
+        const appName = normalizeImportedTeamName(name);
+        const exists = await prisma.team.findFirst({
+          where: {
+            OR: [{ name }, { name: appName }],
+          },
+        });
+        if (!exists) await prisma.team.create({ data: { name: appName } });
       }
       const teamsNow = await prisma.team.findMany({ select: { id: true, name: true } });
       validated = validatePersonRows(rows, { teams: teamsNow });
@@ -428,7 +432,7 @@ async function runPersonImport(req, res, next, rows) {
     }));
     return res.status(400).json({
       error: validated.unknownTeams.length
-        ? 'Niet alle rijen zijn geldig. Onbekende teams worden niet automatisch aangemaakt.'
+        ? 'Niet alle rijen zijn geldig. Teamnamen uit de app zijn leidend (bijv. JO15-1). “Lekkerkerk …” in Excel wordt daaraan gekoppeld als het team bestaat.'
         : 'Niet alle rijen zijn geldig.',
       invalidRows: rowErrors,
       unknownTeams: validated.unknownTeams,

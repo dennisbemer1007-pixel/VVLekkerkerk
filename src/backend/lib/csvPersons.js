@@ -1,7 +1,7 @@
 import { compactHeader } from './csvMatches.js';
 import { normalizeObligation } from './obligation.js';
 import { normalizeRole } from './appUrl.js';
-
+import { buildTeamIndex, clubTeamLabel, findTeamInIndex } from './knvbTeams.js';
 const HEADER_MAP = {
   naam: 'name',
   name: 'name',
@@ -29,11 +29,23 @@ const EXEMPTED_YES = new Set(['ja', 'yes', 'true', '1', 'waar']);
 
 const MAX_ROWS = 1000;
 
-export const PERSON_IMPORT_COLUMNS = 'naam;email;telefoon;team;rol;verplichting';
+export const PERSON_IMPORT_COLUMNS = 'naam;email;telefoon;team;rol;verplichting;hoort_bij;vrijgesteld';
 
+/**
+ * Voorbeeld-CSV met mockdata.
+ * Let op: teamnamen moeten al in Beheer → Teams staan (tenzij je ontbrekende teams aanmaakt).
+ * verplichting: NONE | FULL | VR18 (of: geen | verplicht | vr18+)
+ * rol: Vrijwilliger | Teamcoördinator | Barcommissie | Admin
+ * hoort_bij: e-mail of naam van de ouder/verantwoordelijke (optioneel)
+ * vrijgesteld: ja | nee (optioneel)
+ */
 export const PERSON_IMPORT_EXAMPLE = `${PERSON_IMPORT_COLUMNS}
-Anna de Vries;anna@example.nl;0612345678;JO15-1;Vrijwilliger;verplicht
-Piet Jansen;piet@example.nl;;JO13-2;Teamcoördinator;geen
+Anna de Vries;anna.mock@example.nl;0612345678;JO15-1;Vrijwilliger;FULL;;nee
+Piet Jansen;piet.mock@example.nl;0698765432;JO13-2;Teamcoördinator;NONE;;nee
+Sara Bakker;sara.mock@example.nl;;JO15-1;Vrijwilliger;VR18;;nee
+Mark de Boer;mark.mock@example.nl;0611223344;;Barcommissie;geen;;nee
+Lisa Mock Kind;;0611002200;JO15-1;Vrijwilliger;geen;anna.mock@example.nl;nee
+Jan Vrijgesteld;jan.mock@example.nl;;JO11-1;Vrijwilliger;verplicht;;ja
 `;
 
 export function mapPersonHeader(value) {
@@ -112,7 +124,8 @@ export function parsePersonCsv(text) {
 }
 
 export function validatePersonRows(parsedRows, { teams = [] } = {}) {
-  const teamByKey = new Map(teams.map((t) => [compactHeader(t.name), t]));
+  // App-teams zijn leidend: "Lekkerkerk JO15-1" in Excel mag matchen op "JO15-1" in de app.
+  const teamIndex = buildTeamIndex(teams);
   const rows = [];
   const invalidRows = [];
   const unknownTeams = [];
@@ -131,14 +144,19 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
     const phone = String(raw.phone || '').trim() || null;
     const teamName = String(raw.team || '').trim();
     let teamId = null;
+    let matchedTeamName = null;
     if (teamName) {
-      const team = teamByKey.get(compactHeader(teamName));
+      const team = findTeamInIndex(teamIndex, teamName);
       if (!team) {
         unknownTeams.push(teamName);
-        invalidRows.push({ ...raw, error: `Onbekend team: ${teamName}` });
+        invalidRows.push({
+          ...raw,
+          error: `Onbekend team: ${teamName} (gebruik exact de teamnaam uit de app, of zonder clubprefix)`,
+        });
         continue;
       }
       teamId = team.id;
+      matchedTeamName = team.name;
     }
     const exemptedRaw = String(raw.exempted ?? '').trim().toLowerCase();
     const guardianRef = String(raw.guardian ?? '').trim() || null;
@@ -146,7 +164,7 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       name,
       email,
       phone,
-      teamName: teamName || null,
+      teamName: matchedTeamName || teamName || null,
       teamId,
       role: normalizeRole(raw.role, 'Vrijwilliger'),
       obligation: normalizeObligation(raw.obligation),
@@ -161,4 +179,9 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
     invalidRows,
     unknownTeams: [...new Set(unknownTeams)],
   };
+}
+
+/** Normaliseer een teamnaam uit Excel naar de app-vorm vóór aanmaken. */
+export function normalizeImportedTeamName(name) {
+  return clubTeamLabel(name);
 }
