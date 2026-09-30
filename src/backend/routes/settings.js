@@ -84,16 +84,29 @@ router.post(
         });
       }
 
-      await sendMail({
+      if (!publicSettings.isReady) {
+        return res.status(400).json({
+          error:
+            'Mailtest mislukt: zet “E-mail versturen” aan, vul host + afzender in, en klik Opslaan.',
+        });
+      }
+
+      const sent = await sendMail({
         to,
         subject: 'Testmail VVL Planning App',
         text: 'Dit is een testmail. De mailserver is correct aangesloten.',
         html: '<p>Dit is een <strong>testmail</strong>. De mailserver is correct aangesloten.</p>',
       });
 
+      if (!sent?.sent) {
+        return res.status(400).json({
+          error: `Mailtest mislukt: ${sent?.reason || 'mail is niet verstuurd'}`,
+        });
+      }
+
       res.json({
         ok: true,
-        message: `Verbinding ok. Testmail verstuurd naar ${to}.`,
+        message: `Verbinding ok. Testmail verstuurd naar ${to}. Kijk ook in Spam/Ongewenst.`,
       });
     } catch (err) {
       res.status(400).json({
