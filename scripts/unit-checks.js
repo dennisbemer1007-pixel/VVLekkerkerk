@@ -1088,6 +1088,7 @@ assert(
   assert(
     'branded mail heeft logo CID, knop en footer',
     branded.html.includes('cid:vvl-logo') &&
+      branded.html.includes('background:#ffffff;padding:8px;border-radius:4px;') &&
       branded.html.includes('Account activeren') &&
       branded.html.includes('V.V. Lekkerkerk') &&
       branded.text.includes('Hoi Jan') &&
