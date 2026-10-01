@@ -546,8 +546,14 @@ export default function PersonenBeheer() {
       setBulkMsg(
         res.emailSent
           ? `Uitnodiging verstuurd naar ${p.email}.`
-          : `Link klaargezet voor ${p.email}. Stuur hem handmatig of kopieer hieronder.`,
+          : `Geen e-mail verstuurd naar ${p.email}. ${res.emailError || 'Stuur de link handmatig of kopieer hieronder.'}`,
       );
+      if (!res.emailSent) {
+        setError(
+          res.emailError ||
+            'E-mail is niet verstuurd. Controleer Beheer → E-mail (SMTP) of deel de link handmatig.',
+        );
+      }
     } catch (err) {
       setError(`Uitnodiging opnieuw sturen mislukt: ${err.message}`);
     }
@@ -733,7 +739,11 @@ export default function PersonenBeheer() {
               E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>. De link blijft hieronder beschikbaar.
             </p>
           ) : (
-            <p className="text-sm">Kopieer de uitnodigingslink of stuur hem via WhatsApp / e-mail.</p>
+            <p className="text-sm text-red-800" data-testid="invite-mail-failed">
+              E-mail is <strong>niet</strong> verstuurd
+              {inviteResult.emailError ? `: ${inviteResult.emailError}` : '.'} Kopieer de link of stuur via WhatsApp /
+              je eigen e-mailprogramma.
+            </p>
           )}
           <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">{inviteUrlFor(inviteResult)}</p>
           <div className="flex flex-wrap gap-2">
@@ -867,6 +877,12 @@ export default function PersonenBeheer() {
                     : '.'}{' '}
                   Deel de link hieronder (WhatsApp, mail of zelf tijdelijk inloggen).
                 </p>
+                {!inviteResult.emailSent ? (
+                  <p className="text-sm text-red-800" data-testid="invite-mail-failed-create">
+                    E-mail is <strong>niet</strong> verstuurd
+                    {inviteResult.emailError ? `: ${inviteResult.emailError}` : '.'}
+                  </p>
+                ) : null}
                 <p className="break-all rounded-sm bg-vvl-muted p-3 text-xs font-mono">
                   {inviteUrlFor(inviteResult)}
                 </p>
@@ -1032,6 +1048,12 @@ export default function PersonenBeheer() {
                   {inviteResult?.emailSent ? (
                     <p className="text-sm text-emerald-800">
                       E-mail is verstuurd naar <strong>{inviteResult.person?.email}</strong>. De link blijft beschikbaar.
+                    </p>
+                  ) : inviteResult && inviteResult.emailSent === false ? (
+                    <p className="text-sm text-red-800">
+                      E-mail is <strong>niet</strong> verstuurd
+                      {inviteResult.emailError ? `: ${inviteResult.emailError}` : '.'} Deel deze link via WhatsApp of
+                      je eigen e-mailprogramma.
                     </p>
                   ) : (
                     <p className="text-sm text-gray-700">

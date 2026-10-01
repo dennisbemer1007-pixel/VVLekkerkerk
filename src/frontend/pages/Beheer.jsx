@@ -1439,10 +1439,15 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.notifyVolunteers(),
-                (r) =>
-                  r.mail?.reason === 'not_configured'
-                    ? 'Mail niet ingesteld — stel SMTP in bij E-mail.'
-                    : `Bericht vrijwilligers: ${r.mail?.sent ?? 0} verstuurd.`,
+                (r) => {
+                  if (r.mail?.reason === 'not_configured' || String(r.mail?.reason || '').includes('niet volledig')) {
+                    return 'Mail niet ingesteld — stel SMTP in bij E-mail.';
+                  }
+                  const failed = r.mail?.failed ?? 0;
+                  return failed
+                    ? `Bericht vrijwilligers: ${r.mail?.sent ?? 0} verstuurd, ${failed} mislukt.`
+                    : `Bericht vrijwilligers: ${r.mail?.sent ?? 0} verstuurd.`;
+                },
               )
             }
           >
@@ -1490,10 +1495,15 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.notifyMandatory(),
-                (r) =>
-                  r.mail?.reason === 'not_configured'
-                    ? 'Mail niet ingesteld — stel SMTP in bij E-mail.'
-                    : `Bericht verplichte: ${r.mail?.sent ?? 0} verstuurd.`,
+                (r) => {
+                  if (r.mail?.reason === 'not_configured' || String(r.mail?.reason || '').includes('niet volledig')) {
+                    return 'Mail niet ingesteld — stel SMTP in bij E-mail.';
+                  }
+                  const failed = r.mail?.failed ?? 0;
+                  return failed
+                    ? `Bericht verplichte: ${r.mail?.sent ?? 0} verstuurd, ${failed} mislukt.`
+                    : `Bericht verplichte: ${r.mail?.sent ?? 0} verstuurd.`;
+                },
               )
             }
           >
@@ -1572,10 +1582,15 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.sendDutyReminders(),
-                (r) =>
-                  r.reason === 'not_configured'
-                    ? 'Mail niet ingesteld — stel SMTP in bij E-mail.'
-                    : `Herinneringen: ${r.sent ?? 0} verstuurd.`,
+                (r) => {
+                  if (r.reason === 'not_configured' || String(r.reason || '').includes('niet volledig')) {
+                    return 'Mail niet ingesteld — stel SMTP in bij E-mail.';
+                  }
+                  const failed = r.failed ?? 0;
+                  return failed
+                    ? `Herinneringen: ${r.sent ?? 0} verstuurd, ${failed} mislukt.`
+                    : `Herinneringen: ${r.sent ?? 0} verstuurd.`;
+                },
               )
             }
           >

@@ -133,6 +133,91 @@ function OpschonenDialog({ onClose }) {
   );
 }
 
+function TestMailBlok({ defaultTo = '' }) {
+  const [to, setTo] = useState(defaultTo || '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getMailStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setReady(Boolean(status.isReady));
+        setTo((current) => current || status.fromEmail || defaultTo || '');
+      })
+      .catch(() => {
+        if (!cancelled) setReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultTo]);
+
+  async function sendTest() {
+    setBusy(true);
+    setMsg('');
+    setError('');
+    try {
+      const res = await api.testMail(to);
+      setMsg(res.message || `Testmail verstuurd naar ${to}.`);
+    } catch (err) {
+      setError(err.message || 'Testmail mislukt.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="space-y-3 border-t border-vvl-border pt-6" data-testid="instellingen-testmail">
+      <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Testmail</h2>
+      <p className="text-sm text-gray-700">
+        Stuur één testmail naar jezelf. SMTP stel je in via{' '}
+        <a className="underline" href="/beheer?tab=mail">
+          Beheer → E-mail
+        </a>
+        .
+        {ready === false ? (
+          <span className="mt-1 block text-amber-900">
+            Mail staat nu uit of is onvolledig — de test zal falen tot je SMTP opslaat.
+          </span>
+        ) : null}
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label className="block min-w-0 flex-1">
+          <span className="vvl-label">Stuur test naar</span>
+          <input
+            type="email"
+            className="vvl-input"
+            data-testid="instellingen-testmail-to"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder="jouw@email.nl"
+          />
+        </label>
+        <button
+          type="button"
+          className="vvl-btn-primary min-h-11"
+          data-testid="instellingen-testmail-send"
+          disabled={busy || !to.trim()}
+          onClick={sendTest}
+        >
+          {busy ? 'Bezig…' : 'Stuur testmail'}
+        </button>
+      </div>
+      {msg ? (
+        <p className="rounded-sm border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{msg}</p>
+      ) : null}
+      {error ? (
+        <p className="rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>
+      ) : null}
+    </section>
+  );
+}
+
 export default function Instellingen() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -146,6 +231,8 @@ export default function Instellingen() {
       </div>
 
       <SettingsNavList items={LINKS} />
+
+      {admin ? <TestMailBlok defaultTo={user?.email || ''} /> : null}
 
       {admin ? (
         <section className="space-y-3 border-t border-vvl-border pt-6" data-testid="opschonen-blok">

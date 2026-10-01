@@ -62,6 +62,30 @@ export function isMailReady(settings) {
   );
 }
 
+/** Nederlandse uitleg voor UI / API bij mislukte verzending. */
+export function friendlyMailReason(reason) {
+  const raw = String(reason || '').trim();
+  if (!raw || raw === 'not_configured') {
+    return 'Mailserver staat uit of is niet volledig ingesteld. Zet in Beheer → E-mail “E-mail versturen” aan, vul host, gebruikersnaam, app-wachtwoord en afzender in, en sla op.';
+  }
+  if (raw === 'no_email') return 'Geen e-mailadres';
+  return raw;
+}
+
+/**
+ * Verwerkt het resultaat van sendMail: zachte fouten ({ sent: false }) tellen als mislukt,
+ * niet als succes. Exporteerbaar voor unit tests.
+ */
+export function interpretSendMailResult(result) {
+  if (result?.sent) {
+    return { sent: true, messageId: result.messageId || null };
+  }
+  return {
+    sent: false,
+    reason: friendlyMailReason(result?.reason),
+  };
+}
+
 function sanitizeFromName(name) {
   return String(name || 'V.V. Lekkerkerk')
     .replace(/[\r\n"]/g, '')
@@ -201,7 +225,7 @@ function safeAppUrl() {
 export async function trySendInviteEmail({ email, name, link }) {
   const settings = await getMailSettings();
   if (!isMailReady(settings)) {
-    return { sent: false, reason: 'not_configured' };
+    return { sent: false, reason: friendlyMailReason('not_configured') };
   }
   try {
     const templates = resolveMailTemplates(settings.templates);
@@ -210,18 +234,22 @@ export async function trySendInviteEmail({ email, name, link }) {
       link,
       template: templates.invite,
     });
-    await sendMail({ to: email, subject, text, html });
-    return { sent: true };
+    const result = await sendMail({ to: email, subject, text, html });
+    const interpreted = interpretSendMailResult(result);
+    if (!interpreted.sent) {
+      console.error('[Mail] Uitnodiging niet verstuurd:', interpreted.reason);
+    }
+    return interpreted;
   } catch (err) {
     console.error('[Mail] Uitnodiging versturen mislukt:', err.message);
-    return { sent: false, reason: err.message };
+    return { sent: false, reason: friendlyMailReason(err.message) };
   }
 }
 
 export async function trySendScheduledConfirmation({ person, service }) {
-  if (!person?.email || !service) return { sent: false, reason: 'no_email' };
+  if (!person?.email || !service) return { sent: false, reason: friendlyMailReason('no_email') };
   const settings = await getMailSettings();
-  if (!isMailReady(settings)) return { sent: false, reason: 'not_configured' };
+  if (!isMailReady(settings)) return { sent: false, reason: friendlyMailReason('not_configured') };
   try {
     const templates = resolveMailTemplates(settings.templates);
     const content = renderMail(templates.scheduled, {
@@ -231,11 +259,15 @@ export async function trySendScheduledConfirmation({ person, service }) {
       dienst: dienstLabel(service.type),
       link: safeAppUrl(),
     });
-    await sendMail({ to: person.email, ...content });
-    return { sent: true };
+    const result = await sendMail({ to: person.email, ...content });
+    const interpreted = interpretSendMailResult(result);
+    if (!interpreted.sent) {
+      console.error('[Mail] Bevestiging niet verstuurd', person.id, interpreted.reason);
+    }
+    return interpreted;
   } catch (err) {
     console.error('[Mail] Bevestiging mislukt', person.id, err.message);
-    return { sent: false, reason: err.message };
+    return { sent: false, reason: friendlyMailReason(err.message) };
   }
 }
 
@@ -279,15 +311,19 @@ V.V. Lekkerkerk`;
 export async function trySendPasswordResetEmail({ email, name, link }) {
   const settings = await getMailSettings();
   if (!isMailReady(settings)) {
-    return { sent: false, reason: 'not_configured' };
+    return { sent: false, reason: friendlyMailReason('not_configured') };
   }
   try {
     const { subject, text, html } = passwordResetEmailContent({ name, link });
-    await sendMail({ to: email, subject, text, html });
-    return { sent: true };
+    const result = await sendMail({ to: email, subject, text, html });
+    const interpreted = interpretSendMailResult(result);
+    if (!interpreted.sent) {
+      console.error('[Mail] Wachtwoord-reset niet verstuurd:', interpreted.reason);
+    }
+    return interpreted;
   } catch (err) {
     console.error('[Mail] Wachtwoord-reset mislukt:', err.message);
-    return { sent: false, reason: err.message };
+    return { sent: false, reason: friendlyMailReason(err.message) };
   }
 }
 
@@ -362,8 +398,13 @@ async function sendBulk(people, buildContent) {
     }
     try {
       const { subject, text, html } = buildContent(person);
-      await sendMail({ to: person.email, subject, text, html });
-      sent += 1;
+      const result = await sendMail({ to: person.email, subject, text, html });
+      if (result?.sent) {
+        sent += 1;
+      } else {
+        console.error('[Mail] Bulk niet verstuurd voor', person.email, result?.reason || 'onbekend');
+        failed += 1;
+      }
     } catch (err) {
       console.error('[Mail] Bulk mislukt voor', person.email, err.message);
       failed += 1;

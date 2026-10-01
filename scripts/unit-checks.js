@@ -21,7 +21,11 @@ import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
 import { customMailTemplates, filterMailAudience, renderMail, resolveMailTemplates, serializeMailTemplates } from '../src/backend/lib/mailTemplates.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
-import { swapCommitteeEmailContent } from '../src/backend/lib/mail.js';
+import {
+  friendlyMailReason,
+  interpretSendMailResult,
+  swapCommitteeEmailContent,
+} from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
 import {
   underQuota,
@@ -1036,6 +1040,28 @@ assert(
   filterMailAudience(mailPeople, { audience: 'volunteers' }).map((p) => p.name).join() === 'Lisa' &&
     filterMailAudience(mailPeople, { audience: 'shift', serviceId: 9 }).map((p) => p.name).join() === 'Lisa,Mark' &&
     filterMailAudience(mailPeople, { audience: 'team', teamId: 2 }).length === 2,
+);
+assert(
+  'zachte mailfout telt niet als verstuurd',
+  interpretSendMailResult({ sent: false, reason: 'Mailserver staat uit of is niet volledig ingesteld' }).sent ===
+    false &&
+    interpretSendMailResult({ sent: false, reason: 'not_configured' }).sent === false &&
+    interpretSendMailResult({ sent: true, messageId: 'abc' }).sent === true &&
+    interpretSendMailResult({ sent: true, messageId: 'abc' }).messageId === 'abc',
+);
+assert(
+  'mailfouttekst is Nederlands en bruikbaar',
+  friendlyMailReason('not_configured').includes('E-mail versturen') &&
+    friendlyMailReason('no_email') === 'Geen e-mailadres' &&
+    friendlyMailReason('Server weigerde ontvanger: x@y.nl').includes('weigerde'),
+);
+assert(
+  'Instellingen heeft testmail-knop voor admin',
+  fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'), 'utf8')
+    .includes('data-testid="instellingen-testmail-send"') &&
+    fs
+      .readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/PersonenBeheer.jsx'), 'utf8')
+      .includes('invite-mail-failed'),
 );
 
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');

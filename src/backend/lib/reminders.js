@@ -81,7 +81,16 @@ export async function runDutyReminders({ now = new Date() } = {}) {
         appUrl,
         template: templates.reminder,
       });
-      await sendMail({ to: enrollment.person.email, ...content });
+      const result = await sendMail({ to: enrollment.person.email, ...content });
+      if (!result?.sent) {
+        console.error(
+          '[Mail] Herinnering niet verstuurd',
+          enrollment.person.id,
+          result?.reason || 'onbekend',
+        );
+        failed += 1;
+        continue;
+      }
       await prisma.enrollment.update({
         where: { id: enrollment.id },
         data: { remindedAt: new Date() },
