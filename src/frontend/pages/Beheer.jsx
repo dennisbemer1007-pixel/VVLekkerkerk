@@ -1648,6 +1648,7 @@ const MAIL_PRESETS = [
 ];
 
 function MailBeheer() {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     enabled: false,
     host: '',
@@ -1679,6 +1680,8 @@ function MailBeheer() {
     serviceId: '',
   });
   const [preview, setPreview] = useState(null);
+  const [layoutPreview, setLayoutPreview] = useState(null);
+  const [templateBusy, setTemplateBusy] = useState('');
   const statusRef = useRef(null);
 
   const showStatus = (nextMsg = '', nextError = '') => {
@@ -1705,12 +1708,43 @@ function MailBeheer() {
           templates: s.templates || form.templates,
         });
         setPasswordSet(s.passwordSet);
-        setTestTo(s.fromEmail || '');
+        setTestTo(s.fromEmail || user?.email || '');
       })
       .catch((e) => showStatus('', e.message));
     api.getTeams().then(setTeams).catch(() => {});
     api.getServices().then((list) => setShifts((list || []).slice(0, 40))).catch(() => {});
   }, []);
+
+  const loadLayoutPreview = async (payload) => {
+    setTemplateBusy(payload.key || payload.templateId || 'preview');
+    try {
+      const result = await api.previewMailTemplate(payload);
+      setLayoutPreview(result);
+      showStatus('Voorbeeld geladen (nog niets verstuurd).');
+    } catch (err) {
+      showStatus('', err.message || 'Voorbeeld laden mislukt.');
+    } finally {
+      setTemplateBusy('');
+    }
+  };
+
+  const sendTemplateTest = async (payload) => {
+    const to = (testTo || user?.email || '').trim();
+    if (!to) {
+      showStatus('', 'Vul hierboven een testadres in (bijv. je eigen e-mail).');
+      return;
+    }
+    setTemplateBusy(payload.key || payload.templateId || 'test');
+    showStatus('Testmail wordt verstuurd…');
+    try {
+      const result = await api.testMailTemplate({ ...payload, to });
+      showStatus(result.message || `Testmail verstuurd naar ${to}.`);
+    } catch (err) {
+      showStatus('', err.message || 'Testmail mislukt.');
+    } finally {
+      setTemplateBusy('');
+    }
+  };
 
   const applyPreset = (preset) => {
     setForm((f) => ({
@@ -1904,8 +1938,9 @@ function MailBeheer() {
         <div className="sm:col-span-2 space-y-4 border-t border-vvl-border pt-4">
           <h3 className="font-heading text-base font-black uppercase">E-mailteksten</h3>
           <p className="text-xs text-gray-600">
-            Placeholders: {'{naam}'}, {'{datum}'}, {'{tijd}'}, {'{dienst}'}, {'{link}'}. Leeg opslaan
-            kan niet per ongeluk de standaard wissen: een lege tekst valt terug op de standaard.
+            Placeholders: {'{naam}'}, {'{datum}'}, {'{tijd}'}, {'{dienst}'}, {'{link}'}. De layout
+            (logo, knop, footer) komt er automatisch omheen. Leeg opslaan valt terug op de standaard.
+            Testmails gaan naar het adres hierboven bij Testmail.
           </p>
           {[
             ['invite', 'Uitnodiging'],
@@ -1913,7 +1948,7 @@ function MailBeheer() {
             ['reminder', 'Herinnering, twee dagen van tevoren'],
             ['planningReady', 'Planning klaar'],
           ].map(([key, label]) => (
-            <div key={key} className="space-y-2">
+            <div key={key} className="space-y-2 rounded-sm border border-vvl-border p-3" data-testid={`mail-template-${key}`}>
               <p className="text-sm font-bold">{label}</p>
               <input
                 className="vvl-input"
@@ -1942,40 +1977,131 @@ function MailBeheer() {
                   })
                 }
               />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="vvl-btn-outline text-xs"
+                  data-testid={`mail-preview-${key}`}
+                  disabled={Boolean(templateBusy)}
+                  onClick={() =>
+                    loadLayoutPreview({
+                      key,
+                      subject: form.templates?.[key]?.subject,
+                      body: form.templates?.[key]?.body,
+                    })
+                  }
+                >
+                  {templateBusy === key ? 'Laden…' : 'Voorbeeld'}
+                </button>
+                <button
+                  type="button"
+                  className="vvl-btn-outline text-xs"
+                  data-testid={`mail-test-${key}`}
+                  disabled={Boolean(templateBusy)}
+                  onClick={() =>
+                    sendTemplateTest({
+                      key,
+                      subject: form.templates?.[key]?.subject,
+                      body: form.templates?.[key]?.body,
+                    })
+                  }
+                >
+                  {templateBusy === key ? 'Bezig…' : 'Testmail versturen'}
+                </button>
+              </div>
             </div>
           ))}
+
+          {layoutPreview?.html ? (
+            <div className="space-y-2 rounded-sm border border-vvl-border bg-vvl-muted/40 p-3" data-testid="mail-layout-preview">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-bold">Voorbeeld: {layoutPreview.subject}</p>
+                <button type="button" className="vvl-btn-outline text-xs" onClick={() => setLayoutPreview(null)}>
+                  Sluiten
+                </button>
+              </div>
+              <p className="text-xs text-gray-600">Desktop- en telefoonbreedte. Logo en knop zoals in de echte mail.</p>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <iframe
+                  title="Voorbeeld desktop"
+                  className="h-[420px] w-full rounded-sm border border-vvl-border bg-white"
+                  srcDoc={layoutPreview.html}
+                  sandbox=""
+                />
+                <iframe
+                  title="Voorbeeld telefoon"
+                  className="mx-auto h-[420px] w-full max-w-[360px] rounded-sm border border-vvl-border bg-white"
+                  srcDoc={layoutPreview.html}
+                  sandbox=""
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="space-y-3 border-t border-vvl-border pt-4">
             <h3 className="font-heading text-base font-black uppercase">Eigen e-mailtekst</h3>
             <p className="text-xs text-gray-600">
               De vier teksten hierboven blijven van het systeem. Hier maak je een extra tekst, bijvoorbeeld een oproep voor een drukke week. Sla op voordat je verstuurt.
             </p>
             {(form.templates?.custom || []).map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-vvl-border p-2">
-                <p className="text-sm font-semibold">{item.name}</p>
-                <span className="flex gap-2">
-                  <button
-                    type="button"
-                    className="vvl-btn-outline text-xs"
-                    onClick={() => setOwnDraft(item)}
-                  >
-                    Bewerk
-                  </button>
-                  <button
-                    type="button"
-                    className="vvl-btn-outline text-xs"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        templates: {
-                          ...form.templates,
-                          custom: (form.templates?.custom || []).filter((row) => row.id !== item.id),
-                        },
-                      })
-                    }
-                  >
-                    Weg
-                  </button>
-                </span>
+              <div key={item.id} className="space-y-2 rounded-sm border border-vvl-border p-2" data-testid={`mail-custom-${item.id}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">{item.name}</p>
+                  <span className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      onClick={() => setOwnDraft(item)}
+                    >
+                      Bewerk
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      data-testid={`mail-preview-custom-${item.id}`}
+                      disabled={Boolean(templateBusy)}
+                      onClick={() =>
+                        loadLayoutPreview({
+                          templateId: item.id,
+                          subject: item.subject,
+                          body: item.body,
+                        })
+                      }
+                    >
+                      Voorbeeld
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      data-testid={`mail-test-custom-${item.id}`}
+                      disabled={Boolean(templateBusy)}
+                      onClick={() =>
+                        sendTemplateTest({
+                          templateId: item.id,
+                          subject: item.subject,
+                          body: item.body,
+                        })
+                      }
+                    >
+                      Testmail versturen
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          templates: {
+                            ...form.templates,
+                            custom: (form.templates?.custom || []).filter((row) => row.id !== item.id),
+                          },
+                        })
+                      }
+                    >
+                      Weg
+                    </button>
+                  </span>
+                </div>
               </div>
             ))}
             <input
@@ -1996,30 +2122,64 @@ function MailBeheer() {
               onChange={(e) => setOwnDraft({ ...ownDraft, body: e.target.value })}
               placeholder="Hoi {naam}, …"
             />
-            <button
-              type="button"
-              className="vvl-btn-outline text-xs"
-              onClick={() => {
-                const name = ownDraft.name.trim();
-                const subject = ownDraft.subject.trim();
-                const body = ownDraft.body.trim();
-                if (!name || !subject || !body) {
-                  showStatus('', 'Vul naam, onderwerp en tekst in.');
-                  return;
-                }
-                const id = ownDraft.id || `eigen-${Date.now()}`;
-                const next = { id, name, subject, body };
-                const current = form.templates?.custom || [];
-                const custom = current.some((row) => row.id === id)
-                  ? current.map((row) => (row.id === id ? next : row))
-                  : [...current, next];
-                setForm({ ...form, templates: { ...form.templates, custom } });
-                setOwnDraft({ id: '', name: '', subject: '', body: '' });
-                showStatus('Eigen tekst toegevoegd. Klik Opslaan om hem te bewaren.');
-              }}
-            >
-              {ownDraft.id ? 'Tekst bijwerken' : 'Eigen tekst toevoegen'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="vvl-btn-outline text-xs"
+                onClick={() => {
+                  const name = ownDraft.name.trim();
+                  const subject = ownDraft.subject.trim();
+                  const body = ownDraft.body.trim();
+                  if (!name || !subject || !body) {
+                    showStatus('', 'Vul naam, onderwerp en tekst in.');
+                    return;
+                  }
+                  const id = ownDraft.id || `eigen-${Date.now()}`;
+                  const next = { id, name, subject, body };
+                  const current = form.templates?.custom || [];
+                  const custom = current.some((row) => row.id === id)
+                    ? current.map((row) => (row.id === id ? next : row))
+                    : [...current, next];
+                  setForm({ ...form, templates: { ...form.templates, custom } });
+                  setOwnDraft({ id: '', name: '', subject: '', body: '' });
+                  showStatus('Eigen tekst toegevoegd. Klik Opslaan om hem te bewaren.');
+                }}
+              >
+                {ownDraft.id ? 'Tekst bijwerken' : 'Eigen tekst toevoegen'}
+              </button>
+              {ownDraft.subject.trim() && ownDraft.body.trim() ? (
+                <>
+                  <button
+                    type="button"
+                    className="vvl-btn-outline text-xs"
+                    disabled={Boolean(templateBusy)}
+                    onClick={() =>
+                      loadLayoutPreview({
+                        subject: ownDraft.subject,
+                        body: ownDraft.body,
+                        key: 'custom',
+                      })
+                    }
+                  >
+                    Voorbeeld concept
+                  </button>
+                  <button
+                    type="button"
+                    className="vvl-btn-outline text-xs"
+                    disabled={Boolean(templateBusy)}
+                    onClick={() =>
+                      sendTemplateTest({
+                        key: 'custom',
+                        subject: ownDraft.subject,
+                        body: ownDraft.body,
+                      })
+                    }
+                  >
+                    Testmail concept
+                  </button>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="sm:col-span-2">

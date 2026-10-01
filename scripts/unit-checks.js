@@ -19,11 +19,24 @@ import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
-import { customMailTemplates, filterMailAudience, renderMail, resolveMailTemplates, serializeMailTemplates } from '../src/backend/lib/mailTemplates.js';
+import {
+  customMailTemplates,
+  filterMailAudience,
+  previewMailTemplate,
+  renderMail,
+  resolveMailTemplates,
+  serializeMailTemplates,
+} from '../src/backend/lib/mailTemplates.js';
+import {
+  ctaLabelForTemplateKey,
+  logoAttachment,
+  wrapBrandedEmail,
+} from '../src/backend/lib/mailLayout.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
 import {
   friendlyMailReason,
   interpretSendMailResult,
+  passwordResetEmailContent,
   swapCommitteeEmailContent,
 } from '../src/backend/lib/mail.js';
 import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
@@ -1063,6 +1076,61 @@ assert(
       .readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/PersonenBeheer.jsx'), 'utf8')
       .includes('invite-mail-failed'),
 );
+{
+  const branded = wrapBrandedEmail({
+    text: 'Hoi Jan,\n\nKlik hier:\nhttps://example.com/x\n\nGroet',
+    ctaLabel: 'Account activeren',
+    ctaUrl: 'https://example.com/x',
+  });
+  assert(
+    'branded mail heeft logo CID, knop en footer',
+    branded.html.includes('cid:vvl-logo') &&
+      branded.html.includes('Account activeren') &&
+      branded.html.includes('V.V. Lekkerkerk') &&
+      branded.text.includes('Hoi Jan') &&
+      !branded.text.includes('<table'),
+  );
+  assert('logo-bestand voor CID bestaat', Boolean(logoAttachment()?.path));
+  const invite = renderMail(
+    resolveMailTemplates(null).invite,
+    { naam: 'Lisa', link: 'https://app.example/invite' },
+    { templateKey: 'invite' },
+  );
+  assert(
+    'systeemtekst invite gebruikt layout + knop',
+    invite.html.includes('Account activeren') && invite.text.includes('Lisa'),
+  );
+  assert('cta-labels per sjabloon', ctaLabelForTemplateKey('reminder') === 'Bekijk dienst');
+  const preview = previewMailTemplate({
+    key: 'invite',
+    logoBaseUrl: 'http://localhost:5173',
+  });
+  assert(
+    'preview gebruikt publieke logo-URL',
+    preview.html.includes('http://localhost:5173/logo.png') && preview.subject.includes('Uitnodiging'),
+  );
+  const reset = passwordResetEmailContent({ name: 'Bo', link: 'https://app/reset' });
+  assert('wachtwoord-reset ook branded', reset.html.includes('Nieuw wachtwoord') && reset.html.includes('cid:vvl-logo'));
+  const beheerSrc = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),
+    'utf8',
+  );
+  assert(
+    'Beheer e-mailteksten hebben voorbeeld en testmail per sjabloon',
+    beheerSrc.includes('mail-test-${key}') &&
+      beheerSrc.includes('mail-preview-${key}') &&
+      beheerSrc.includes('data-testid="mail-layout-preview"') &&
+      beheerSrc.includes('Testmail versturen'),
+  );
+  const settingsSrc = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/settings.js'),
+    'utf8',
+  );
+  assert(
+    'API preview en test-template bestaan',
+    settingsSrc.includes("/mail/preview") && settingsSrc.includes("/mail/test-template"),
+  );
+}
 
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Mijn gegevens');

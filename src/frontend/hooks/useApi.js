@@ -281,6 +281,10 @@ export const api = {
     json('/settings/mail', { method: 'PUT', body: JSON.stringify(data) }),
   testMail: (to) =>
     json('/settings/mail/test', { method: 'POST', body: JSON.stringify({ to }) }),
+  previewMailTemplate: (data) =>
+    json('/settings/mail/preview', { method: 'POST', body: JSON.stringify(data) }),
+  testMailTemplate: (data) =>
+    json('/settings/mail/test-template', { method: 'POST', body: JSON.stringify(data) }),
   getServiceRules: () => json('/service-rules'),
   createServiceRule: (data) => json('/service-rules', { method: 'POST', body: JSON.stringify(data) }),
   updateServiceRule: (id, data) =>
