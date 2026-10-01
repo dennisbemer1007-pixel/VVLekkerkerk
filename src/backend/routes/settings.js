@@ -13,7 +13,15 @@ import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
 import prisma from '../lib/prisma.js';
 import { previewEnvironmentReset, runEnvironmentReset } from '../lib/environmentReset.js';
-import { customMailTemplates, dienstLabel, filterMailAudience, formatDutyDate, renderMail } from '../lib/mailTemplates.js';
+import {
+  customMailTemplates,
+  dienstLabel,
+  filterMailAudience,
+  formatDutyDate,
+  MAIL_TEMPLATE_KEYS,
+  previewMailTemplate,
+  renderMail,
+} from '../lib/mailTemplates.js';
 import { resolvePublicAppUrl } from '../lib/appUrl.js';
 
 const router = Router();
@@ -145,6 +153,120 @@ router.post(
   }),
 );
 
+/** Voorbeeld van een e-mailtekst in de branding-layout (geen verzending). */
+router.post(
+  '/mail/preview',
+  requireRole(...ADMIN)(async (req, res, next) => {
+    try {
+      const settings = await getMailSettings();
+      let base = '';
+      try {
+        base = resolvePublicAppUrl();
+      } catch {
+        base = '';
+      }
+      const preview = previewMailTemplate({
+        key: req.body?.key,
+        templateId: req.body?.templateId,
+        subject: req.body?.subject,
+        body: req.body?.body,
+        templatesRaw: settings.templates,
+        logoBaseUrl: base,
+      });
+      res.json(preview);
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      next(err);
+    }
+  }),
+);
+
+/**
+ * Stuur één sjabloon met voorbeelddata naar jezelf (of een opgegeven adres).
+ * Geen massamail. Logo gaat mee als CID-bijlage.
+ */
+router.post(
+  '/mail/test-template',
+  requireRole(...ADMIN)(async (req, res, next) => {
+    try {
+      const settings = await getMailSettings();
+      const publicSettings = publicMailSettings(settings);
+      if (!publicSettings.isReady) {
+        return res.status(400).json({
+          error:
+            'Mailtest mislukt: zet “E-mail versturen” aan, vul host, gebruikersnaam, app-wachtwoord en afzender in, en klik Opslaan.',
+        });
+      }
+
+      const to = String(req.body?.to || req.person?.email || settings.fromEmail || '').trim();
+      if (!to || !to.includes('@')) {
+        return res.status(400).json({
+          error: 'Vul een testadres in (bijv. je eigen e-mail).',
+        });
+      }
+
+      const { exampleMailVars } = await import('../lib/mailLayout.js');
+      const { resolveMailTemplates } = await import('../lib/mailTemplates.js');
+
+      let template;
+      let templateKey = 'custom';
+      if (req.body?.templateId) {
+        const found = customMailTemplates(settings.templates).find(
+          (item) => item.id === String(req.body.templateId),
+        );
+        if (!found) return res.status(400).json({ error: 'Onbekende eigen e-mailtekst' });
+        template = {
+          subject: String(req.body?.subject || found.subject),
+          body: String(req.body?.body || found.body),
+        };
+      } else if (MAIL_TEMPLATE_KEYS.includes(String(req.body?.key))) {
+        templateKey = String(req.body.key);
+        const resolved = resolveMailTemplates(settings.templates)[templateKey];
+        template = {
+          subject: String(req.body?.subject || resolved.subject),
+          body: String(req.body?.body || resolved.body),
+        };
+      } else if (String(req.body?.subject || '').trim() && String(req.body?.body || '').trim()) {
+        template = {
+          subject: String(req.body.subject),
+          body: String(req.body.body),
+        };
+        templateKey = String(req.body?.key || 'custom');
+      } else {
+        return res.status(400).json({ error: 'Kies een e-mailtekst om te testen' });
+      }
+
+      // CID-logo (default in wrapBrandedEmail) — betrouwbaar in Gmail/Outlook
+      const mail = renderMail(template, exampleMailVars(), { templateKey });
+      const sent = await sendMail({ to, ...mail });
+      if (!sent?.sent) {
+        return res.status(400).json({
+          error: `Mailtest mislukt: ${sent?.reason || 'mail is niet verstuurd'}`,
+        });
+      }
+      res.json({
+        ok: true,
+        messageId: sent.messageId || null,
+        to,
+        subject: mail.subject,
+        message: `Testmail “${mail.subject}” verstuurd naar ${to}.`,
+      });
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      const raw = String(err.message || err);
+      let hint = raw;
+      if (/Invalid login|Username and Password not accepted|EAUTH/i.test(raw)) {
+        hint =
+          'Gmail weigert de login. Gebruik een app-wachtwoord (niet je gewone wachtwoord), zet 2-stapsverificatie aan, en sla opnieuw op.';
+      } else if (/CERTIFICATE|TLS|SSL|ECONNECTION|ETIMEDOUT|ENOTFOUND/i.test(raw)) {
+        hint =
+          'Geen verbinding met de mailserver. Controleer host en poort (Gmail: smtp.gmail.com, 587).';
+      }
+      res.status(400).json({ error: `Mailtest mislukt: ${hint}` });
+    }
+  }),
+);
+
 router.post(
   '/mail/send-own',
   requireRole(...ADMIN)(async (req, res, next) => {
@@ -188,13 +310,17 @@ router.post(
         }
       })();
       const sample = recipients[0];
-      const preview = renderMail(template, {
-        naam: sample?.name || 'Naam',
-        datum: sampleService ? formatDutyDate(sampleService.date) : '',
-        tijd: sampleService?.time || '',
-        dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
-        link,
-      });
+      const preview = renderMail(
+        template,
+        {
+          naam: sample?.name || 'Naam',
+          datum: sampleService ? formatDutyDate(sampleService.date) : '',
+          tijd: sampleService?.time || '',
+          dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
+          link,
+        },
+        { templateKey: 'custom' },
+      );
       if (!req.body?.confirm) {
         return res.json({
           confirm: false,
@@ -207,13 +333,17 @@ router.post(
       let sent = 0;
       const failed = [];
       for (const person of recipients) {
-        const mail = renderMail(template, {
-          naam: person.name,
-          datum: sampleService ? formatDutyDate(sampleService.date) : '',
-          tijd: sampleService?.time || '',
-          dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
-          link,
-        });
+        const mail = renderMail(
+          template,
+          {
+            naam: person.name,
+            datum: sampleService ? formatDutyDate(sampleService.date) : '',
+            tijd: sampleService?.time || '',
+            dienst: sampleService ? dienstLabel(sampleService.type) : 'bardienst',
+            link,
+          },
+          { templateKey: 'custom' },
+        );
         const result = await sendMail({ to: person.email, subject: mail.subject, text: mail.text, html: mail.html });
         if (result.sent) sent += 1;
         else failed.push({ name: person.name, reason: result.reason || 'niet verstuurd' });

@@ -16,13 +16,17 @@ export function reminderWindow(now = new Date()) {
 
 export function dutyReminderEmail({ name, dateText, time, typeLabel, appUrl, template }) {
   const templates = resolveMailTemplates(template ? { reminder: template } : null);
-  return renderMail(templates.reminder, {
-    naam: name,
-    datum: dateText,
-    tijd: time,
-    dienst: typeLabel,
-    link: appUrl || '',
-  });
+  return renderMail(
+    templates.reminder,
+    {
+      naam: name,
+      datum: dateText,
+      tijd: time,
+      dienst: typeLabel,
+      link: appUrl || '',
+    },
+    { templateKey: 'reminder' },
+  );
 }
 
 let lastRunAt = 0;

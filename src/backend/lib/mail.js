@@ -11,6 +11,12 @@ import {
   resolveMailTemplates,
   serializeMailTemplates,
 } from './mailTemplates.js';
+import {
+  ctaLabelForTemplateKey,
+  logoAttachment,
+  MAIL_BRAND,
+  wrapBrandedEmail,
+} from './mailLayout.js';
 
 const DEFAULT_ID = 1;
 
@@ -160,12 +166,20 @@ export async function sendMail({ to, subject, text, html }) {
   const fromName = sanitizeFromName(settings.fromName);
   const from = fromName ? `"${fromName}" <${settings.fromEmail}>` : settings.fromEmail;
 
+  const htmlBody = html || text.replace(/\n/g, '<br>');
+  const attachments = [];
+  if (String(htmlBody).includes(`cid:${MAIL_BRAND.logoCid}`)) {
+    const logo = logoAttachment();
+    if (logo) attachments.push(logo);
+  }
+
   const info = await transporter.sendMail({
     from,
     to,
     subject,
     text,
-    html: html || text.replace(/\n/g, '<br>'),
+    html: htmlBody,
+    ...(attachments.length ? { attachments } : {}),
   });
 
   const rejected = Array.isArray(info.rejected) ? info.rejected.filter(Boolean) : [];
@@ -203,15 +217,7 @@ export async function verifyMailConnection(settingsOverride) {
 
 export function inviteEmailContent({ name, link, template }) {
   const templates = resolveMailTemplates(template ? { invite: template } : null);
-  return renderMail(templates.invite, { naam: name, link });
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return renderMail(templates.invite, { naam: name, link }, { templateKey: 'invite' });
 }
 
 function safeAppUrl() {
@@ -252,13 +258,17 @@ export async function trySendScheduledConfirmation({ person, service }) {
   if (!isMailReady(settings)) return { sent: false, reason: friendlyMailReason('not_configured') };
   try {
     const templates = resolveMailTemplates(settings.templates);
-    const content = renderMail(templates.scheduled, {
-      naam: person.name,
-      datum: formatDutyDate(service.date),
-      tijd: service.time || '',
-      dienst: dienstLabel(service.type),
-      link: safeAppUrl(),
-    });
+    const content = renderMail(
+      templates.scheduled,
+      {
+        naam: person.name,
+        datum: formatDutyDate(service.date),
+        tijd: service.time || '',
+        dienst: dienstLabel(service.type),
+        link: safeAppUrl(),
+      },
+      { templateKey: 'scheduled' },
+    );
     const result = await sendMail({ to: person.email, ...content });
     const interpreted = interpretSendMailResult(result);
     if (!interpreted.sent) {
@@ -282,7 +292,7 @@ export async function notifyPlanningReady() {
   const templates = resolveMailTemplates(settings.templates);
   const link = safeAppUrl();
   return sendBulk(people, (person) =>
-    renderMail(templates.planningReady, { naam: person.name, link }),
+    renderMail(templates.planningReady, { naam: person.name, link }, { templateKey: 'planningReady' }),
   );
 }
 
@@ -299,13 +309,12 @@ Heb je dit niet aangevraagd? Negeer deze e-mail.
 
 Groet,
 V.V. Lekkerkerk`;
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p>Je hebt gevraagd om je wachtwoord te resetten.</p>
-    <p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;font-weight:bold;border-radius:999px;">Nieuw wachtwoord</a></p>
-    <p>Link 24 uur geldig. Niet aangevraagd? Negeer deze mail.</p>
-  `;
-  return { subject, text, html };
+  const branded = wrapBrandedEmail({
+    text,
+    ctaLabel: ctaLabelForTemplateKey('passwordReset'),
+    ctaUrl: link,
+  });
+  return { subject, text: branded.text, html: branded.html };
 }
 
 export async function trySendPasswordResetEmail({ email, name, link }) {
@@ -342,45 +351,43 @@ export function volunteerOpenEmail({ name, deadline, appUrl }) {
   const deadlineText = deadline
     ? `Je kunt je inschrijven tot ${formatDeadline(deadline)}.`
     : 'Schrijf je zo snel mogelijk in via de app.';
+  const link = String(appUrl || '').trim();
   const text = `Hoi ${name},
 
 De bardiensten voor de komende weken staan open.
 ${deadlineText}
 
-Log in via: ${appUrl || 'de VVL Planning App'}
+Log in via: ${link || 'de VVL Planning App'}
 
 Groet,
 V.V. Lekkerkerk`;
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p>De bardiensten voor de komende weken staan open.</p>
-    <p><strong>${escapeHtml(deadlineText)}</strong></p>
-    <p><a href="${escapeHtml(appUrl || '#')}">Open de VVL Planning App</a></p>
-    <p>Groet,<br>V.V. Lekkerkerk</p>
-  `;
-  return { subject, text, html };
+  const branded = wrapBrandedEmail({
+    text,
+    ctaLabel: 'Open de app',
+    ctaUrl: link,
+  });
+  return { subject, text: branded.text, html: branded.html };
 }
 
 export function mandatoryOpenEmail({ name, appUrl }) {
   const subject = 'Verplichte bardienst — nog inschrijven';
+  const link = String(appUrl || '').trim();
   const text = `Hoi ${name},
 
 Je staat genoteerd voor een verplichte bardienst.
 De vrijwilligersfase is afgelopen; schrijf je nu in op een open dienst via de app.
 Als je je niet inschrijft, kan de coördinator je team toewijzen.
 
-Log in via: ${appUrl || 'de VVL Planning App'}
+Log in via: ${link || 'de VVL Planning App'}
 
 Groet,
 V.V. Lekkerkerk`;
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p>Je staat genoteerd voor een <strong>verplichte bardienst</strong>.</p>
-    <p>De vrijwilligersfase is afgelopen; schrijf je nu in op een open dienst.</p>
-    <p><a href="${escapeHtml(appUrl || '#')}">Open de VVL Planning App</a></p>
-    <p>Groet,<br>V.V. Lekkerkerk</p>
-  `;
-  return { subject, text, html };
+  const branded = wrapBrandedEmail({
+    text,
+    ctaLabel: 'Open de app',
+    ctaUrl: link,
+  });
+  return { subject, text: branded.text, html: branded.html };
 }
 
 async function sendBulk(people, buildContent) {
@@ -449,18 +456,12 @@ Keur goed of wijs af via Beheer → Ruilen${link ? `:\n${link}` : '.'}
 
 Groet,
 V.V. Lekkerkerk`;
-  const html = `
-    <p>Hoi ${escapeHtml(name)},</p>
-    <p><strong>${escapeHtml(requesterName)}</strong> en <strong>${escapeHtml(counterpartyName)}</strong> zijn allebei akkoord met een ruil. Die wacht nu op de barcommissie.</p>
-    <p>${escapeHtml(requesterName)}: ${escapeHtml(fromLabel)}<br>${escapeHtml(counterpartyName)}: ${escapeHtml(toLabel)}</p>
-    ${
-      link
-        ? `<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;font-weight:bold;border-radius:999px;">Open ter goedkeuring</a></p>`
-        : '<p>Keur goed of wijs af via Beheer → Ruilen.</p>'
-    }
-    <p>Groet,<br>V.V. Lekkerkerk</p>
-  `;
-  return { subject, text, html };
+  const branded = wrapBrandedEmail({
+    text,
+    ctaLabel: ctaLabelForTemplateKey('swap'),
+    ctaUrl: link,
+  });
+  return { subject, text: branded.text, html: branded.html };
 }
 
 export async function notifyBarcommissieOfPendingSwap({

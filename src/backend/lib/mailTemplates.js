@@ -1,3 +1,11 @@
+import {
+  ctaLabelForTemplateKey,
+  exampleMailVars,
+  publicLogoUrl,
+  wrapBrandedEmail,
+} from './mailLayout.js';
+import { resolvePublicAppUrl } from './appUrl.js';
+
 export const MAIL_TEMPLATE_KEYS = ['invite', 'scheduled', 'reminder', 'planningReady'];
 
 export const DEFAULT_MAIL_TEMPLATES = {
@@ -49,14 +57,6 @@ V.V. Lekkerkerk`,
 };
 
 const PLACEHOLDER = /\{(naam|datum|tijd|dienst|link)\}/g;
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 export function resolveMailTemplates(raw) {
   let stored = {};
@@ -131,7 +131,13 @@ export function filterMailAudience(people, { audience, teamId, serviceId } = {})
   return [];
 }
 
-export function renderMail(template, vars = {}) {
+/**
+ * Vult placeholders en wikkelt de tekst in de VV Lekkerkerk HTML-layout.
+ * @param {{ subject?: string, body?: string }} template
+ * @param {Record<string, string>} vars
+ * @param {{ templateKey?: string, ctaLabel?: string, logoSrc?: string }} [options]
+ */
+export function renderMail(template, vars = {}, options = {}) {
   const dict = {
     naam: vars.naam || '',
     datum: vars.datum || '',
@@ -143,15 +149,82 @@ export function renderMail(template, vars = {}) {
   const subject = fill(template.subject).replace(/[\r\n]/g, ' ').trim();
   const text = fill(template.body);
   const link = dict.link;
-  let html = escapeHtml(text).replace(/\n/g, '<br>');
-  if (link) {
-    html = html.replace(escapeHtml(link), `<a href="${escapeHtml(link)}">${escapeHtml(link)}</a>`);
-  }
-  return { subject, text, html: `<div>${html}</div>` };
+  const ctaLabel =
+    options.ctaLabel ||
+    (options.templateKey ? ctaLabelForTemplateKey(options.templateKey) : '') ||
+    (link ? 'Open de app' : '');
+  const branded = wrapBrandedEmail({
+    text,
+    ctaLabel,
+    ctaUrl: link,
+    logoSrc: options.logoSrc,
+  });
+  return { subject, text: branded.text, html: branded.html };
 }
 
 export function dienstLabel(type) {
   return type === 'KITCHEN' ? 'keukendienst' : 'bardienst';
+}
+
+/**
+ * Voorbeeld/preview van een systeem- of eigen tekst in de branding-layout.
+ * logoSrc is een publieke URL (voor iframe-preview); verzenden gebruikt CID.
+ */
+export function previewMailTemplate({
+  key,
+  templateId,
+  subject,
+  body,
+  templatesRaw,
+  vars,
+  logoBaseUrl,
+} = {}) {
+  const resolved = resolveMailTemplates(templatesRaw);
+  const custom = customMailTemplates(templatesRaw);
+  let templateKey = key || '';
+  let template = null;
+
+  if (templateId) {
+    const found = custom.find((item) => item.id === String(templateId));
+    if (!found) throw Object.assign(new Error('Onbekende eigen e-mailtekst'), { status: 400 });
+    template = { subject: found.subject, body: found.body };
+    templateKey = 'custom';
+  } else if (MAIL_TEMPLATE_KEYS.includes(String(key))) {
+    template = resolved[key];
+    templateKey = key;
+  } else if (subject != null || body != null) {
+    template = {
+      subject: String(subject || 'Voorbeeld'),
+      body: String(body || ''),
+    };
+    templateKey = key || 'custom';
+  } else {
+    throw Object.assign(new Error('Kies een e-mailtekst'), { status: 400 });
+  }
+
+  // Concepttekst uit het formulier (nog niet opgeslagen) heeft voorrang
+  if (subject != null && String(subject).trim()) template = { ...template, subject: String(subject) };
+  if (body != null && String(body).trim()) template = { ...template, body: String(body) };
+
+  let base = logoBaseUrl || '';
+  if (!base) {
+    try {
+      base = resolvePublicAppUrl();
+    } catch {
+      base = '';
+    }
+  }
+  const sampleVars = exampleMailVars(vars);
+  const rendered = renderMail(template, sampleVars, {
+    templateKey,
+    logoSrc: publicLogoUrl(base),
+  });
+  return {
+    ...rendered,
+    templateKey,
+    ctaLabel: ctaLabelForTemplateKey(templateKey),
+    vars: sampleVars,
+  };
 }
 
 export function formatDutyDate(date) {
