@@ -38,7 +38,7 @@ export default function Planning({ variant = 'rooster' }) {
   const [children, setChildren] = useState([]);
   const [pendingId, setPendingId] = useState(null);
   const [mineOnly, setMineOnly] = useState(false);
-  const [showAllRooster, setShowAllRooster] = useState(true);
+  const [showAllRooster, setShowAllRooster] = useState(false);
   const detailTopRef = useRef(null);
   const isCommittee = can('beheer');
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
@@ -257,11 +257,17 @@ export default function Planning({ variant = 'rooster' }) {
   };
 
   useEffect(() => {
+    // Zonder filter blijft het rooster leeg, ook op de telefoon (daar verbergt een
+    // geselecteerde dienst de lijst, inclusief de tekst “Kies een filter”).
+    if (variant === 'rooster' && !roosterFiltered) {
+      if (selectedId != null) setSelectedId(null);
+      return;
+    }
     if (!shown.length) return;
     if (selectedId && shown.some((s) => s.id === selectedId)) return;
     if (cleared.current) return;
     setSelectedId(shown[0].id);
-  }, [shown, selectedId]);
+  }, [shown, selectedId, variant, roosterFiltered]);
 
   const pick = (id) => {
     cleared.current = false;
