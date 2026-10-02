@@ -34,8 +34,11 @@ import {
 } from '../src/backend/lib/mailLayout.js';
 import { isNamelessRosterPerson, normalizePersonName } from '../src/backend/lib/personMatch.js';
 import {
+  connectionTestMail,
   friendlyMailReason,
+  friendlySmtpError,
   interpretSendMailResult,
+  mailFromMustMatchUser,
   passwordResetEmailContent,
   swapCommitteeEmailContent,
 } from '../src/backend/lib/mail.js';
@@ -1085,12 +1088,51 @@ assert(
   assert(
     'branded mail heeft logo CID, knop en footer',
     branded.html.includes('cid:vvl-logo') &&
+      branded.html.includes('background:#ffffff;padding:8px;border-radius:4px;') &&
       branded.html.includes('Account activeren') &&
       branded.html.includes('V.V. Lekkerkerk') &&
       branded.text.includes('Hoi Jan') &&
       !branded.text.includes('<table'),
   );
   assert('logo-bestand voor CID bestaat', Boolean(logoAttachment()?.path));
+const connection = connectionTestMail();
+assert(
+  'verbindings-testmail gebruikt huisstijl',
+  connection.html.includes('cid:vvl-logo') &&
+    connection.html.includes('Planning bar- en keukendiensten') &&
+    connection.html.includes('Open de app') &&
+    connection.text.includes('testmail') &&
+    !connection.html.includes('<p>Dit is een <strong>testmail</strong>'),
+);
+assert(
+  'Gmail eist dezelfde afzender, eigen server niet',
+  mailFromMustMatchUser({ host: 'smtp.gmail.com', fromEmail: 'a@gmail.com', user: 'b@gmail.com' }).includes('Gmail') &&
+    mailFromMustMatchUser({ host: 'smtp.gmail.com', fromEmail: 'a@gmail.com', user: 'a@gmail.com' }) === '' &&
+    mailFromMustMatchUser({ host: '127.0.0.1', fromEmail: 'planning@vvl.test', user: 'vvl-sink' }) === '',
+);
+assert(
+  'SMTP-fout noemt Gmail alleen bij Gmail',
+  friendlySmtpError('connect ECONNREFUSED', 'smtp.gmail.com').includes('smtp.gmail.com') &&
+    friendlySmtpError('connect ECONNREFUSED', 'mail.club.nl').includes('mail.club.nl') &&
+    !friendlySmtpError('connect ECONNREFUSED', 'mail.club.nl').includes('smtp.gmail.com'),
+);
+const stylesCss = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/styles.css'),
+  'utf8',
+);
+assert(
+  'lettertype staat lokaal, niet via Google',
+  stylesCss.includes('@fontsource/inter') && !stylesCss.includes('fonts.googleapis.com'),
+);
+const planningSrc = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Planning.jsx'),
+  'utf8',
+);
+assert(
+  'rooster start leeg tot een filter',
+  /const \[showAllRooster, setShowAllRooster\] = useState\(false\)/.test(planningSrc) &&
+    planningSrc.includes('Kies een filter of klik Alles tonen'),
+);
   const invite = renderMail(
     resolveMailTemplates(null).invite,
     { naam: 'Lisa', link: 'https://app.example/invite' },

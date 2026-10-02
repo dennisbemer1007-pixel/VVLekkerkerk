@@ -295,6 +295,22 @@ async function main() {
     await pageCheck(browser, {
       email: 'mark@vvl.demo',
       password: 'demo123',
+      path: '/rooster',
+      width: 1280,
+      expectText: ['Kies een filter'],
+      forbidText: leftover,
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/rooster',
+      width: 375,
+      expectText: ['Kies een filter'],
+      forbidText: leftover,
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
       path: '/open',
       width: 375,
       expectText: ['Open'],

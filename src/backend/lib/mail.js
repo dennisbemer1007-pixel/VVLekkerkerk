@@ -57,6 +57,56 @@ export function publicMailSettings(settings) {
   };
 }
 
+/**
+ * Gmail levert vaak niet af als afzender en SMTP-gebruikersnaam uit elkaar lopen.
+ * Bij een eigen mailserver mag de gebruikersnaam anders zijn dan het afzenderadres.
+ */
+export function mailFromMustMatchUser(settings) {
+  const host = String(settings?.host || '').trim().toLowerCase();
+  const gmail = host === 'smtp.gmail.com' || host.endsWith('.gmail.com') || host.includes('googlemail.com');
+  if (!gmail) return '';
+  const fromNorm = String(settings?.fromEmail || '').trim().toLowerCase();
+  const userNorm = String(settings?.user || '').trim().toLowerCase();
+  if (fromNorm && userNorm && fromNorm !== userNorm) {
+    return `afzender (${settings.fromEmail}) moet hetzelfde zijn als gebruikersnaam (${settings.user}). Bij Gmail anders komt de mail vaak niet aan.`;
+  }
+  return '';
+}
+
+/** Verbindingstest in dezelfde huisstijl als de andere mails. */
+export function connectionTestMail() {
+  let link = '';
+  try {
+    link = resolvePublicAppUrl();
+  } catch {
+    link = '';
+  }
+  const text = link
+    ? `Dit is een testmail van de VVL Planning App.\n\nDe mailserver is correct aangesloten.\n\n${link}`
+    : 'Dit is een testmail van de VVL Planning App.\n\nDe mailserver is correct aangesloten.';
+  return wrapBrandedEmail({
+    text,
+    ctaLabel: link ? 'Open de app' : '',
+    ctaUrl: link,
+  });
+}
+
+/** Nederlandse uitleg bij een SMTP-fout, zonder Gmail-advies op een andere server. */
+export function friendlySmtpError(raw, host) {
+  const message = String(raw || '').trim();
+  if (/Invalid login|Username and Password not accepted|EAUTH/i.test(message)) {
+    return 'De mailserver weigert de login. Controleer gebruikersnaam en wachtwoord. Bij Gmail gebruik je een app-wachtwoord, niet je normale wachtwoord.';
+  }
+  if (/CERTIFICATE|TLS|SSL|ECONNECTION|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(message)) {
+    const where = String(host || '').trim();
+    if (!where || where.includes('gmail')) {
+      return 'Geen verbinding met smtp.gmail.com. Controleer host smtp.gmail.com, poort 587, en laat “Beveiligde verbinding” uit.';
+    }
+    return `Geen verbinding met ${where}. Controleer host en poort.`;
+  }
+  return message;
+}
+
 export function isMailReady(settings) {
   return Boolean(
     settings?.enabled &&

@@ -494,6 +494,30 @@ async function main() {
   const lisaPersons = await req('/api/persons', { token: lisa });
   mark(record('vrijwilliger personenlijst 403', lisaPersons.status === 403, String(lisaPersons.status)));
 
+  const sandraPersons = await req('/api/persons', { token: sandra });
+  const sandraTeams = new Set(
+    (teamsSandra.json || []).map((team) => team.id).filter((id) => Number.isFinite(id)),
+  );
+  mark(
+    record(
+      'teamco ziet alleen eigen team, zonder contact of uitnodiging',
+      sandraPersons.status === 200 &&
+        Array.isArray(sandraPersons.json) &&
+        sandraPersons.json.length > 0 &&
+        sandraPersons.json.every(
+          (person) =>
+            person.email == null &&
+            person.inviteToken == null &&
+            person.phone == null &&
+            sandraTeams.has(person.teamId),
+        ) &&
+        sandraPersons.json.some((person) => person.name === 'Lisa Bakker') &&
+        sandraPersons.json.every((person) => person.name !== 'Fatima El Amrani') &&
+        sandraPersons.json.every((person) => person.name !== 'Erik Hofman'),
+      `${sandraPersons.status} n=${sandraPersons.json?.length} teams=${[...sandraTeams].join(',')}`,
+    ),
+  );
+
   const me = await req('/api/auth/me', { token: lisa });
   mark(record('me zonder passwordHash', me.json?.passwordHash == null && me.json?.inviteToken == null));
 

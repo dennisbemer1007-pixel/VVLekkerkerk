@@ -12,7 +12,7 @@ import {
 } from '../lib/obligation.js';
 import { isAdminRole, ADMIN_ROLES } from '../lib/roles.js';
 import { normalizeRole, resolvePublicAppUrl } from '../lib/appUrl.js';
-import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
+import { canManagePersonAsTeamCoordinator, teamIdsForActor } from '../lib/authz.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { writeAudit } from '../lib/audit.js';
 import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, normalizeImportedTeamName, personRowsFromObjects } from '../lib/csvPersons.js';
@@ -104,6 +104,19 @@ router.get(
         });
         const ids = new Set(duties.map((d) => d.personId));
         visible = visible.filter((p) => ids.has(p.id));
+      }
+      if (!isAdmin && isTeamCo) {
+        const allowed = await teamIdsForActor(req.person);
+        const memberships = allowed.size
+          ? await prisma.personTeam.findMany({
+              where: { active: true, teamId: { in: [...allowed] } },
+              select: { personId: true },
+            })
+          : [];
+        const memberIds = new Set(memberships.map((row) => row.personId));
+        visible = visible.filter(
+          (person) => memberIds.has(person.id) || (person.teamId && allowed.has(person.teamId)),
+        );
       }
       res.json(visible.map((p) => publicPerson(p, { viewerRole: req.person.role })));
     } catch (err) {

@@ -163,7 +163,13 @@ export function wrapBrandedEmail({
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${widthAttr}width:100%;background:${MAIL_BRAND.background};border:1px solid ${MAIL_BRAND.border};">
           <tr>
             <td style="background:${MAIL_BRAND.primary};padding:20px 24px;text-align:center;">
-              <img src="${escapeHtml(logoSrc)}" width="56" height="58" alt="${escapeHtml(MAIL_BRAND.clubName)}" style="display:inline-block;border:0;outline:none;width:56px;height:auto;" />
+              <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td style="background:#ffffff;padding:8px;border-radius:4px;">
+                    <img src="${escapeHtml(logoSrc)}" width="56" height="58" alt="${escapeHtml(MAIL_BRAND.clubName)}" style="display:block;border:0;outline:none;width:56px;height:auto;" />
+                  </td>
+                </tr>
+              </table>
               <div style="margin-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#ffffff;">
                 ${escapeHtml(MAIL_BRAND.clubName)}
               </div>

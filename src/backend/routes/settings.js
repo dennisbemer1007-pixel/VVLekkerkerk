@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES } from '../lib/roles.js';
 import {
+  connectionTestMail,
+  friendlySmtpError,
   getMailSettings,
+  mailFromMustMatchUser,
   publicMailSettings,
   saveMailSettings,
   sendMail,
@@ -75,8 +78,9 @@ router.put(
 router.post(
   '/mail/test',
   requireRole(...ADMIN)(async (req, res, next) => {
+    let settings;
     try {
-      const settings = await getMailSettings();
+      settings = await getMailSettings();
       const publicSettings = publicMailSettings(settings);
 
       if (!publicSettings.host) {
@@ -106,23 +110,19 @@ router.post(
         });
       }
 
-      const fromNorm = String(settings.fromEmail || '')
-        .trim()
-        .toLowerCase();
-      const userNorm = String(settings.user || '')
-        .trim()
-        .toLowerCase();
-      if (fromNorm && userNorm && fromNorm !== userNorm) {
+      const fromMismatch = mailFromMustMatchUser(settings);
+      if (fromMismatch) {
         return res.status(400).json({
-          error: `Mailtest mislukt: afzender (${settings.fromEmail}) moet hetzelfde zijn als gebruikersnaam (${settings.user}). Bij Gmail anders komt de mail vaak niet aan.`,
+          error: `Mailtest mislukt: ${fromMismatch}`,
         });
       }
 
+      const testMail = connectionTestMail();
       const sent = await sendMail({
         to,
         subject: 'Testmail VVL Planning App',
-        text: 'Dit is een testmail. De mailserver is correct aangesloten.',
-        html: '<p>Dit is een <strong>testmail</strong>. De mailserver is correct aangesloten.</p>',
+        text: testMail.text,
+        html: testMail.html,
       });
 
       if (!sent?.sent) {
@@ -137,17 +137,8 @@ router.post(
         message: `Verbinding ok. Testmail verstuurd naar ${to}. Staat hij niet in Inbox/Spam? Kijk in Gmail onder Verzonden. Komt hij daar ook niet? Dan is hij niet echt weggegaan — controleer app-wachtwoord en of “E-mail versturen” aanstaat.`,
       });
     } catch (err) {
-      const raw = String(err.message || err);
-      let hint = raw;
-      if (/Invalid login|Username and Password not accepted|EAUTH/i.test(raw)) {
-        hint =
-          'Gmail weigert de login. Gebruik een app-wachtwoord (niet je gewone wachtwoord), zet 2-stapsverificatie aan, en sla opnieuw op.';
-      } else if (/CERTIFICATE|TLS|SSL|ECONNECTION|ETIMEDOUT|ENOTFOUND/i.test(raw)) {
-        hint =
-          'Geen verbinding met smtp.gmail.com. Controleer host smtp.gmail.com, poort 587, en laat “Beveiligde verbinding” uit.';
-      }
       res.status(400).json({
-        error: `Mailtest mislukt: ${hint}`,
+        error: `Mailtest mislukt: ${friendlySmtpError(err.message || err, settings?.host)}`,
       });
     }
   }),
@@ -188,8 +179,9 @@ router.post(
 router.post(
   '/mail/test-template',
   requireRole(...ADMIN)(async (req, res, next) => {
+    let settings;
     try {
-      const settings = await getMailSettings();
+      settings = await getMailSettings();
       const publicSettings = publicMailSettings(settings);
       if (!publicSettings.isReady) {
         return res.status(400).json({
@@ -253,16 +245,9 @@ router.post(
       });
     } catch (err) {
       if (err.status) return res.status(err.status).json({ error: err.message });
-      const raw = String(err.message || err);
-      let hint = raw;
-      if (/Invalid login|Username and Password not accepted|EAUTH/i.test(raw)) {
-        hint =
-          'Gmail weigert de login. Gebruik een app-wachtwoord (niet je gewone wachtwoord), zet 2-stapsverificatie aan, en sla opnieuw op.';
-      } else if (/CERTIFICATE|TLS|SSL|ECONNECTION|ETIMEDOUT|ENOTFOUND/i.test(raw)) {
-        hint =
-          'Geen verbinding met de mailserver. Controleer host en poort (Gmail: smtp.gmail.com, 587).';
-      }
-      res.status(400).json({ error: `Mailtest mislukt: ${hint}` });
+      res.status(400).json({
+        error: `Mailtest mislukt: ${friendlySmtpError(err.message || err, settings?.host)}`,
+      });
     }
   }),
 );
