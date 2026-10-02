@@ -307,8 +307,7 @@ export default function Planning({ variant = 'rooster' }) {
       ) : null}
       {variant === 'open' ? (
         <p className="text-sm text-gray-700">
-          Open plekken en aandachtspunten in de actieve planning. Diensten van deze week staan niet
-          meer apart op het dashboard.
+          Open plekken en aandachtspunten in de actieve planningperiode.
         </p>
       ) : null}
       {variant === 'rooster' ? (

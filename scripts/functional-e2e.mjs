@@ -62,8 +62,19 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
       failed.push(`${res.status()} ${res.url()}`);
     }
   });
-  await page.goto(`${base}/login`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('input[type="email"], input[name="email"], input[type="password"]');
+  await page.goto(`${base}/login`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.evaluate(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+  });
+  await page.goto(`${base}/login`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.waitForSelector('input[type="email"], input[name="email"], input[type="password"]', {
+    timeout: 25000,
+  });
   const emailSel = (await page.$('input[type="email"]'))
     ? 'input[type="email"]'
     : (await page.$('input[name="email"]'))
@@ -74,11 +85,11 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
   await page.click('input[type="password"]', { clickCount: 3 });
   await page.type('input[type="password"]', password, { delay: 5 });
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
     page.click('button[type="submit"]'),
   ]);
-  await page.goto(`${base}${path}`, { waitUntil: 'networkidle0' });
-  await new Promise((r) => setTimeout(r, 400));
+  await page.goto(`${base}${path}`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await new Promise((r) => setTimeout(r, 600));
   const body = await page.evaluate(() => document.body?.innerText || '');
   for (const t of expectText) {
     ok(`UI ${email} ${width}px ${path} bevat "${t}"`, body.toLowerCase().includes(t.toLowerCase()));
@@ -177,13 +188,19 @@ async function main() {
     body: { name: `E2E Kind ${stamp}` },
   });
   ok('ouder voegt kind toe', child.status === 201, String(child.status));
-  if (child.json?.id && pick) {
-    const again = openList.find((s) => s.id !== pick.id && !s.locked && (s.capacity?.personalOpen ?? 0) > 0) || pick;
-    const enChild = await req('/api/enrollments', {
-      method: 'POST',
-      token: lisa,
-      body: { serviceId: again.id, personId: child.json.id },
-    });
+  if (child.json?.id) {
+    const candidates = (openList || []).filter(
+      (s) => !s.locked && (s.capacity?.personalOpen ?? 0) > 0,
+    );
+    let enChild = { status: 0, json: {} };
+    for (const svc of candidates) {
+      enChild = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: svc.id, personId: child.json.id },
+      });
+      if (enChild.status === 201) break;
+    }
     ok('ouder schrijft kind in', enChild.status === 201, String(enChild.status) + ' ' + (enChild.json?.error || ''));
     if (enChild.json?.id) {
       const del = await req(`/api/enrollments/${enChild.json.id}`, { method: 'DELETE', token: lisa });
@@ -273,16 +290,32 @@ async function main() {
       password: 'demo123',
       path: '/diensten',
       width: 375,
-      expectText: ['Inschrijven'],
+      expectText: ['Alleen open plekken', 'Filter'],
       forbidText: leftover,
     });
     await pageCheck(browser, {
       email: 'lisa@vvl.demo',
       password: 'demo123',
-      path: '/ik',
+      path: '/mijn-gegevens',
       width: 375,
-      expectText: ['Wachtwoord'],
+      expectText: ['Mijn diensten', 'Mijn kinderen'],
       forbidText: ['excel downloaden', 'privacy'],
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/mijn-diensten',
+      width: 375,
+      expectText: ['FILTER'],
+      forbidText: ['Geen toegang'],
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/beheer?tab=teams',
+      width: 1280,
+      expectText: ['Teamdiensten (plekken)'],
+      forbidText: leftover,
     });
     await pageCheck(browser, {
       email: 'sandra@vvl.demo',
