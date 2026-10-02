@@ -145,9 +145,9 @@ async function main() {
   mark(record('admin rol', adminMe.json?.role === 'Admin', String(adminMe.json?.role)));
   mark(
     record(
-      'admin geen vrijwilliger-tabs',
+      'admin heeft beheer plus eigen diensten',
       adminMe.json?.access?.can?.includes('beheer') === true &&
-        adminMe.json?.access?.can?.includes('inschrijven') === false &&
+        adminMe.json?.access?.can?.includes('inschrijven') === true &&
         adminMe.json?.access?.can?.includes('ruilen') === false &&
         adminMe.json?.access?.can?.includes('voorkeuren') === false,
     ),
@@ -156,9 +156,9 @@ async function main() {
   const markMe = await req('/api/auth/me', { token: markTok });
   mark(
     record(
-      'barcommissie geen vrijwilliger-tabs',
+      'barcommissie heeft beheer plus eigen diensten',
       markMe.json?.access?.can?.includes('beheer') === true &&
-        markMe.json?.access?.can?.includes('inschrijven') === false &&
+        markMe.json?.access?.can?.includes('inschrijven') === true &&
         markMe.json?.access?.can?.includes('ruilen') === false &&
         markMe.json?.access?.can?.includes('voorkeuren') === false,
     ),
@@ -798,6 +798,80 @@ async function main() {
         where: { id: 1 },
         data: { official: false, status: 'VOLUNTEER_OPEN' },
       });
+      await prisma.$disconnect();
+    }
+  }
+
+  // Barcommissie: eigen diensten + verleden bijschrijven + teamplekken + za/zo-preview
+  {
+    const mine = await req('/api/services?filter=mine', { token: markTok });
+    mark(record('barcommissie mijn diensten API', mine.status === 200, String(mine.status)));
+    const dash = await req('/api/teams/dashboard', { token: markTok });
+    mark(
+      record(
+        'teamplekken in teamdashboard',
+        dash.status === 200 &&
+          Array.isArray(dash.json?.teams) &&
+          dash.json.teams.every((t) => typeof t.teamShiftSpots === 'number'),
+        String(dash.status),
+      ),
+    );
+    const splitPrev = await req('/api/teams/split-senior-weekend', { token: markTok });
+    mark(
+      record(
+        'senior za/zo split-preview',
+        splitPrev.status === 200 && typeof splitPrev.json?.count === 'number',
+        String(splitPrev.status),
+      ),
+    );
+    const { default: prisma } = await import('../src/backend/lib/prisma.js');
+    try {
+      const past = await prisma.service.create({
+        data: {
+          date: new Date('2026-01-10T12:00:00'),
+          time: '19:00 - 22:00',
+          type: 'BAR',
+          slot: 'EVENING',
+          location: 'Bar',
+          required: 2,
+          active: true,
+          draft: false,
+          note: 'accept-past-enroll',
+        },
+      });
+      const pastVolunteer = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: past.id, personId: lisaMe.json.id, ignoreMatchBlock: true },
+      });
+      mark(
+        record(
+          'vrijwilliger niet in verleden',
+          pastVolunteer.status === 400 || pastVolunteer.status === 403,
+          `${pastVolunteer.status} ${pastVolunteer.json?.error || ''}`,
+        ),
+      );
+      const pastAdmin = await req('/api/enrollments', {
+        method: 'POST',
+        token: markTok,
+        body: {
+          serviceId: past.id,
+          personId: lisaMe.json.id,
+          ignoreMatchBlock: true,
+        },
+      });
+      mark(
+        record(
+          'barcommissie wel in verleden',
+          pastAdmin.status === 201,
+          `${pastAdmin.status} ${pastAdmin.json?.error || ''}`,
+        ),
+      );
+      if (pastAdmin.json?.id) {
+        await prisma.enrollment.delete({ where: { id: pastAdmin.json.id } }).catch(() => {});
+      }
+      await prisma.service.delete({ where: { id: past.id } }).catch(() => {});
+    } finally {
       await prisma.$disconnect();
     }
   }

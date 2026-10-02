@@ -314,6 +314,9 @@ export const api = {
   markNotificationRead: (id) => json(`/notifications/${id}/read`, { method: 'POST', body: '{}' }),
   markAllNotificationsRead: () => json('/notifications/read-all', { method: 'POST', body: '{}' }),
   getTeamDashboard: () => json('/teams/dashboard'),
+  previewSeniorWeekendSplit: () => json('/teams/split-senior-weekend'),
+  splitSeniorWeekendTeams: () =>
+    json('/teams/split-senior-weekend', { method: 'POST', body: '{}' }),
   addTeamParent: (teamId, data) =>
     json(`/teams/${teamId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
   updateTeamParent: (teamId, personId, data) =>

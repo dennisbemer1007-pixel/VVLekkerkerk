@@ -108,6 +108,20 @@ export default function DienstregelsBeheer() {
     }
   };
 
+  const removeRule = async (rule) => {
+    if (!window.confirm(`Dienstregel “${rule.name}” verwijderen?`)) return;
+    setError('');
+    setMsg('');
+    try {
+      await api.deleteServiceRule(rule.id);
+      if (editId === rule.id) reset();
+      setMsg('Dienstregel verwijderd.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="vvl-card space-y-2">
@@ -359,30 +373,40 @@ export default function DienstregelsBeheer() {
             <p className="text-xs text-gray-600">
               {WEEKDAY_OPTIONS.find((d) => d.id === r.weekday)?.label || 'Elke dag'} {r.startTime}–{r.endTime}
             </p>
-            <button
-              type="button"
-              className="vvl-btn-outline mt-2 text-xs"
-              onClick={() => {
-                setEditId(r.id);
-                setForm({
-                  ...emptyRule,
-                  ...r,
-                  weekday: r.weekday ?? '',
-                  conditionTeamId: r.conditionTeamId ? String(r.conditionTeamId) : '',
-                  conditionTeamName: r.conditionTeamName || '',
-                  conditionActivityType: r.conditionActivityType || '',
-                  kickoffAfter: r.kickoffAfter || '',
-                  teamDutySlotRole: r.teamDutySlotRole || '',
-                  teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
-                  teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
-                  teamDutyAgeTo: r.teamDutyAgeTo ?? '',
-                  slot: r.slot || '',
-                });
-                scrollToForm(formRef);
-              }}
-            >
-              Wijzigen
-            </button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="vvl-btn-outline text-xs"
+                onClick={() => {
+                  setEditId(r.id);
+                  setForm({
+                    ...emptyRule,
+                    ...r,
+                    weekday: r.weekday ?? '',
+                    conditionTeamId: r.conditionTeamId ? String(r.conditionTeamId) : '',
+                    conditionTeamName: r.conditionTeamName || '',
+                    conditionActivityType: r.conditionActivityType || '',
+                    kickoffAfter: r.kickoffAfter || '',
+                    teamDutySlotRole: r.teamDutySlotRole || '',
+                    teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
+                    teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
+                    teamDutyAgeTo: r.teamDutyAgeTo ?? '',
+                    slot: r.slot || '',
+                  });
+                  scrollToForm(formRef);
+                }}
+              >
+                Wijzigen
+              </button>
+              <button
+                type="button"
+                className="vvl-btn-outline text-xs text-red-800"
+                data-testid={`dienstregel-verwijder-${r.id}`}
+                onClick={() => removeRule(r)}
+              >
+                Verwijderen
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -423,30 +447,39 @@ export default function DienstregelsBeheer() {
                   {r.conditionActivityType ? ` · ${r.conditionActivityType}` : ''}
                 </td>
                 <td className="p-3 text-right">
-                  <button
-                    type="button"
-                    className="vvl-btn-outline text-xs"
-                    onClick={() => {
-                      setEditId(r.id);
-                      setForm({
-                        ...emptyRule,
-                        ...r,
-                        weekday: r.weekday ?? '',
-                        conditionTeamId: r.conditionTeamId ? String(r.conditionTeamId) : '',
-                        conditionTeamName: r.conditionTeamName || '',
-                        conditionActivityType: r.conditionActivityType || '',
-                        kickoffAfter: r.kickoffAfter || '',
-                        teamDutySlotRole: r.teamDutySlotRole || '',
-                        teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
-                        teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
-                        teamDutyAgeTo: r.teamDutyAgeTo ?? '',
-                        slot: r.slot || '',
-                      });
-                      scrollToForm(formRef);
-                    }}
-                  >
-                    Bewerk
-                  </button>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs"
+                      onClick={() => {
+                        setEditId(r.id);
+                        setForm({
+                          ...emptyRule,
+                          ...r,
+                          weekday: r.weekday ?? '',
+                          conditionTeamId: r.conditionTeamId ? String(r.conditionTeamId) : '',
+                          conditionTeamName: r.conditionTeamName || '',
+                          conditionActivityType: r.conditionActivityType || '',
+                          kickoffAfter: r.kickoffAfter || '',
+                          teamDutySlotRole: r.teamDutySlotRole || '',
+                          teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
+                          teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
+                          teamDutyAgeTo: r.teamDutyAgeTo ?? '',
+                          slot: r.slot || '',
+                        });
+                        scrollToForm(formRef);
+                      }}
+                    >
+                      Bewerk
+                    </button>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline text-xs text-red-800"
+                      onClick={() => removeRule(r)}
+                    >
+                      Verwijderen
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

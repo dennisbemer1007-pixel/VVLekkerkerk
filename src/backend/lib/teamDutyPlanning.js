@@ -160,9 +160,16 @@ export function pickTeamDutyAssignment(rule, candidates, options = {}) {
   if (!list.length) return [];
   const reserved = reservedSpotsForRule(rule);
   if (!reserved) return [];
+  // Eén kandidaat (enige thuisteam die dag) wint altijd, ook als ze recent stonden.
+  if (list.length === 1) {
+    return [{ team: list[0].team, reserved, match: list[0].match }];
+  }
   const keepId = options.keepTeamId != null ? Number(options.keepTeamId) : null;
+  const preferId = options.preferTeamId != null ? Number(options.preferTeamId) : null;
   const kept = keepId ? list.find((c) => Number(c.team.id) === keepId) : null;
-  const chosen = kept || [...list].sort((a, b) => compareTeamDutyFairness(a, b, options))[0];
+  const preferred = preferId ? list.find((c) => Number(c.team.id) === preferId) : null;
+  const chosen =
+    kept || preferred || [...list].sort((a, b) => compareTeamDutyFairness(a, b, options))[0];
   if (!chosen) return [];
   return [{ team: chosen.team, reserved, match: chosen.match }];
 }
@@ -195,7 +202,9 @@ export function standsFromDutyRows(rows) {
   for (const row of rows || []) {
     const teamId = row.teamId;
     if (teamId == null) continue;
-    counts.set(teamId, (counts.get(teamId) || 0) + 1);
+    // Tel plekken (O9 met 2 reserved = 2), niet alleen diensten.
+    const spots = Math.max(1, Number(row.reserved) || 1);
+    counts.set(teamId, (counts.get(teamId) || 0) + spots);
     const t = new Date(row.service?.date || row.date || 0).getTime();
     if (!Number.isFinite(t)) continue;
     if (!lastAt.has(teamId) || t > lastAt.get(teamId)) lastAt.set(teamId, t);
@@ -213,11 +222,12 @@ export function keepTeamIdFromExisting(service, candidates) {
   return null;
 }
 
-export function recordTeamDutyStand(fairness, teamId, at) {
+export function recordTeamDutyStand(fairness, teamId, at, reserved = 1) {
   if (teamId == null || !fairness) return;
   const counts = fairness.counts || new Map();
   const lastAt = fairness.lastAt || new Map();
-  counts.set(teamId, (counts.get(teamId) || 0) + 1);
+  const spots = Math.max(1, Number(reserved) || 1);
+  counts.set(teamId, (counts.get(teamId) || 0) + spots);
   const t = at instanceof Date ? at.getTime() : Number(at) || 0;
   if (!lastAt.has(teamId) || t > lastAt.get(teamId)) lastAt.set(teamId, t);
   fairness.counts = counts;
@@ -316,8 +326,7 @@ export function friendlyEnrollmentReason(source, { makeup = false, obligation } 
   if (source === 'GUARDIAN') return 'Ingeschreven door ouder';
   if (source === 'AUTO') {
     if (makeup) return 'Automatisch ingepland: openstaande inhaaldienst.';
-    // Was open shift filled by auto-planning — keep the label short in the rooster.
-    return 'open';
+    return 'Automatisch ingepland';
   }
   return null;
 }

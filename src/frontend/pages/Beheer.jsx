@@ -692,6 +692,8 @@ function TeamsBeheer() {
   const [teams, setTeams] = useState([]);
   const [persons, setPersons] = useState([]);
   const [services, setServices] = useState([]);
+  const [teamOverview, setTeamOverview] = useState([]);
+  const [splitPreview, setSplitPreview] = useState(null);
   const [teamForm, setTeamForm] = useState({
     name: '',
     coordinatorId: '',
@@ -705,13 +707,22 @@ function TeamsBeheer() {
   const [msg, setMsg] = useState('');
   const [editDuration, setEditDuration] = useState({});
   const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const load = () =>
-    Promise.all([api.getTeams(), api.getPersons(), api.getServices({ filter: 'open' })])
-      .then(([t, p, s]) => {
+    Promise.all([
+      api.getTeams(),
+      api.getPersons(),
+      api.getServices({ filter: 'open' }),
+      api.getTeamDashboard().catch(() => ({ teams: [] })),
+      api.previewSeniorWeekendSplit().catch(() => ({ count: 0, teams: [] })),
+    ])
+      .then(([t, p, s, dash, split]) => {
         setTeams(t);
         setPersons(p);
         setServices(s);
+        setTeamOverview(dash?.teams || []);
+        setSplitPreview(split);
         const dur = {};
         for (const team of t) dur[team.id] = team.matchDurationMinutes ?? 90;
         setEditDuration(dur);
@@ -721,6 +732,30 @@ function TeamsBeheer() {
   useEffect(() => {
     load();
   }, []);
+
+  const runSeniorSplit = async () => {
+    if (!splitPreview?.count) return;
+    const names = (splitPreview.teams || []).map((t) => t.name).join(', ');
+    if (
+      !window.confirm(
+        `${splitPreview.count} gecombineerd seniorenteam(s) splitsen in zaterdag/zondag?\n\n${names}\n\nEr wordt eerst een database-backup gemaakt.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const res = await api.splitSeniorWeekendTeams();
+      setMsg(res.message || 'Teams gesplitst.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const addTeam = async (e) => {
     e.preventDefault();
@@ -815,6 +850,53 @@ function TeamsBeheer() {
 
   return (
     <section className="space-y-6">
+      <div className="vvl-card space-y-3" data-testid="team-plekken-overzicht">
+        <h2 className="font-heading text-lg font-black uppercase">Teamdiensten (plekken)</h2>
+        <p className="text-sm text-gray-700">
+          Aantal teamplekken in de actieve planningsperiode. O9 met 2 plekken telt als 2; middag +
+          avond op één dag telt op.
+        </p>
+        {teamOverview.length === 0 ? (
+          <p className="text-sm text-gray-600">Geen teams met teamdienst in deze periode.</p>
+        ) : (
+          <ul className="divide-y divide-vvl-border rounded-sm border border-vvl-border">
+            {[...teamOverview]
+              .sort((a, b) => (b.teamShiftSpots || 0) - (a.teamShiftSpots || 0) || a.name.localeCompare(b.name))
+              .map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="font-semibold">{t.name}</span>
+                  <span className="font-black tabular-nums">{t.teamShiftSpots ?? 0}</span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
+
+      {splitPreview?.count ? (
+        <div className="vvl-card space-y-3" data-testid="senior-weekend-split">
+          <h2 className="font-heading text-lg font-black uppercase">Lekkerkerk za/zo splitsen</h2>
+          <p className="text-sm text-gray-700">
+            {splitPreview.count} seniorenteam(s) hebben wedstrijden op zaterdag én zondag onder
+            dezelfde naam. Splits ze in “(za)” en “(zo)” (met backup).
+          </p>
+          <ul className="text-sm text-gray-700">
+            {(splitPreview.teams || []).map((t) => (
+              <li key={t.id}>
+                {t.name} → {(t.into || []).join(' + ')} ({t.matches} wedstrijden)
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="vvl-btn-primary w-fit"
+            disabled={busy}
+            onClick={runSeniorSplit}
+          >
+            {busy ? 'Bezig…' : 'Nu splitsen'}
+          </button>
+        </div>
+      ) : null}
+
       <form onSubmit={addTeam} className="vvl-card grid gap-3 sm:grid-cols-2">
         <h2 className="sm:col-span-2 font-heading text-lg font-black uppercase">Team toevoegen</h2>
         <div>
@@ -1481,8 +1563,16 @@ function PlanningBeheer() {
             onClick={() =>
               run(
                 () => api.fillMandatory(periodPayload()),
-                (r) =>
-                  `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${r.unfilled?.length ?? 0} verplichting(en) nog open.`,
+                (r) => {
+                  const open = r.unfilled?.length ?? 0;
+                  const reasons = (r.unfilled || [])
+                    .slice(0, 5)
+                    .map((row) => `${row.name}: ${row.reason || 'geen plek'}`)
+                    .join(' · ');
+                  return open
+                    ? `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${open} nog open.${reasons ? ` ${reasons}` : ''}`
+                    : `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven.`;
+                },
               )
             }
           >

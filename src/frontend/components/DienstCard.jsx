@@ -18,9 +18,9 @@ function displayReason(reason, adminMode) {
   if (!reason) return null;
   let cleaned = String(reason).replace(/\s*stond nog open\.?/gi, '').trim();
   if (!cleaned) return null;
-  // Compact label for auto-filled open spots (old + new wording).
+  // Oude compacte “open”-label → duidelijke auto-tekst
   if (/^open$/i.test(cleaned) || /Automatisch ingepland:.*(verplichte bardienst|VR18)/i.test(cleaned)) {
-    cleaned = 'open';
+    cleaned = 'Automatisch ingepland';
   }
   if (adminMode) return cleaned;
   if (/barcommissie/i.test(cleaned) && /handmatig/i.test(cleaned)) return null;

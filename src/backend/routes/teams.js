@@ -13,6 +13,10 @@ import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber
 import { normalizePersonName } from '../lib/personMatch.js';
 import { writeAudit } from '../lib/audit.js';
 import { teamDutyOpenForTeam } from '../lib/teamDutyPlanning.js';
+import {
+  previewSeniorWeekendSplit,
+  splitSeniorWeekendTeams,
+} from '../lib/splitSeniorWeekendTeams.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -161,6 +165,11 @@ router.get(
               teamOpen: teamDutyOpenForTeam(mapped, team.id),
             };
           });
+        // Plekken tellen: O9 met 2 reserved = 2; middag+avond = som van reserved
+        const teamShiftSpots = (team.teamDuties || []).reduce(
+          (sum, duty) => sum + Math.max(0, Number(duty.reserved) || 0),
+          0,
+        );
         payload.push({
           id: team.id,
           name: team.name,
@@ -168,6 +177,7 @@ router.get(
           teamDutySlots: parseTeamDutySlots(team.teamDutySlots),
           coordinator: publicPersonBrief(team.coordinator),
           members,
+          teamShiftSpots,
           upcomingMatches: team.matches.map((m) => ({
             id: m.id,
             date: m.date,
@@ -184,6 +194,36 @@ router.get(
         openPersonal: open.slice(0, 40),
         teams: payload,
       });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/split-senior-weekend',
+  admin(async (req, res, next) => {
+    try {
+      res.json(await previewSeniorWeekendSplit(prisma));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/split-senior-weekend',
+  admin(async (req, res, next) => {
+    try {
+      const result = await splitSeniorWeekendTeams(prisma);
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'team.split_senior_weekend',
+        entity: 'Team',
+        entityId: null,
+        detail: result.message,
+      });
+      res.json(result);
     } catch (err) {
       next(err);
     }

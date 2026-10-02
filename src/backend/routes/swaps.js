@@ -442,6 +442,14 @@ router.post(
         detail: swap.status,
       });
 
+      // Oude bel-meldingen over dit verzoek weg (anders blijft “nieuw ruilverzoek” hangen)
+      await prisma.notification.deleteMany({
+        where: {
+          swapId: swap.id,
+          type: { in: ['SWAP_INCOMING', 'SWAP_INFO', 'SWAP_ACCEPTED'] },
+        },
+      });
+
       const otherId =
         req.person.id === swap.requesterId ? swap.counterpartyId : swap.requesterId;
       if (otherId && otherId !== req.person.id) {
@@ -454,6 +462,16 @@ router.post(
           swapId: swap.id,
         });
       }
+      await notifyBarcommissie(
+        {
+          type: 'SWAP_CANCELLED',
+          title: 'Ruilverzoek ingetrokken',
+          body: `${req.person.name} heeft een ruilverzoek ingetrokken.`,
+          link: '/meer?tab=ruilen',
+          swapId: swap.id,
+        },
+        { excludeIds: [req.person.id, otherId].filter(Boolean) },
+      );
 
       res.json(mapSwap(updated));
     } catch (err) {

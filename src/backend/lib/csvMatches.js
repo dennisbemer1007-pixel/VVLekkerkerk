@@ -222,7 +222,7 @@ function normalizeRow(row, format) {
   if (detected === 'knvb') {
     const homeTeam = String(row.thuis ?? row.homeTeam ?? '').trim();
     const awayTeam = String(row.uit ?? row.awayTeam ?? '').trim();
-    const sides = deriveClubSides(homeTeam, awayTeam);
+    const sides = deriveClubSides(homeTeam, awayTeam, date);
     return {
       ...base,
       format: 'knvb',

@@ -8,7 +8,7 @@ import {
   serviceKey,
   startTimeFromService,
 } from './serviceRuleLogic.js';
-import { startOfDay } from './dates.js';
+import { startOfDay, toIsoDate } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import { getActiveRound } from './planningRounds.js';
 import {
@@ -171,13 +171,26 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     excludeServiceIds,
   });
 
-  for (const spec of needed.values()) {
+  // Middag vóór avond, zodat we middag+avond aan hetzelfde team kunnen koppelen.
+  const roleOrder = { MORNING: 0, SECOND: 1, LAST: 2 };
+  const specsOrdered = [...needed.values()].sort(
+    (a, b) =>
+      (roleOrder[a.rule.teamDutySlotRole] ?? 9) - (roleOrder[b.rule.teamDutySlotRole] ?? 9) ||
+      String(a.key).localeCompare(String(b.key)),
+  );
+  const afternoonTeamByDate = new Map();
+
+  for (const spec of specsOrdered) {
     const target = pickExistingTarget(existingByKey.get(spec.key) || []);
     const keepTeamId = keepTeamIdFromExisting(target, spec.candidates);
+    const dateKey = toIsoDate(spec.date);
+    const preferTeamId =
+      spec.rule.teamDutySlotRole === 'LAST' ? afternoonTeamByDate.get(dateKey) || null : null;
     const assignments = pickTeamDutyAssignment(spec.rule, spec.candidates, {
       counts: fairness.counts,
       lastAt: fairness.lastAt,
       keepTeamId,
+      preferTeamId,
     });
     const required = requiredForTeamDuties(spec.rule.required, spec.rule.teamDutySlotRole, assignments);
     spec.assignments = assignments;
@@ -187,7 +200,15 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     spec.matchId = (assignments[0]?.match || spec.evaluation.matches?.[0] || spec.homeMatches[0])?.id ?? null;
     spec.note = buildNote(spec.rule, spec.evaluation, assignments);
     if (assignments[0]?.team) {
-      recordTeamDutyStand(fairness, assignments[0].team.id, spec.date);
+      recordTeamDutyStand(
+        fairness,
+        assignments[0].team.id,
+        spec.date,
+        assignments[0].reserved,
+      );
+      if (spec.rule.teamDutySlotRole === 'SECOND') {
+        afternoonTeamByDate.set(dateKey, assignments[0].team.id);
+      }
     }
   }
 

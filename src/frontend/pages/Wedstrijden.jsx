@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import BeheerNavButtons from '../components/BeheerNavButtons.jsx';
 import CsvMatchImport from '../components/CsvMatchImport.jsx';
 import NlDateInput from '../components/NlDateInput.jsx';
 import DesktopOnly from '../components/DesktopOnly.jsx';
@@ -135,6 +136,7 @@ export default function Wedstrijden() {
 
   return (
     <div className="space-y-6">
+      {isAdmin ? <BeheerNavButtons /> : null}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <PageTitle {...PAGE_HELP.wedstrijden}>Wedstrijden</PageTitle>
