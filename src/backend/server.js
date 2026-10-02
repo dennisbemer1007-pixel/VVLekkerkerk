@@ -208,8 +208,8 @@ if (isProd) {
 }
 
 app.use((err, _req, res, _next) => {
-  console.error(err);
   const { status, body } = clientErrorPayload(err, isProd);
+  if (status >= 500) console.error(err);
   res.status(status).json(body);
 });
 
