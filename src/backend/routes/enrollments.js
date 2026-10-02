@@ -163,7 +163,12 @@ router.post(
           });
         }
       }
-      if (servicePreview && startOfDay(servicePreview.date) < startOfDay(new Date())) {
+      // Alleen de barcommissie/admin mag naderhand nog bijschrijven (vervanging e.d.).
+      if (
+        servicePreview &&
+        startOfDay(servicePreview.date) < startOfDay(new Date()) &&
+        !isAdminRole(req.person.role)
+      ) {
         return res.status(400).json({
           error: 'Inschrijven in het verleden kan niet.',
         });

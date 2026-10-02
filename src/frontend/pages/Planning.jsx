@@ -54,8 +54,8 @@ export default function Planning({ variant = 'rooster' }) {
 
   const load = useCallback(() => {
     const params = {};
-    if (variant === 'open') params.filter = 'week';
-    else if (filter) params.filter = filter;
+    // Dashboard/Open: geen “deze week”-blok meer; toon de actieve planningperiode.
+    if (variant !== 'open' && filter) params.filter = filter;
     if (kind) params.type = kind;
     if (filter === 'mine' && personId) params.personId = personId;
     if (listFilters.from) params.from = listFilters.from;
@@ -306,7 +306,10 @@ export default function Planning({ variant = 'rooster' }) {
         <PlanningRoundSwitcher onActivated={reloadPlanningContext} />
       ) : null}
       {variant === 'open' ? (
-        <WeekTiles counts={counts} active={statusFilter} onToggle={toggleTile} />
+        <p className="text-sm text-gray-700">
+          Open plekken en aandachtspunten in de actieve planning. Diensten van deze week staan niet
+          meer apart op het dashboard.
+        </p>
       ) : null}
       {variant === 'rooster' ? (
         <div className="flex flex-wrap gap-2">

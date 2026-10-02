@@ -1,42 +1,69 @@
 /** Clubnaam in KNVB-export (Thuis / Uit). */
 const CLUB_RE = /\blekkerkerk\b/i;
+const SENIOR_BARE_RE = /^lekkerkerk\s+\d+[a-z]?$/i;
 
 export function isClubTeamName(name) {
   return CLUB_RE.test(String(name || ''));
+}
+
+/** Zaterdag/zondag-suffix voor seniorenteams die in KNVB dezelfde naam delen. */
+export function seniorWeekendSuffix(date) {
+  if (!date) return '';
+  const day = new Date(date).getDay();
+  if (day === 6) return ' (za)';
+  if (day === 0) return ' (zo)';
+  return '';
+}
+
+export function isBareSeniorClubTeam(name) {
+  const n = String(name || '')
+    .replace(/\s*\((za|zo)\)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return SENIOR_BARE_RE.test(n);
 }
 
 /**
  * KNVB zet de club in Thuis of Uit, bijv. "Lekkerkerk O16-1".
  * @returns {{ home: boolean, team: string, opponent: string } | null}
  */
-export function deriveClubSides(homeTeamName, awayTeamName) {
+export function deriveClubSides(homeTeamName, awayTeamName, date) {
   const thuis = String(homeTeamName || '').trim();
   const uit = String(awayTeamName || '').trim();
   const clubHome = isClubTeamName(thuis);
   const clubAway = isClubTeamName(uit);
 
   if (clubHome && !clubAway) {
-    return { home: true, team: clubTeamLabel(thuis), opponent: uit };
+    return { home: true, team: clubTeamLabel(thuis, { date }), opponent: uit };
   }
   if (clubAway && !clubHome) {
-    return { home: false, team: clubTeamLabel(uit), opponent: thuis };
+    return { home: false, team: clubTeamLabel(uit, { date }), opponent: thuis };
   }
   if (clubHome && clubAway) {
-    return { home: true, team: clubTeamLabel(thuis), opponent: uit };
+    return { home: true, team: clubTeamLabel(thuis, { date }), opponent: uit };
   }
   return null;
 }
 
-/** "Lekkerkerk O16-1" → "O16-1"; "Lekkerkerk 3" blijft "Lekkerkerk 3". */
-export function clubTeamLabel(fullName) {
+/**
+ * "Lekkerkerk O16-1" → "O16-1"; "Lekkerkerk 2" op zaterdag → "Lekkerkerk 2 (za)".
+ * @param {string} fullName
+ * @param {{ date?: Date|string }} [opts]
+ */
+export function clubTeamLabel(fullName, opts = {}) {
   const cleaned = String(fullName || '')
     .replace(/,/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  // Al gesplitst behouden
+  if (/\((za|zo)\)$/i.test(cleaned)) return cleaned;
   const stripped = cleaned.replace(/^lekkerkerk\s+/i, '').trim();
   if (!stripped) return cleaned;
-  if (/^\d+[a-z]?$/i.test(stripped)) return `Lekkerkerk ${stripped}`;
-  return stripped;
+  let label = /^\d+[a-z]?$/i.test(stripped) ? `Lekkerkerk ${stripped}` : stripped;
+  if (isBareSeniorClubTeam(label)) {
+    label = `${label}${seniorWeekendSuffix(opts.date)}`;
+  }
+  return label;
 }
 
 export function teamLookupKeys(name) {

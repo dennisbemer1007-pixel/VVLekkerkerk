@@ -11,7 +11,7 @@ export const DAY_LABELS = [
   'Zondag',
 ];
 
-/** Zelfde dagdelen voor bar én keuken (kantine-print). */
+/** Weekend: bar + keuken. Doordeweeks: alleen bar avond. */
 export const SLOT_ROWS = [
   { slot: 'MORNING', type: 'BAR', label: 'Bar ochtend', time: SLOT_TIMES.MORNING.BAR },
   { slot: 'AFTERNOON', type: 'BAR', label: 'Bar middag', time: SLOT_TIMES.AFTERNOON.BAR },
@@ -20,6 +20,8 @@ export const SLOT_ROWS = [
   { slot: 'AFTERNOON', type: 'KITCHEN', label: 'Keuken middag', time: '13:00 - 16:00' },
   { slot: 'EVENING', type: 'KITCHEN', label: 'Keuken laat', time: '16:00 - 19:00' },
 ];
+
+export const WEEKDAY_SLOT_ROWS = [{ slot: 'EVENING', type: 'BAR', label: 'Bar avond', time: SLOT_TIMES.EVENING.BAR }];
 
 export function dayIndex(d) {
   const day = new Date(d).getDay();
@@ -43,13 +45,11 @@ export function servicesForSlotRow(services, row) {
   );
 }
 
-/** Alleen actieve, niet-concept diensten waarop iemand met een naam staat. */
+/** Actieve niet-concept diensten (ook zonder namen — voor open plekken / teamnamen). */
 export function servicesForRoster(services) {
   return (services || []).filter((service) => {
     if (!service || service.active === false || service.draft === true) return false;
-    return (service.enrollments || []).some((enrollment) =>
-      Boolean(String(enrollment?.person?.name || enrollment?.personName || '').trim()),
-    );
+    return true;
   });
 }
 
@@ -58,15 +58,59 @@ export function namesOnly(service) {
   return names;
 }
 
-export function slotCellText(services) {
-  if (!services?.length) return 'gesloten';
-  const names = [...new Set(services.flatMap((s) => namesOnly(s)))];
-  return names.length ? names.join(', ') : 'nog open';
+function openSpotTokens(service) {
+  const required = Math.max(0, Number(service?.required) || 0);
+  const named = namesOnly(service).length;
+  const open = Math.max(0, required - named);
+  const tokens = [];
+  for (const name of namesOnly(service)) tokens.push({ kind: 'name', text: name });
+  // Teamnaam tonen als bardienstcoördinator nog geen ouder heeft gezet
+  const teamNames = (service?.teamDuties || [])
+    .map((d) => d.team?.name)
+    .filter(Boolean);
+  if (!named && teamNames.length) {
+    for (const name of [...new Set(teamNames)]) tokens.push({ kind: 'team', text: name });
+  }
+  const stillOpen = Math.max(0, open - (tokens.length - named));
+  for (let i = 0; i < stillOpen; i += 1) tokens.push({ kind: 'open', text: 'open plek' });
+  return tokens;
 }
 
-/** Elke weekdag gebruikt dezelfde tijdsblok-rijen. */
+export function slotCellText(services) {
+  if (!services?.length) return 'gesloten';
+  const tokens = services.flatMap((s) => openSpotTokens(s));
+  if (!tokens.length) return 'nog open';
+  // Unieke namen, open plekken behouden
+  const seen = new Set();
+  const parts = [];
+  for (const token of tokens) {
+    if (token.kind === 'name' || token.kind === 'team') {
+      if (seen.has(token.text)) continue;
+      seen.add(token.text);
+    }
+    parts.push(token.text);
+  }
+  return parts.join(', ') || 'nog open';
+}
+
+export function slotCellHasOpen(services) {
+  if (!services?.length) return false;
+  return services.some((s) => openSpotTokens(s).some((t) => t.kind === 'open')) ||
+    slotCellText(services) === 'nog open';
+}
+
+export function rowLabelTime(row, services) {
+  const real = (services || []).map((s) => String(s.time || '').trim()).find(Boolean);
+  return real || row.time;
+}
+
+/** Doordeweeks alleen bar avond; weekend alle rijen. */
 export function rosterDaySections() {
-  return DAY_LABELS.map((label, day) => ({ day, label, rows: SLOT_ROWS }));
+  return DAY_LABELS.map((label, day) => ({
+    day,
+    label,
+    rows: day <= 4 ? WEEKDAY_SLOT_ROWS : SLOT_ROWS,
+  }));
 }
 
 /** Rooster-PDF: altijd 6 weken vanaf de download-dag, niet de hele planning. */
@@ -247,7 +291,7 @@ export function renderPlanningRoster(doc, {
     drawWeekHeader();
 
     for (const section of daySections) {
-      ensureSpace(sectionH + SLOT_ROWS.length * rowH);
+      ensureSpace(sectionH + section.rows.length * rowH);
 
       drawCell(doc, left, y, labelW, sectionH, section.label, {
         bold: true,
@@ -265,7 +309,12 @@ export function renderPlanningRoster(doc, {
       y += sectionH;
 
       for (const row of section.rows) {
-        drawCell(doc, left, y, labelW, rowH, `${row.label}\n${row.time}`, {
+        // Eerste weekkolom voor voorbeeldtijd in label; cellen gebruiken echte tijden via tekst
+        const sampleList = weekStarts.length
+          ? servicesForSlotRow(byWeekDay.get(`${toIsoDate(weekStarts[0])}|${section.day}`) || [], row)
+          : [];
+        const labelTime = rowLabelTime(row, sampleList);
+        drawCell(doc, left, y, labelW, rowH, `${row.label}\n${labelTime}`, {
           bold: true,
           size: 5.5,
           fill: '#f7f7f7',
@@ -274,11 +323,15 @@ export function renderPlanningRoster(doc, {
         weekStarts.forEach((ws, i) => {
           const x = left + labelW + i * colW;
           const list = byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [];
-          const text = slotCellText(servicesForSlotRow(list, row));
+          const cellServices = servicesForSlotRow(list, row);
+          const text = slotCellText(cellServices);
+          const hasOpen = slotCellHasOpen(cellServices);
           drawCell(doc, x, y, colW, rowH, text, {
             size: 6,
             align: text === 'gesloten' || text === 'nog open' ? 'center' : 'left',
             stroke: '#cccccc',
+            fill: hasOpen ? '#fff3cd' : null,
+            color: hasOpen && /open plek/i.test(text) ? '#7a4e00' : '#000000',
           });
         });
         y += rowH;
@@ -296,4 +349,3 @@ export function renderPlanningRoster(doc, {
       );
   });
 }
-

@@ -68,11 +68,13 @@ import {
   eligibleTeamDutyCandidates,
   friendlyEnrollmentReason,
   occupiedSlots,
+  pickTeamDutyAssignment,
   recordTeamDutyStand,
   requiredForTeamDuties,
   serviceCapacity,
   teamDutyAssignments,
 } from '../src/backend/lib/teamDutyPlanning.js';
+import { clubTeamLabel, isBareSeniorClubTeam, seniorWeekendSuffix } from '../src/backend/lib/knvbTeams.js';
 import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
 import {
   clampServiceDateFilter,
@@ -82,9 +84,12 @@ import {
 import { toIsoDate } from '../src/backend/lib/dates.js';
 import {
   SLOT_ROWS,
+  WEEKDAY_SLOT_ROWS,
   inferSlot,
   rosterDaySections,
+  rowLabelTime,
   servicesForSlotRow,
+  slotCellHasOpen,
   slotCellText,
   servicesForRoster,
   sixWeekRosterWindow,
@@ -226,8 +231,11 @@ assert('kitchen and evening bar are unmatched', picked.remove.map((s) => s.id).s
 const pdfDays = rosterDaySections();
 assert('pdf has 7 days', pdfDays.length === 7);
 assert(
-  'weekdays use same slot rows as weekend',
-  pdfDays[0].rows === SLOT_ROWS && pdfDays[5].rows === SLOT_ROWS && pdfDays[6].rows.length === 6,
+  'weekdays only bar evening; weekend full slots',
+  pdfDays[0].rows === WEEKDAY_SLOT_ROWS &&
+    pdfDays[0].rows.length === 1 &&
+    pdfDays[5].rows === SLOT_ROWS &&
+    pdfDays[6].rows.length === 6,
 );
 assert('pdf includes kitchen rows', SLOT_ROWS.some((row) => row.type === 'KITCHEN'));
 assert(
@@ -283,6 +291,63 @@ assert(
     ),
   ) === 'Piet',
 );
+assert(
+  'pdf toont open plekken en teamnaam',
+  slotCellText([
+    {
+      type: 'BAR',
+      slot: 'EVENING',
+      required: 3,
+      enrollments: [{ person: { name: 'Cheryl' } }],
+      teamDuties: [],
+    },
+  ]) === 'Cheryl, open plek, open plek' &&
+    slotCellHasOpen([
+      {
+        type: 'BAR',
+        slot: 'EVENING',
+        required: 3,
+        enrollments: [{ person: { name: 'Cheryl' } }],
+      },
+    ]) === true &&
+    slotCellText([
+      {
+        type: 'BAR',
+        slot: 'AFTERNOON',
+        required: 2,
+        enrollments: [],
+        teamDuties: [{ team: { name: 'MO17-1' } }],
+      },
+    ]) === 'MO17-1, open plek',
+);
+assert(
+  'pdf gebruikt echte diensttijd in label',
+  rowLabelTime(WEEKDAY_SLOT_ROWS[0], [{ time: '19:00 - 22:00' }]) === '19:00 - 22:00',
+);
+assert(
+  'knvb senior za/zo label',
+  clubTeamLabel('Lekkerkerk 2', { date: '2026-10-10' }) === 'Lekkerkerk 2 (za)' &&
+    clubTeamLabel('Lekkerkerk 2', { date: '2026-10-11' }) === 'Lekkerkerk 2 (zo)' &&
+    clubTeamLabel('Lekkerkerk O16-1', { date: '2026-10-10' }) === 'O16-1' &&
+    isBareSeniorClubTeam('Lekkerkerk 2') === true &&
+    seniorWeekendSuffix('2026-10-10') === ' (za)',
+);
+{
+  const rule = { required: 2, teamDutyReserved: 2 };
+  const recent = { team: { id: 1, name: 'MO17-1' }, match: { id: 10 } };
+  const other = { team: { id: 2, name: 'JO15-1' }, match: { id: 11 } };
+  const sole = pickTeamDutyAssignment(rule, [recent], {
+    counts: new Map([[1, 5]]),
+    lastAt: new Map([[1, Date.now()]]),
+  });
+  assert('enig thuisteam wint ondanks recente stand', sole[0]?.team?.id === 1);
+  const coupled = pickTeamDutyAssignment(rule, [recent, other], {
+    preferTeamId: 1,
+    counts: new Map([[1, 3], [2, 0]]),
+    lastAt: new Map(),
+  });
+  assert('avond koppelt aan middagteam', coupled[0]?.team?.id === 1);
+}
 
 const xlsxPath = 'C:/Users/dbeme/Documents/KNVB-Wedstrijden.xlsx';
 if (fs.existsSync(xlsxPath)) {
@@ -368,11 +433,12 @@ assert('vrijwilliger geen dashboard', canAccess('Vrijwilliger', 'dashboard') ===
 assert('vrijwilliger wel inschrijven', canAccess('Vrijwilliger', 'inschrijven') === true);
 assert('vrijwilliger geen voorkeuren-tab', canAccess('Vrijwilliger', 'voorkeuren') === false);
 assert('vrijwilliger geen planning', canAccess('Vrijwilliger', 'planning') === false);
-assert('barcommissie geen inschrijven', canAccess('Barcommissie', 'inschrijven') === false);
+assert('barcommissie wel inschrijven (eigen diensten)', canAccess('Barcommissie', 'inschrijven') === true);
+assert('admin wel inschrijven (eigen diensten)', canAccess('Admin', 'inschrijven') === true);
 assert('barcommissie geen ruilen-tab', canAccess('Barcommissie', 'ruilen') === false);
 assert('barcommissie geen voorkeuren', canAccess('Barcommissie', 'voorkeuren') === false);
 assert('barcommissie wel beheer', canAccess('Barcommissie', 'beheer') === true);
-assert('admin geen inschrijven', canAccess('Admin', 'inschrijven') === false);
+assert('admin wel inschrijven voor eigen diensten', canAccess('Admin', 'inschrijven') === true);
 assert('admin wel beheer', canAccess('Admin', 'beheer') === true);
 assert('teamco wel inschrijven', canAccess('Teamcoördinator', 'inschrijven') === true);
 assert('teamco wel mijn team', canAccess('Teamcoördinator', 'teams') === true);
@@ -951,8 +1017,10 @@ const rosterKept = servicesForRoster([
   { active: true, draft: true, enrollments: [{ person: { name: 'Noa' } }] },
 ]);
 assert(
-  'pdf-filter: alleen actieve diensten met ingeschreven persoon',
-  rosterKept.length === 1 && rosterKept[0].enrollments[0].person.name === 'Lisa',
+  'pdf-filter: actieve niet-concept diensten (ook open plekken)',
+  rosterKept.length === 3 &&
+    rosterKept.some((s) => s.enrollments?.[0]?.person?.name === 'Lisa') &&
+    rosterKept.some((s) => (s.enrollments || []).length === 0),
 );
 const sixWeeks = sixWeekRosterWindow(new Date('2026-09-29T15:00:00'));
 const farEnd = new Date('2027-06-01T12:00:00');
@@ -1177,20 +1245,42 @@ assert(
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Mijn gegevens');
 assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Mijn gegevens');
-assert('menu barcommissie', labels('Barcommissie') === 'Dashboard|Diensten|Mijn diensten|Personen|Mijn ruilen|Beheer');
-assert('menu admin', labels('Admin') === 'Dashboard|Diensten|Mijn diensten|Personen|Mijn ruilen|Instellingen|Beheer');
+assert('menu barcommissie', labels('Barcommissie') === 'Dashboard|Mijn diensten|Personen|Mijn ruilen|Beheer');
+assert('menu admin', labels('Admin') === 'Dashboard|Mijn diensten|Personen|Mijn ruilen|Instellingen|Beheer');
 assert(
   'admin-instellingen niet onder Meer',
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
     navItemActive({ to: '/meer', match: ['/meer', '/beheer'] }, '/beheer', '?tab=regels', 'Admin') === false,
 );
 assert(
-  'auto-inschrijving toont kort open i.p.v. lange reden',
-  friendlyEnrollmentReason('AUTO', { obligation: 'FULL' }) === 'open' &&
-    friendlyEnrollmentReason('AUTO', { obligation: 'VR18' }) === 'open' &&
+  'auto-inschrijving toont Automatisch ingepland',
+  friendlyEnrollmentReason('AUTO', { obligation: 'FULL' }) === 'Automatisch ingepland' &&
+    friendlyEnrollmentReason('AUTO', { obligation: 'VR18' }) === 'Automatisch ingepland' &&
     friendlyEnrollmentReason('AUTO', { makeup: true }) ===
       'Automatisch ingepland: openstaande inhaaldienst.',
 );
+{
+  const ikSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Ik.jsx'),
+    'utf8',
+  );
+  assert(
+    'ik-pagina heeft mijn diensten en kinderen',
+    ikSrc.includes('/mijn-diensten') && ikSrc.includes('/kinderen') && ikSrc.includes('Mijn kinderen'),
+  );
+  const inschrijfSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Inschrijven.jsx'),
+    'utf8',
+  );
+  assert(
+    'vrijwilliger lijst-default met bar/keuken-filter en bevestiging',
+    inschrijfSrc.includes('filter-dienst-type') &&
+      inschrijfSrc.includes('inschrijf-bevestiging') &&
+      inschrijfSrc.includes('listScrollRef') &&
+      inschrijfSrc.includes("useState(null)") &&
+      /onlyOpen.*mode === 'open'|mode === 'open'.*onlyOpen/.test(inschrijfSrc.replace(/\n/g, ' ')),
+  );
+}
 {
   const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');
   const pending = {

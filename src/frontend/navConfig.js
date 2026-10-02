@@ -56,8 +56,9 @@ export function navForRole(role) {
       VOLUNTEER[3],
     ];
   }
-  if (r === 'Barcommissie') return [DASHBOARD, DIENSTEN, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, MEER];
-  if (r === 'Admin') return [DASHBOARD, DIENSTEN, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, INSTELLINGEN, MEER];
+  // Geen aparte “Diensten” in het hoofdmenu: die zit onder Beheer → Rooster.
+  if (r === 'Barcommissie') return [DASHBOARD, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, MEER];
+  if (r === 'Admin') return [DASHBOARD, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, INSTELLINGEN, MEER];
   return VOLUNTEER;
 }
 

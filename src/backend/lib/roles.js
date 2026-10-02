@@ -21,15 +21,15 @@ export const ROLE_ACCESS = {
   },
   Barcommissie: {
     label: 'Barcommissie',
-    can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
+    can: ['dashboard', 'planning', 'wedstrijden', 'beheer', 'inschrijven'],
     description:
-      'Clubplanning en beheer. Ruilverzoeken zie je via het notificatiebelletje; vrijwilligers regelen akkoord onderling.',
+      'Clubplanning en beheer. Je kunt zelf ook ingedeeld worden (Mijn diensten). Ruilverzoeken zie je via het notificatiebelletje.',
   },
   Admin: {
     label: 'Admin',
-    can: ['dashboard', 'planning', 'wedstrijden', 'beheer'],
+    can: ['dashboard', 'planning', 'wedstrijden', 'beheer', 'inschrijven'],
     description:
-      'Volledig beheer, inclusief uitnodigingen en PDF-planning. Ruilverzoeken zie je via het notificatiebelletje.',
+      'Volledig beheer, inclusief uitnodigingen en PDF-planning. Je kunt zelf ook ingedeeld worden (Mijn diensten).',
   },
 };
 

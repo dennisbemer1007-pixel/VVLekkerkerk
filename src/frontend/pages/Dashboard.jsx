@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BeheerNavButtons from '../components/BeheerNavButtons.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
@@ -82,9 +83,12 @@ export default function Dashboard({ focus = 'week' }) {
 
   const toggleFilter = (key) => setStatusFilter((cur) => (cur === key ? null : key));
 
+  const gaps = stats?.controls?.assignmentGaps || [];
+
   if (focus === 'aandacht') {
     return (
       <div className="space-y-4">
+        <BeheerNavButtons />
         <h1 className="font-heading text-xl font-black uppercase">Aandacht</h1>
         <p className="text-sm text-gray-700">
           Alleen verplichte vrijwilligers die extra aandacht nodig hebben.
@@ -112,6 +116,22 @@ export default function Dashboard({ focus = 'week' }) {
             showNoShowMeta
           />
         </div>
+        {gaps.length ? (
+          <section className="space-y-2" data-testid="autoplan-redenen">
+            <h2 className="font-heading text-base font-black uppercase">Waarom niet automatisch</h2>
+            <p className="text-sm text-gray-700">
+              Redenen van de auto-planner waarom iemand in deze periode niet kon worden gezet.
+            </p>
+            <ul className="divide-y divide-vvl-border rounded-sm border border-vvl-border bg-white">
+              {gaps.map((row) => (
+                <li key={row.personId || row.name} className="px-3 py-2 text-sm">
+                  <span className="font-semibold">{row.name}</span>
+                  <span className="block text-gray-700">{row.reason || 'Geen geschikt moment.'}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
     );
   }

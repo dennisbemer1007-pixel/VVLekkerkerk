@@ -221,6 +221,9 @@ export default function TeamDashboard() {
                 <p className="text-sm text-gray-700">
                   {team.members.length} ouders/leden
                   {team.teamDutyUse ? ' · teamdienst bij thuiswedstrijd' : ' · geen teamdienst'}
+                  {typeof team.teamShiftSpots === 'number'
+                    ? ` · ${team.teamShiftSpots} teamplek(ken) in periode`
+                    : ''}
                 </p>
               </div>
 

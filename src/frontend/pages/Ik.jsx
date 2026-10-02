@@ -25,19 +25,18 @@ export default function Ik({ title = 'Ik' }) {
 
   return (
     <div className="space-y-4">
+      <h1 className="font-heading text-xl font-black uppercase">{title}</h1>
       <p className="text-sm text-gray-700">{user?.name}</p>
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
 
-      {title === 'Ik' ? (
-        <Link to="/kinderen" className="vvl-btn-outline inline-flex w-full sm:w-auto">
-          Mijn kinderen
-        </Link>
-      ) : (
-        <Link to="/rooster" className="vvl-btn-outline inline-flex w-full sm:w-auto">
-          Eigen diensten in het rooster
-        </Link>
-      )}
+      <Link to="/mijn-diensten" className="vvl-btn-outline inline-flex w-full sm:w-auto" data-testid="link-mijn-diensten">
+        Mijn diensten
+      </Link>
+
+      <Link to="/kinderen" className="vvl-btn-outline inline-flex w-full sm:w-auto" data-testid="link-mijn-kinderen">
+        Mijn kinderen
+      </Link>
 
       <button type="button" className="vvl-btn-outline w-full sm:w-auto" onClick={resetPassword}>
         Wachtwoord via e-mail
