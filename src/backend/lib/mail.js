@@ -15,6 +15,7 @@ import {
   ctaLabelForTemplateKey,
   logoAttachment,
   MAIL_BRAND,
+  escapeHtml,
   wrapBrandedEmail,
 } from './mailLayout.js';
 
@@ -203,7 +204,17 @@ function buildTransport(settings) {
   return nodemailer.createTransport(options);
 }
 
+/** Eén gewoon mailboxadres, zonder regeleinden of extra koppen. */
+export function isSafeMailbox(value) {
+  const address = String(value || '').trim();
+  if (!address || address.length > 254 || /[\r\n\0]/.test(address)) return false;
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(address);
+}
+
 export async function sendMail({ to, subject, text, html }) {
+  if (!isSafeMailbox(to)) {
+    return { sent: false, reason: 'Ongeldig e-mailadres' };
+  }
   const settings = await getMailSettingsForTransport();
   if (!isMailReady(settings)) {
     return { sent: false, reason: 'Mailserver staat uit of is niet volledig ingesteld' };
@@ -216,7 +227,7 @@ export async function sendMail({ to, subject, text, html }) {
   const fromName = sanitizeFromName(settings.fromName);
   const from = fromName ? `"${fromName}" <${settings.fromEmail}>` : settings.fromEmail;
 
-  const htmlBody = html || text.replace(/\n/g, '<br>');
+  const htmlBody = html || escapeHtml(text || '').replace(/\n/g, '<br>');
   const attachments = [];
   if (String(htmlBody).includes(`cid:${MAIL_BRAND.logoCid}`)) {
     const logo = logoAttachment();

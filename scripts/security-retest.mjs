@@ -131,6 +131,24 @@ async function main() {
   mark(assert('helmet x-content-type-options', h.headers.get('x-content-type-options') === 'nosniff'));
   mark(assert('api cache-control no-store', (h.headers.get('cache-control') || '').includes('no-store')));
 
+  const resetProbe = await fetch(`${API}/auth/reset/geen-echte-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'langgenoegwachtwoord' }),
+  });
+  const resetJson = await resetProbe.json().catch(() => ({}));
+  mark(
+    assert(
+      'reset limiet zonder stack',
+      resetProbe.status === 404 &&
+        resetProbe.headers.get('ratelimit-limit') === '10' &&
+        !JSON.stringify(resetJson).includes('server.js'),
+      String(resetProbe.status),
+    ),
+  );
+  const missing = await req('/bestaat-niet');
+  mark(assert('onbekend api-pad 404', missing.status === 404 && missing.json?.error === 'Niet gevonden', String(missing.status)));
+
   console.log(ok ? '\nALL SECURITY RETESTS PASSED' : '\nSOME SECURITY RETESTS FAILED');
   process.exit(ok ? 0 : 1);
 }

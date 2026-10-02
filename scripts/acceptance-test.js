@@ -94,6 +94,52 @@ async function main() {
     ),
   );
 
+  const resetProbe = await fetch(`${base}/api/auth/reset/geen-echte-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'langgenoegwachtwoord' }),
+  });
+  const resetBody = await resetProbe.json().catch(() => ({}));
+  const resetText = JSON.stringify(resetBody);
+  mark(
+    record(
+      'wachtwoord-reset limiet en geen stack',
+      resetProbe.status === 404 &&
+        resetProbe.headers.get('ratelimit-limit') === '10' &&
+        !resetText.toLowerCase().includes('stack') &&
+        !resetText.includes('server.js'),
+      String(resetProbe.status),
+    ),
+  );
+  const acceptProbe = await fetch(`${base}/api/auth/invite/geen-echte-token/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'langgenoegwachtwoord' }),
+  });
+  mark(
+    record(
+      'uitnodiging accepteren heeft limiet',
+      acceptProbe.status === 404 && acceptProbe.headers.get('ratelimit-limit') === '10',
+      String(acceptProbe.status),
+    ),
+  );
+  const missingApi = await req('/api/bestaat-niet');
+  mark(
+    record(
+      'onbekend api-pad is 404',
+      missingApi.status === 404 && missingApi.json?.error === 'Niet gevonden',
+      String(missingApi.status),
+    ),
+  );
+  const robots = await fetch(`${base}/robots.txt`);
+  const robotsText = await robots.text();
+  mark(
+    record(
+      'robots.txt blokkeert indexering',
+      robots.status === 200 && robots.headers.get('content-type')?.includes('text/plain') && robotsText.includes('Disallow: /') && !robotsText.includes('<html'),
+    ),
+  );
+
   const demo = await req('/api/auth/demo-accounts');
   mark(record('demo-accounts enabled', demo.json?.enabled === true));
   mark(

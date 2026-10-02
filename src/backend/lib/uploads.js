@@ -49,6 +49,15 @@ export function publicPhotoPath(filename) {
   return `/uploads/photos/${filename}`;
 }
 
+/** Database-back-ups en andere niet-foto's horen niet via /uploads bereikbaar te zijn. */
+const UNSAFE_UPLOAD = /\.(db|sqlite|sqlite3|env|bak|sql|log|json|zip)($|\?)/i;
+
+export function isUnsafeUploadPath(urlPath) {
+  const value = String(urlPath || '');
+  if (value.includes('..') || value.includes('\\') || value.includes('\0')) return true;
+  return UNSAFE_UPLOAD.test(value);
+}
+
 /** Controleer echte bestandsbytes (niet alleen de extensie). */
 export function assertImageMagic(filePath) {
   const fd = fs.openSync(filePath, 'r');

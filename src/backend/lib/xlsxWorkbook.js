@@ -4,8 +4,16 @@
  */
 import { inflateRawSync } from 'node:zlib';
 
-function unzipUtf8(buffer) {
+export const MAX_XLSX_BYTES = 2 * 1024 * 1024;
+export const MAX_XLSX_UNCOMPRESSED = 8 * 1024 * 1024;
+
+function unzipUtf8(buffer, limits = {}) {
+  const maxBytes = limits.maxBytes ?? MAX_XLSX_BYTES;
+  const maxUncompressed = limits.maxUncompressed ?? MAX_XLSX_UNCOMPRESSED;
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (buf.length > maxBytes) {
+    throw new Error('Excel-bestand is te groot');
+  }
   let eocd = -1;
   const start = Math.max(0, buf.length - 22 - 65535);
   for (let i = buf.length - 22; i >= start; i -= 1) {
@@ -22,6 +30,7 @@ function unzipUtf8(buffer) {
   const cdOffset = buf.readUInt32LE(eocd + 16);
   const files = {};
   let p = cdOffset;
+  let uncompressed = 0;
 
   for (let n = 0; n < cdCount; n += 1) {
     if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) break;
@@ -40,8 +49,19 @@ function unzipUtf8(buffer) {
       const data = buf.slice(dataStart, dataStart + compSize);
       let content;
       if (method === 0) content = data;
-      else if (method === 8) content = inflateRawSync(data);
-      else throw new Error('Dit Excel-bestand gebruikt een niet-ondersteunde compressie');
+      else if (method === 8) {
+        try {
+          content = inflateRawSync(data, {
+            maxOutputLength: Math.max(0, maxUncompressed - uncompressed),
+          });
+        } catch {
+          throw new Error('Excel-bestand is te groot');
+        }
+      } else throw new Error('Dit Excel-bestand gebruikt een niet-ondersteunde compressie');
+      uncompressed += content.length;
+      if (uncompressed > maxUncompressed) {
+        throw new Error('Excel-bestand is te groot');
+      }
       files[name] = content.toString('utf8');
     }
 
@@ -147,8 +167,8 @@ function firstSheetPath(files) {
 /**
  * @returns {{ headers: string[], matrix: string[][] }}
  */
-export function parseXlsxBuffer(buffer) {
-  const files = unzipUtf8(buffer);
+export function parseXlsxBuffer(buffer, limits = {}) {
+  const files = unzipUtf8(buffer, limits);
   const strings = parseSharedStrings(files['xl/sharedStrings.xml']);
   const sheetPath = firstSheetPath(files);
   const sheetXml = files[sheetPath] || files[sheetPath.replace(/\\/g, '/')];
@@ -163,8 +183,8 @@ export function parseXlsxBuffer(buffer) {
   return { headers, matrix: matrix.slice(1) };
 }
 
-export function xlsxToObjects(buffer) {
-  const { headers, matrix } = parseXlsxBuffer(buffer);
+export function xlsxToObjects(buffer, limits = {}) {
+  const { headers, matrix } = parseXlsxBuffer(buffer, limits);
   return matrix.map((cols, index) => {
     const obj = { __row: index + 2 };
     headers.forEach((h, i) => {

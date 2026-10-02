@@ -99,7 +99,6 @@ function PersonAbsencesEditor({ personId, personName }) {
     setAbsences([]);
     setError('');
     if (personId) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);
 
   const submit = async (e) => {

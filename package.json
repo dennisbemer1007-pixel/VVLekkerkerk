@@ -26,6 +26,7 @@
     "test:functional": "node scripts/functional-e2e.mjs",
     "docs:handleiding": "node scripts/make-handleiding-pdfs.mjs",
     "test:security": "node scripts/security-retest.mjs",
+    "lint": "eslint .",
     "demo:users": "node scripts/ensure-role-accounts.js",
     "admin:reset": "node scripts/reset-password.js admin@vvl.local admin123",
     "demo:video": "node scripts/make-demo-video.mjs"
@@ -37,13 +38,13 @@
     "autoprefixer": "^10.5.4",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "express-rate-limit": "^8.6.0",
+    "express": "^4.22.3",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "multer": "^2.4.0",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.13",
     "pdfkit": "^0.17.1",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.28",
     "prisma": "^6.12.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -52,7 +53,9 @@
     "vite": "^6.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^9.2.0",
+    "eslint": "^10.11.0",
     "puppeteer-core": "^25.12.0"
   },
   "engines": {

@@ -16,7 +16,8 @@ import teamsRouter from './routes/teams.js';
 import { ensureAdmin } from './lib/seed.js';
 import { trySyncPlanningFromMatches } from './lib/proposePlanning.js';
 import prisma from './lib/prisma.js';
-import { UPLOADS_DIR, ensureUploadDirs } from './lib/uploads.js';
+import { UPLOADS_DIR, ensureUploadDirs, isUnsafeUploadPath } from './lib/uploads.js';
+import { clientErrorPayload } from './lib/clientError.js';
 import { ensureClubDefaults } from './lib/clubDefaults.js';
 import { maybeRunDutyReminders } from './lib/reminders.js';
 import serviceRulesRouter from './routes/serviceRules.js';
@@ -87,10 +88,14 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
-// Foto's: onvoorspelbare bestandsnamen; geen directory listing
+// Foto's: onvoorspelbare bestandsnamen; geen directory listing en geen back-ups
+app.use('/uploads', (req, res, next) => {
+  if (isUnsafeUploadPath(req.path)) return res.status(404).end();
+  next();
+});
 app.use(
   '/uploads',
-  express.static(UPLOADS_DIR, { fallthrough: true, index: false, maxAge: '7d' }),
+  express.static(UPLOADS_DIR, { fallthrough: true, index: false, maxAge: '7d', dotfiles: 'deny' }),
 );
 
 app.get('/api/health', async (_req, res) => {
@@ -109,6 +114,13 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+function postOnly(limiter) {
+  return (req, res, next) => {
+    if (req.method !== 'POST') return next();
+    return limiter(req, res, next);
+  };
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -126,6 +138,30 @@ const forgotLimiter = rateLimit({
   message: { error: 'Te veel resetverzoeken. Probeer later opnieuw.' },
 });
 
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Te veel resetpogingen. Probeer later opnieuw.' },
+});
+
+const inviteAcceptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Te veel pogingen met deze uitnodiging. Probeer later opnieuw.' },
+});
+
+const inviteCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Te veel uitnodigingen. Probeer later opnieuw.' },
+});
+
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -134,8 +170,16 @@ const apiLimiter = rateLimit({
 });
 
 app.use('/api/', apiLimiter);
-app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth/forgot-password', forgotLimiter);
+app.use('/api/auth/login', postOnly(loginLimiter));
+app.use('/api/auth/forgot-password', postOnly(forgotLimiter));
+app.use('/api/auth/reset', postOnly(resetLimiter));
+app.use('/api/auth/invite/:token/accept', postOnly(inviteAcceptLimiter));
+app.use('/api/auth/invite', (req, res, next) => {
+  if (req.method !== 'POST') return next();
+  const rest = req.path || '/';
+  if (rest === '/' || /\/resend\/?$/.test(rest)) return inviteCreateLimiter(req, res, next);
+  return next();
+});
 
 app.use('/api/auth', authRouter);
 app.use('/api/persons', personsRouter);
@@ -151,6 +195,10 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Niet gevonden' });
+});
+
 if (isProd) {
   const dist = path.join(__dirname, '../../dist');
   app.use(express.static(dist));
@@ -161,10 +209,8 @@ if (isProd) {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({
-    error: isProd && status === 500 ? 'Internal server error' : err.message ?? 'Internal server error',
-  });
+  const { status, body } = clientErrorPayload(err, isProd);
+  res.status(status).json(body);
 });
 
 ensureAdmin()
@@ -175,6 +221,10 @@ ensureAdmin()
       if (!isProd) {
         console.warn(
           '[Security] Development mode — wijzig standaard admin-wachtwoord vóór productie.',
+        );
+      } else if (!process.env.MAIL_SECRET) {
+        console.warn(
+          '[Security] MAIL_SECRET ontbreekt. SMTP-wachtwoorden worden niet opgeslagen tot die sleutel gezet is.',
         );
       }
       trySyncPlanningFromMatches().then((result) => {

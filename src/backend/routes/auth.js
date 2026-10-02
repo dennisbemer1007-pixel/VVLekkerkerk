@@ -103,8 +103,7 @@ router.post('/forgot-password', async (req, res, next) => {
       } catch (dbErr) {
         console.error('[Wachtwoord-reset] database:', dbErr.message);
         return res.status(503).json({
-          error:
-            'Wachtwoord-reset is nog niet geactiveerd op de server. Voer npm run db:push uit en herstart de app.',
+          error: 'Wachtwoord-reset is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
         });
       }
     }

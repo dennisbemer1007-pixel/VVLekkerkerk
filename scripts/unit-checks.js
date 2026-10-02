@@ -7,6 +7,10 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
+import { clientErrorPayload } from '../src/backend/lib/clientError.js';
+import { isUnsafeUploadPath } from '../src/backend/lib/uploads.js';
+import { sealSecret, unsealSecret } from '../src/backend/lib/secrets.js';
+import { safeHttpUrl } from '../src/backend/lib/mailLayout.js';
 import { parseCsv, validateMatchRows, objectsToMatchRows } from '../src/backend/lib/csvMatches.js';
 import { workbookToXlsx } from '../src/backend/lib/xlsxWrite.js';
 import { xlsxToObjects } from '../src/backend/lib/xlsxWorkbook.js';
@@ -37,6 +41,7 @@ import {
   connectionTestMail,
   friendlyMailReason,
   friendlySmtpError,
+  isSafeMailbox,
   interpretSendMailResult,
   mailFromMustMatchUser,
   passwordResetEmailContent,
@@ -1314,6 +1319,105 @@ assert(
 
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
 assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
+
+{
+  const evil = renderMail(
+    { subject: 'Onderwerp <script>alert(1)</script>', body: 'Hoi {naam}\n\n<script>alert(1)</script>\n{link}' },
+    { naam: '<img src=x onerror=alert(1)>', link: 'javascript:alert(1)' },
+    { templateKey: 'custom' },
+  );
+  assert(
+    'eigen mailtekst en placeholders worden ge-escaped',
+    !evil.html.includes('<script>') &&
+      !evil.html.includes('<img src=x') &&
+      !evil.html.includes('href="javascript:') &&
+      evil.html.includes('&lt;script&gt;') &&
+      evil.html.includes('&lt;img'),
+  );
+  assert('javascript-link wordt geen knop', safeHttpUrl('javascript:alert(1)') === '' && safeHttpUrl('https://example.test/pad') === 'https://example.test/pad');
+  assert(
+    'mailbox weigert kop-injectie',
+    isSafeMailbox('jan@example.nl') &&
+      !isSafeMailbox('jan@example.nl\nBcc: a@b.c') &&
+      !isSafeMailbox('jan@example.nl<script>'),
+  );
+}
+
+{
+  let tooBig = false;
+  try {
+    xlsxToObjects(
+      workbookToXlsx([{ name: 'Diensten', headers: ['A'], rows: [['xxxxxxxx']] }]),
+      { maxUncompressed: 20 },
+    );
+  } catch (err) {
+    tooBig = /te groot/i.test(err.message);
+  }
+  assert('te groot excel-bestand wordt geweigerd', tooBig);
+}
+
+assert(
+  'uploads serveren geen database of back-up',
+  isUnsafeUploadPath('/photos/vvl-opschonen.db') &&
+    isUnsafeUploadPath('/../vvl.db') &&
+    !isUnsafeUploadPath('/photos/p-abc.jpg'),
+);
+
+{
+  const leaked = Object.assign(new Error('kapot\n    at internal (/src/server.js:1:1)'), {
+    stack: 'Error: kapot\n    at secret',
+  });
+  const hidden = clientErrorPayload(leaked, true);
+  const shown = clientErrorPayload(Object.assign(new Error('Typ OPSCHONEN\n    at x'), { status: 400 }), true);
+  assert(
+    'productiefout verbergt stack en interne 500',
+    hidden.status === 500 &&
+      hidden.body.error === 'Internal server error' &&
+      hidden.body.stack == null &&
+      shown.status === 400 &&
+      shown.body.error === 'Typ OPSCHONEN',
+  );
+}
+
+{
+  const prevNode = process.env.NODE_ENV;
+  const prevMail = process.env.MAIL_SECRET;
+  const prevApp = process.env.APP_URL;
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.MAIL_SECRET;
+    process.env.APP_URL = 'https://vvl-planning-demo.onrender.com';
+    let refused = false;
+    try {
+      sealSecret('smtp-geheim');
+    } catch {
+      refused = true;
+    }
+    assert('productie zonder MAIL_SECRET slaat smtp-wachtwoord niet op', refused);
+
+    process.env.MAIL_SECRET = 'unit-test-mail-secret';
+    const sealed = sealSecret('smtp-geheim');
+    assert(
+      'MAIL_SECRET versleutelt het smtp-wachtwoord',
+      sealed.startsWith('enc:v1:') && !sealed.includes('smtp-geheim') && unsealSecret(sealed) === 'smtp-geheim',
+    );
+    delete process.env.MAIL_SECRET;
+    let locked = false;
+    try {
+      locked = unsealSecret(sealed) !== 'smtp-geheim';
+    } catch {
+      locked = true;
+    }
+    assert('productie leest het smtp-wachtwoord niet met alleen APP_URL', locked);
+  } finally {
+    if (prevNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNode;
+    if (prevMail === undefined) delete process.env.MAIL_SECRET;
+    else process.env.MAIL_SECRET = prevMail;
+    if (prevApp === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = prevApp;
+  }
+}
 
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {

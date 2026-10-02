@@ -83,12 +83,26 @@ export function ctaLabelForTemplateKey(key) {
   }
 }
 
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Alleen http(s)-links mogen in een href. javascript: en data: blijven platte tekst. */
+export function safeHttpUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw || /[\r\n\0]/.test(raw)) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.toString();
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -103,7 +117,7 @@ export function wrapBrandedEmail({
   previewWidth,
 } = {}) {
   const plain = String(text || '').replace(/\r\n/g, '\n').trim();
-  const link = String(ctaUrl || '').trim();
+  const link = safeHttpUrl(ctaUrl);
   const label = String(ctaLabel || '').trim() || (link ? 'Open de app' : '');
 
   const paragraphs = plain
