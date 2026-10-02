@@ -438,7 +438,6 @@ assert('admin wel inschrijven (eigen diensten)', canAccess('Admin', 'inschrijven
 assert('barcommissie geen ruilen-tab', canAccess('Barcommissie', 'ruilen') === false);
 assert('barcommissie geen voorkeuren', canAccess('Barcommissie', 'voorkeuren') === false);
 assert('barcommissie wel beheer', canAccess('Barcommissie', 'beheer') === true);
-assert('admin wel inschrijven voor eigen diensten', canAccess('Admin', 'inschrijven') === true);
 assert('admin wel beheer', canAccess('Admin', 'beheer') === true);
 assert('teamco wel inschrijven', canAccess('Teamcoördinator', 'inschrijven') === true);
 assert('teamco wel mijn team', canAccess('Teamcoördinator', 'teams') === true);
