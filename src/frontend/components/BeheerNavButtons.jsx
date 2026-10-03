@@ -25,6 +25,13 @@ export default function BeheerNavButtons() {
           </Link>
         );
       })}
+      <Link
+        to="/scheidsrechters"
+        data-testid="scheids-nav"
+        className={pathname === '/scheidsrechters' ? 'vvl-btn-primary min-h-11' : 'vvl-btn-outline min-h-11'}
+      >
+        Scheidsrechters
+      </Link>
     </div>
   );
 }

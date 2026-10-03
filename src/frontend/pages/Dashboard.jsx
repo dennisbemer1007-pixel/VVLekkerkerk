@@ -5,6 +5,8 @@ import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
 import { api } from '../hooks/useApi.js';
+import { formatSlotDate } from '../scheids/example.js';
+import { useScheidsBoard } from '../scheids/store.js';
 import { occupancyStatus } from '../utils/formatDate.js';
 
 const OBLIGATION_SHORT = {
@@ -25,6 +27,10 @@ export default function Dashboard({ focus = 'week' }) {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState(null);
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+  const scheidsBoard = useScheidsBoard();
+  const scheidsOpen = scheidsBoard.slots.filter(
+    (slot) => slot.open && slot.reason && slot.reason !== 'Nog niet ingepland.',
+  );
 
   const loadPlanningPeriod = () => {
     if (!can('beheer')) return Promise.resolve();
@@ -116,7 +122,7 @@ export default function Dashboard({ focus = 'week' }) {
             showNoShowMeta
           />
         </div>
-        {gaps.length ? (
+        {gaps.length || scheidsOpen.length ? (
           <section className="space-y-2" data-testid="autoplan-redenen">
             <h2 className="font-heading text-base font-black uppercase">Waarom niet automatisch</h2>
             <p className="text-sm text-gray-700">
@@ -127,6 +133,14 @@ export default function Dashboard({ focus = 'week' }) {
                 <li key={row.personId || row.name} className="px-3 py-2 text-sm">
                   <span className="font-semibold">{row.name}</span>
                   <span className="block text-gray-700">{row.reason || 'Geen geschikt moment.'}</span>
+                </li>
+              ))}
+              {scheidsOpen.map((slot) => (
+                <li key={slot.id} className="px-3 py-2 text-sm" data-testid="scheids-aandacht-reden">
+                  <span className="font-semibold">
+                    {slot.team} · {formatSlotDate(slot.date)} · {slot.time}
+                  </span>
+                  <span className="block text-gray-700">{slot.reason}</span>
                 </li>
               ))}
             </ul>
