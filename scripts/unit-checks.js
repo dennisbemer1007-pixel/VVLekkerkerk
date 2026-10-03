@@ -1542,8 +1542,15 @@ assert(
     'utf8',
   );
   assert(
-    'publieke health lekt geen mail of backuppad',
-    !healthSrc.includes('inspectMail') && !healthSrc.includes('extra.backup') && !healthSrc.includes('fromEmail'),
+    'publieke health lekt geen mail, backuppad of dienst-diff',
+    !healthSrc.includes('inspectMail') &&
+      !healthSrc.includes('extra.backup') &&
+      !healthSrc.includes('fromEmail') &&
+      !healthSrc.includes('serviceDiff'),
+  );
+  assert(
+    'publieke health is alleen ok/name/db',
+    healthSrc.includes("res.json({ ok: true, name: 'VVL Planning App', db: true })"),
   );
 }
 

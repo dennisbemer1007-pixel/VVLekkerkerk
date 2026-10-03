@@ -21,7 +21,6 @@ import { UPLOADS_DIR, ensureUploadDirs, isUnsafeUploadPath } from './lib/uploads
 import { clientErrorPayload } from './lib/clientError.js';
 import { ensureClubDefaults } from './lib/clubDefaults.js';
 import { maybeRunDutyReminders } from './lib/reminders.js';
-import { readDeployStatus, deployStateDir, resolveLiveDbFile } from './lib/liveDeploy.js';
 import fs from 'fs';
 import serviceRulesRouter from './routes/serviceRules.js';
 import activitiesRouter from './routes/activities.js';
@@ -105,16 +104,7 @@ app.use(
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    const extra = {};
-    try {
-      const root = path.join(__dirname, '../..');
-      const dbFile = resolveLiveDbFile(root);
-      const status = readDeployStatus(deployStateDir(dbFile));
-      extra.serviceDiff = status?.serviceDiff || null;
-    } catch {
-      extra.serviceDiff = null;
-    }
-    res.json({ ok: true, name: 'VVL Planning App', db: true, ...extra });
+    res.json({ ok: true, name: 'VVL Planning App', db: true });
     maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));
   } catch (err) {
     console.error('[Health] Database niet bereikbaar:', err.message);
