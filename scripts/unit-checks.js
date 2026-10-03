@@ -1312,10 +1312,129 @@ assert(
     !/Mijn gegevens|Personen/.test(meerSrc),
 );
 
+const { categoryOfTeam, categoryNeeded, planReferees } = await import('../src/backend/lib/refereePlan.js');
+assert(
+  'scheidsniveau volgt teamcategorie',
+  categoryOfTeam('JO11-1')?.level === 'pupillen' &&
+    categoryOfTeam('JO11-1')?.key === 'JO11' &&
+    categoryOfTeam('MO15-1')?.level === 'junioren' &&
+    categoryOfTeam('JO19-1')?.level === 'junioren' &&
+    categoryOfTeam('O9-3')?.level === 'pupillen' &&
+    categoryOfTeam('O8-1')?.key === 'O8' &&
+    categoryOfTeam('Senioren 1')?.key === 'Senioren' &&
+    categoryOfTeam('VR1')?.key === 'VR' &&
+    categoryOfTeam('VR1')?.level === 'senioren',
+);
+assert(
+  'JO8-JO10 en MO8-MO10 hebben standaard geen scheidsrechter',
+  categoryNeeded('JO8') === false &&
+    categoryNeeded('JO10') === false &&
+    categoryNeeded('MO9') === false &&
+    categoryNeeded('O8') === false &&
+    categoryNeeded('JO11') === true &&
+    categoryNeeded('JO7') === true &&
+    categoryNeeded('Senioren') === true,
+);
+{
+  const people = [
+    { id: 1, name: 'Anne', teams: ['JO11-1'], levels: ['pupillen'] },
+    { id: 2, name: 'Bas', teams: [], levels: ['pupillen'] },
+    { id: 3, name: 'Cees', teams: [], levels: ['pupillen'] },
+  ];
+  const matches = [
+    { id: 10, date: '2026-10-10', time: '09:30', home: true, team: 'JO11-1', opponent: 'X' },
+    { id: 11, date: '2026-10-10', time: '10:45', home: true, team: 'JO12-1', opponent: 'Y' },
+  ];
+  const planned = planReferees({ people, matches, isNeeded: () => true });
+  const bySlot = Object.fromEntries(planned.assignments.map((row) => [row.matchId, row.personId]));
+  assert(
+    'nooit het eigen team, wel vlak erna als dat kan',
+    bySlot[10] === 2 && bySlot[11] === 1 && planned.open.length === 0,
+  );
+}
+{
+  const planned = planReferees({
+    people: [
+      { id: 1, name: 'Aaf', teams: [], levels: ['pupillen'] },
+      { id: 2, name: 'Bas', teams: [], levels: ['pupillen'] },
+    ],
+    matches: [
+      { id: 1, date: '2026-10-10', time: '10:00', home: true, team: 'JO12-1', opponent: 'X' },
+      { id: 2, date: '2026-10-17', time: '10:00', home: true, team: 'JO12-1', opponent: 'Y' },
+    ],
+    isNeeded: () => true,
+  });
+  const second = planned.assignments.find((row) => row.matchId === 2);
+  assert('rollend venster geeft de volgende plek aan wie nog niet floot', second?.personId === 2);
+}
+{
+  const planned = planReferees({
+    people: [{ id: 1, name: 'Bo', teams: [], levels: ['pupillen'] }],
+    matches: [
+      { id: 1, date: '2026-10-10', time: '09:00', home: true, team: 'JO12-1', opponent: 'A' },
+      { id: 2, date: '2026-10-10', time: '12:00', home: true, team: 'JO12-2', opponent: 'B' },
+    ],
+    isNeeded: () => true,
+  });
+  assert(
+    'hooguit één automatische plek per persoon per dag',
+    planned.assignments.length === 1 &&
+      planned.open.length === 1 &&
+      planned.open[0].reason.includes('fluit die dag al'),
+  );
+}
+{
+  const planned = planReferees({
+    people: [{ id: 1, name: 'Anne', teams: ['JO11-1'], levels: ['pupillen'] }],
+    matches: [
+      { id: 1, date: '2026-10-10', time: '10:00', home: true, team: 'JO11-1', opponent: 'X' },
+      { id: 2, date: '2026-10-10', time: '09:00', home: true, team: 'JO8-1', opponent: 'Y' },
+    ],
+    isNeeded: (key) => categoryNeeded(key),
+  });
+  assert(
+    'open plek noemt waarom en JO8 telt niet mee',
+    planned.assignments.length === 0 &&
+      planned.open.length === 1 &&
+      planned.open[0].matchId === 1 &&
+      planned.open[0].reason.includes('Pupillen'),
+  );
+}
+{
+  const migration = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/prisma/migrations/20261003180000_referees/migration.sql',
+    ),
+    'utf8',
+  );
+  const instellingenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'),
+    'utf8',
+  );
+  assert(
+    'scheids-migratie is additief en staat uit',
+    migration.includes('refereesEnabled') &&
+      /DEFAULT false/i.test(migration) &&
+      migration.includes('refereeLevels') &&
+      !/DROP TABLE/i.test(migration) &&
+      !/DROP COLUMN/i.test(migration),
+  );
+  assert(
+    'instellingen heeft de scheidsrechters-schakelaar',
+    instellingenSrc.includes('data-testid="scheids-schakelaar"'),
+  );
+}
+
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
 assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
 
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const refereeApi = spawnSync(process.execPath, ['scripts/referee-api-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('scheids-API: 404 uit en rollen', refereeApi.status === 0);
 const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {
   cwd: unitRoot,
   stdio: 'inherit',

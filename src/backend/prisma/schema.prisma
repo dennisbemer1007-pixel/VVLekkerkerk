@@ -51,6 +51,11 @@ model Person {
   swapRequests     SwapRequest[] @relation("SwapRequester")
   swapOffers       SwapRequest[] @relation("SwapCounterparty")
   notifications    Notification[]
+  /** JSON: pupillen, junioren, senioren. Leeg = niet beschikbaar als scheidsrechter. */
+  refereeLevels    String       @default("[]")
+  refereeAssignments RefereeAssignment[]
+  refereeSwapsRequested RefereeSwap[] @relation("RefereeSwapRequester")
+  refereeSwapsReceived  RefereeSwap[] @relation("RefereeSwapCounterparty")
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
@@ -127,6 +132,7 @@ model Match {
   teamId      Int?
   team        Team?    @relation(fields: [teamId], references: [id])
   services    Service[]
+  refereeAssignment RefereeAssignment?
 }
 
 model Activity {
@@ -313,7 +319,57 @@ model ClubSettings {
   seasonStartMonth     Int      @default(8)
   auditRetainMonths    Int      @default(24)
   inactiveRetainMonths Int      @default(24)
+  /** Scheidsrechters uit tot een admin de schakelaar aanzet. */
+  refereesEnabled      Boolean  @default(false)
   updatedAt            DateTime @updatedAt
+}
+
+/** Per teamcategorie of een scheidsrechter nodig is. Geen rij = de standaard. */
+model RefereeCategory {
+  key    String  @id
+  needed Boolean
+}
+
+/** Eén scheidsrechterplek per thuiswedstrijd. */
+model RefereeAssignment {
+  id          Int       @id @default(autoincrement())
+  matchId     Int       @unique
+  match       Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  level       String
+  categoryKey String
+  personId    Int?
+  person      Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  /** voorgesteld | bevestigd */
+  status      String    @default("voorgesteld")
+  /** auto | self | hand */
+  source      String    @default("auto")
+  openReason  String    @default("")
+  swapsFrom   RefereeSwap[] @relation("SwapFromSlot")
+  swapsTo     RefereeSwap[] @relation("SwapToSlot")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([personId])
+}
+
+/** Ruil tussen twee scheidsrechterplekken. Niet tegen een open plek of een bardienst. */
+model RefereeSwap {
+  id               Int                @id @default(autoincrement())
+  fromAssignmentId Int
+  toAssignmentId   Int
+  fromAssignment   RefereeAssignment  @relation("SwapFromSlot", fields: [fromAssignmentId], references: [id], onDelete: Cascade)
+  toAssignment     RefereeAssignment  @relation("SwapToSlot", fields: [toAssignmentId], references: [id], onDelete: Cascade)
+  requesterId      Int
+  counterpartyId   Int
+  requester        Person             @relation("RefereeSwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  counterparty     Person             @relation("RefereeSwapCounterparty", fields: [counterpartyId], references: [id], onDelete: Cascade)
+  /** PENDING | ACCEPTED | REJECTED | CANCELLED */
+  status           String             @default("PENDING")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([requesterId, status])
+  @@index([counterpartyId, status])
 }
 
 model MailSettings {

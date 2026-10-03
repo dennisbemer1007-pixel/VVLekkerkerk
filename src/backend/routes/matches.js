@@ -16,6 +16,7 @@ import { defaultTeamFunctions } from '../lib/teamFunctions.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { matchTemplateSheets } from '../lib/matchesXlsx.js';
 import { dateInQuery, queryText } from '../lib/listFilters.js';
+import { syncRefereeSlots } from '../lib/referees.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -119,6 +120,7 @@ router.post(
         include: { team: true },
       });
       const planning = home !== false ? await trySyncPlanningFromMatches() : { created: 0 };
+      await syncRefereeSlots().catch((err) => console.error('[scheids]', err.message));
       res.status(201).json({ ...match, planningCreated: planning.created });
     } catch (err) {
       next(err);
@@ -166,6 +168,7 @@ router.put(
         include: { team: true },
       });
       const planning = home !== false ? await trySyncPlanningFromMatches() : { created: 0 };
+      await syncRefereeSlots().catch((err) => console.error('[scheids]', err.message));
       res.json({ ...match, planningCreated: planning.created });
     } catch (err) {
       next(err);
@@ -355,6 +358,7 @@ router.post(
       const { created, persistErrors, skippedDuplicates, teamsRecognized, unknownTeams, createdTeams } =
         await persistValidRows(result.rows);
       const planning = await trySyncPlanningFromMatches();
+      await syncRefereeSlots().catch((err) => console.error('[scheids]', err.message));
 
       if (created.length === 0 && skippedDuplicates === 0) {
         return res.status(400).json({

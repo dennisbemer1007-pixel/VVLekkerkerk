@@ -18,6 +18,7 @@ import Privacy from './pages/Privacy.jsx';
 import Uitnodiging from './pages/Uitnodiging.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
 import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
+import Scheidsrechters from './pages/Scheidsrechters.jsx';
 import Wedstrijden from './pages/Wedstrijden.jsx';
 
 function Protected({ children, feature, adminOnly = false }) {
@@ -79,6 +80,7 @@ export default function App() {
               <Route path="/rooster" element={<Protected feature="planning"><Planning variant="rooster" /></Protected>} />
               <Route path="/planning" element={<Protected feature="planning"><Navigate to="/rooster" replace /></Protected>} />
               <Route path="/wedstrijden" element={<Protected feature="wedstrijden"><Wedstrijden /></Protected>} />
+              <Route path="/scheidsrechters" element={<Protected feature="beheer"><Scheidsrechters /></Protected>} />
               <Route path="/ruilen" element={<Protected><Ruilen scope="mine" mode="list" /></Protected>} />
               <Route path="/ruilen/nieuw" element={<Protected><Ruilen scope="mine" mode="new" title="Nieuw ruilverzoek" /></Protected>} />
               <Route path="/mijn-ruilen" element={<Protected feature="beheer"><Ruilen scope="mine" mode="list" title="Mijn ruilen" basePath="/mijn-ruilen" /></Protected>} />

@@ -23,6 +23,7 @@ import serviceRulesRouter from './routes/serviceRules.js';
 import activitiesRouter from './routes/activities.js';
 import swapsRouter from './routes/swaps.js';
 import notificationsRouter from './routes/notifications.js';
+import refereesRouter from './routes/referees.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -148,6 +149,7 @@ app.use('/api/service-rules', serviceRulesRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/swaps', swapsRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/referees', refereesRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 

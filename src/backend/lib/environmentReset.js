@@ -288,6 +288,8 @@ async function wipeInside(tx, { actorId, backupFilename }) {
     personen: await tx.person.count({ where: { id: { notIn: keptList } } }),
   };
 
+  await tx.refereeSwap.deleteMany();
+  await tx.refereeAssignment.deleteMany();
   await tx.swapRequest.deleteMany();
   await tx.notification.deleteMany();
   await tx.enrollment.deleteMany();

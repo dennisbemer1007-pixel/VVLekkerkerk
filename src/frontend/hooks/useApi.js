@@ -389,6 +389,25 @@ export const api = {
   unmarkPlanningOfficial: (data) =>
     json('/planning/unofficial', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   sendDutyReminders: () => json('/planning/remind', { method: 'POST', body: '{}' }),
+  setRefereesEnabled: (enabled) =>
+    json('/settings/club', { method: 'PATCH', body: JSON.stringify({ refereesEnabled: enabled }) }),
+  getRefereeOverview: () => json('/referees/overview'),
+  getRefereeAttention: () => json('/referees/attention'),
+  getRefereePeople: () => json('/referees/people'),
+  getRefereeMine: () => json('/referees/mine'),
+  setRefereeLevels: (id, levels) =>
+    json(`/referees/people/${id}/levels`, { method: 'PUT', body: JSON.stringify({ levels }) }),
+  setRefereeCategory: (key, needed) =>
+    json(`/referees/categories/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ needed }) }),
+  planReferees: () => json('/referees/plan', { method: 'POST', body: '{}' }),
+  assignReferee: (matchId, personId) =>
+    json(`/referees/slots/${matchId}`, { method: 'PUT', body: JSON.stringify({ personId }) }),
+  confirmReferee: (matchId) => json(`/referees/slots/${matchId}/confirm`, { method: 'POST', body: '{}' }),
+  claimReferee: (matchId) => json(`/referees/slots/${matchId}/claim`, { method: 'POST', body: '{}' }),
+  proposeRefereeSwap: (fromMatchId, toMatchId) =>
+    json('/referees/swaps', { method: 'POST', body: JSON.stringify({ fromMatchId, toMatchId }) }),
+  acceptRefereeSwap: (id) => json(`/referees/swaps/${id}/accept`, { method: 'POST', body: '{}' }),
+  rejectRefereeSwap: (id) => json(`/referees/swaps/${id}/reject`, { method: 'POST', body: '{}' }),
   downloadPlanningExcel: async (params = {}) => {
     const headers = {};
     const token = getToken();
