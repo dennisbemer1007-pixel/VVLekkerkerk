@@ -151,39 +151,55 @@ export function shortName(name) {
   return String(name || '').replace(/^(JO\d+|Senioren)-\d+\s+/i, '');
 }
 
+const STANDING_HEADERS = ['P', 'W', 'G', 'V', 'DV', 'DT', 'S', 'PT'];
+
 export function PouleBoards({ poules }) {
   if (!poules.length) return null;
   return (
     <div className="grid gap-3 md:grid-cols-2" data-testid="poules">
       {poules.map((poule) => (
-        <section key={poule.id} className="vvl-card p-0">
+        <section key={poule.id} className="vvl-card min-w-0 overflow-hidden p-0">
           <h2 className="border-b border-vvl-border px-3 py-2 text-sm font-black uppercase">{poule.name}</h2>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-[11px] uppercase text-gray-500">
-                {['', 'P', 'W', 'G', 'V', 'DV', 'DT', 'S', 'PT'].map((label) => (
-                  <th key={label || 'team'} className={`px-2 py-1 font-bold ${label === 'PT' ? 'text-right' : ''}`}>
-                    {label}
-                  </th>
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed text-left text-xs">
+              <colgroup>
+                <col />
+                {STANDING_HEADERS.map((label) => (
+                  <col key={label} style={{ width: '8%' }} />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {poule.table.map((row) => (
-                <tr key={row.teamId} className="border-t border-vvl-border">
-                  <td className="px-2 py-1 font-semibold">{row.name}</td>
-                  <td className="px-2 py-1">{row.played}</td>
-                  <td className="px-2 py-1">{row.won}</td>
-                  <td className="px-2 py-1">{row.drawn}</td>
-                  <td className="px-2 py-1">{row.lost}</td>
-                  <td className="px-2 py-1">{row.gf}</td>
-                  <td className="px-2 py-1">{row.ga}</td>
-                  <td className="px-2 py-1">{row.gd}</td>
-                  <td className="px-2 py-1 text-right font-black">{row.points}</td>
+              </colgroup>
+              <thead>
+                <tr className="text-[10px] uppercase text-gray-500">
+                  <th className="px-2 py-1 text-left font-bold" />
+                  {STANDING_HEADERS.map((label) => (
+                    <th key={label} className="px-0 py-1 text-center font-bold">
+                      {label}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {poule.table.map((row) => {
+                  const values = [row.played, row.won, row.drawn, row.lost, row.gf, row.ga, row.gd, row.points];
+                  return (
+                    <tr key={row.teamId} className="border-t border-vvl-border">
+                      <td className="break-words px-2 py-1 text-left text-sm font-semibold leading-tight">{row.name}</td>
+                      {values.map((value, index) => (
+                        <td
+                          key={STANDING_HEADERS[index]}
+                          className={`px-0 py-1 text-center tabular-nums ${
+                            STANDING_HEADERS[index] === 'PT' ? 'font-black' : ''
+                          }`}
+                        >
+                          {value}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       ))}
     </div>

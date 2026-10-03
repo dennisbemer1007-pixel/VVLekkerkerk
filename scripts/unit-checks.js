@@ -1414,6 +1414,26 @@ assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false &&
   );
 }
 
+{
+  const printSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/ToernooiPrint.jsx'),
+    'utf8',
+  );
+  assert(
+    'afdruk houdt veldkop bij het veld',
+    printSrc.includes('veld-blok') && printSrc.includes('break-inside: avoid'),
+  );
+  const seedSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/seed-mock.js'),
+    'utf8',
+  );
+  assert(
+    'seed-mock toont demo-wachtwoord bij SEED_DEMO',
+    seedSrc.includes("SEED_DEMO === 'true' ? 'demo-test-2026' : 'admin123'") &&
+      !seedSrc.includes('admin@vvl.local / admin123'),
+  );
+}
+
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {
   cwd: unitRoot,
