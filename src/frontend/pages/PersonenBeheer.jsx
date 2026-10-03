@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import DesktopOnly from '../components/DesktopOnly.jsx';
 import NlDateInput from '../components/NlDateInput.jsx';
 import { api } from '../hooks/useApi.js';
+import RefereeLevelField, { RefereeBadges } from '../scheids/RefereeLevelField.jsx';
+import { levelsForPerson, savePersonLevels, useScheidsState } from '../scheids/store.js';
 import { toDateInputValue } from '../utils/formatDate.js';
 
 const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
@@ -15,6 +17,13 @@ const ACCOUNT_FILTERS = [
   { value: 'yes', label: 'Wel account' },
   { value: 'no', label: 'Geen account' },
 ];
+const REFEREE_FILTERS = [
+  { value: '', label: 'Alle' },
+  { value: 'pupillen', label: 'Pupillen' },
+  { value: 'junioren', label: 'Junioren' },
+  { value: 'senioren', label: 'Senioren' },
+  { value: 'none', label: 'Geen' },
+];
 
 const emptyForm = {
   name: '',
@@ -26,6 +35,7 @@ const emptyForm = {
   exempted: false,
   exemptedUntil: '',
   guardianId: '',
+  refereeLevels: [],
 };
 
 function IconButton({ title, onClick, children, tone = 'default', size = 'md' }) {
@@ -395,6 +405,7 @@ function PersonImport({ onDone }) {
 }
 
 export default function PersonenBeheer() {
+  const scheids = useScheidsState();
   const [persons, setPersons] = useState([]);
   const [teams, setTeams] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -410,6 +421,7 @@ export default function PersonenBeheer() {
   const [filterRole, setFilterRole] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
+  const [filterReferee, setFilterReferee] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
@@ -462,6 +474,7 @@ export default function PersonenBeheer() {
       exempted: Boolean(p.exempted),
       exemptedUntil: p.exemptedUntil || '',
       guardianId: p.guardianId ? String(p.guardianId) : '',
+      refereeLevels: levelsForPerson(p, scheids),
     });
     setFormOpen(true);
   };
@@ -481,13 +494,15 @@ export default function PersonenBeheer() {
       return;
     }
     try {
+      const { refereeLevels, ...formRest } = form;
       const data = {
-        ...form,
+        ...formRest,
         teamId: form.teamId || null,
         guardianId: form.guardianId || null,
       };
       if (editId) {
         await api.updatePerson(editId, data);
+        if (scheids.enabled) savePersonLevels({ id: editId, email: data.email }, refereeLevels);
         closeForm();
       } else if (mode === 'invite') {
         const res = await api.invitePerson(data);
@@ -569,6 +584,11 @@ export default function PersonenBeheer() {
     }
     if (filterAccount === 'yes' && !p.hasAccount) return false;
     if (filterAccount === 'no' && p.hasAccount) return false;
+    if (scheids.enabled) {
+      const levels = levelsForPerson(p, scheids);
+      if (filterReferee === 'none' && levels.length) return false;
+      if (filterReferee && filterReferee !== 'none' && !levels.includes(filterReferee)) return false;
+    }
     return true;
   });
 
@@ -716,6 +736,16 @@ export default function PersonenBeheer() {
               ))}
             </select>
           </div>
+          {scheids.enabled ? (
+            <div>
+              <label className="vvl-label">Scheidsrechter</label>
+              <select className="vvl-input" value={filterReferee} onChange={(e) => setFilterReferee(e.target.value)} aria-label="Scheidsrechter">
+                {REFEREE_FILTERS.map((f) => (
+                  <option key={f.value || 'alle'} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
             <input
               type="checkbox"
@@ -806,9 +836,12 @@ export default function PersonenBeheer() {
                     aria-label={`Selecteer ${p.name}`}
                   />
                 </td>
-                <td className="truncate p-2 font-semibold">
-                  {p.name}
-                  {!p.active ? ' (inactief)' : ''}
+                <td className="p-2 font-semibold">
+                  <span className="block truncate">
+                    {p.name}
+                    {!p.active ? ' (inactief)' : ''}
+                  </span>
+                  {scheids.enabled ? <RefereeBadges levels={levelsForPerson(p, scheids)} /> : null}
                   <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 md:hidden">
                     {p.email || 'geen e-mail'}
                     {p.phone ? ` · ${p.phone}` : ''}
@@ -989,6 +1022,12 @@ export default function PersonenBeheer() {
                   ))}
                 </select>
               </div>
+              {scheids.enabled ? (
+                <RefereeLevelField
+                  value={form.refereeLevels}
+                  onChange={(refereeLevels) => setForm({ ...form, refereeLevels })}
+                />
+              ) : null}
               {editId ? (
                 <GuardianPicker
                   persons={persons}

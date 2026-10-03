@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import SettingsNavList from '../components/SettingsNavList.jsx';
 import { api } from '../hooks/useApi.js';
 import { isAdminRoleName } from '../navConfig.js';
+import { setScheidsEnabled, useScheidsEnabled } from '../scheids/store.js';
 
 const LINKS = [
   { to: '/beheer?tab=regels', label: 'Dienstregels' },
@@ -218,6 +219,34 @@ function TestMailBlok({ defaultTo = '' }) {
   );
 }
 
+function ScheidsSchakelaar() {
+  const enabled = useScheidsEnabled();
+  return (
+    <div
+      className="flex min-h-12 items-center justify-between gap-3 rounded-sm border border-vvl-border bg-white px-4 py-3"
+      data-testid="scheids-schakelaar"
+    >
+      <span className="text-sm font-semibold uppercase tracking-wide">Scheidsrechters</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Scheidsrechters"
+        data-testid="scheids-schakelaar-knop"
+        onClick={() => setScheidsEnabled(!enabled)}
+        className="inline-flex min-h-11 items-center gap-2"
+      >
+        <span className="text-xs font-bold uppercase tracking-wide">{enabled ? 'Aan' : 'Uit'}</span>
+        <span className={`relative h-7 w-12 rounded-full ${enabled ? 'bg-black' : 'bg-vvl-border'}`}>
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white ${enabled ? 'left-5' : 'left-0.5'}`}
+          />
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export default function Instellingen() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -229,6 +258,8 @@ export default function Instellingen() {
         <h1 className="font-heading text-xl font-black uppercase">Instellingen</h1>
         <p className="mt-1 text-sm text-vvl-accent">Beheer clubinstellingen en planningregels.</p>
       </div>
+
+      {admin ? <ScheidsSchakelaar /> : null}
 
       <SettingsNavList items={LINKS} />
 

@@ -6,6 +6,7 @@ import ServiceLine from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
+import { ScheidsMijn, ScheidsOpen } from '../scheids/ScheidsVrijwilliger.jsx';
 import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
 
 function formatEnrollConfirm(service) {
@@ -134,6 +135,7 @@ export default function Inschrijven({ mode = 'open' }) {
 
   return (
     <div className="space-y-4" ref={listTopRef} data-testid="inschrijven-page">
+      {mode === 'mine' ? <ScheidsMijn /> : <ScheidsOpen />}
       {mode === 'open' ? (
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
           <input

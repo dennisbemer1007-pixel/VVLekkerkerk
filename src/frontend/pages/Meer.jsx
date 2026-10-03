@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom';
+import ScheidsNavLink from '../scheids/ScheidsNavLink.jsx';
 import Beheer from './Beheer.jsx';
 
 export const BEHEER_BUTTONS = [
@@ -35,6 +36,7 @@ export default function Meer() {
             </Link>
           );
         })}
+        <ScheidsNavLink />
       </div>
       {showPanel ? <Beheer mode="meer" hideChrome /> : null}
     </div>

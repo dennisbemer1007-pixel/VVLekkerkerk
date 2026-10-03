@@ -1312,6 +1312,91 @@ assert(
     !/Mijn gegevens|Personen/.test(meerSrc),
 );
 
+const { categoryOfTeam, categoryNeeded } = await import('../src/frontend/scheids/categories.js');
+const { planReferees } = await import('../src/frontend/scheids/planReferees.js');
+assert(
+  'scheidsniveau volgt teamcategorie',
+  categoryOfTeam('JO11-1')?.level === 'pupillen' &&
+    categoryOfTeam('JO11-1')?.key === 'JO11' &&
+    categoryOfTeam('MO15-1')?.level === 'junioren' &&
+    categoryOfTeam('JO19-1')?.level === 'junioren' &&
+    categoryOfTeam('O9-3')?.level === 'pupillen' &&
+    categoryOfTeam('Senioren 1')?.key === 'Senioren' &&
+    categoryOfTeam('VR1')?.key === 'VR' &&
+    categoryOfTeam('VR1')?.level === 'senioren',
+);
+assert(
+  'JO8-JO10 en MO8-MO10 hebben standaard geen scheidsrechter',
+  categoryNeeded('JO8') === false &&
+    categoryNeeded('JO10') === false &&
+    categoryNeeded('MO9') === false &&
+    categoryNeeded('JO11') === true &&
+    categoryNeeded('JO7') === true &&
+    categoryNeeded('Senioren') === true,
+);
+{
+  const people = [
+    { email: 'anne@x', name: 'Anne', teams: ['JO11-1'], levels: ['pupillen'] },
+    { email: 'bas@x', name: 'Bas', teams: [], levels: ['pupillen'] },
+    { email: 'cees@x', name: 'Cees', teams: [], levels: ['pupillen'] },
+  ];
+  const matches = [
+    { id: 'own', date: '2026-10-10', time: '09:30', home: true, team: 'JO11-1', opponent: 'X', field: 'Veld 1' },
+    { id: 'after', date: '2026-10-10', time: '10:45', home: true, team: 'JO12-1', opponent: 'Y', field: 'Veld 2' },
+  ];
+  const planned = planReferees({ people, matches, isNeeded: () => true });
+  const bySlot = Object.fromEntries(planned.assignments.map((row) => [row.slotId, row.personEmail]));
+  assert(
+    'nooit het eigen team, wel vlak erna als dat kan',
+    bySlot.own === 'bas@x' && bySlot.after === 'anne@x' && planned.open.length === 0,
+  );
+}
+{
+  const people = [
+    { email: 'aaf@x', name: 'Aaf', teams: [], levels: ['pupillen'] },
+    { email: 'bas@x', name: 'Bas', teams: [], levels: ['pupillen'] },
+  ];
+  const matches = [
+    { id: 'w1', date: '2026-10-10', time: '10:00', home: true, team: 'JO12-1', opponent: 'X', field: 'Veld 1' },
+    { id: 'w2', date: '2026-10-17', time: '10:00', home: true, team: 'JO12-1', opponent: 'Y', field: 'Veld 1' },
+  ];
+  const planned = planReferees({ people, matches, isNeeded: () => true });
+  const second = planned.assignments.find((row) => row.slotId === 'w2');
+  assert('rollend venster geeft de volgende plek aan wie nog niet floot', second?.personEmail === 'bas@x');
+}
+{
+  const planned = planReferees({
+    people: [{ email: 'anne@x', name: 'Anne', teams: ['JO11-1'], levels: ['pupillen'] }],
+    matches: [
+      { id: 'own', date: '2026-10-10', time: '10:00', home: true, team: 'JO11-1', opponent: 'X', field: 'Veld 1' },
+      { id: 'jo8', date: '2026-10-10', time: '09:00', home: true, team: 'JO8-1', opponent: 'Y', field: 'Veld 2' },
+    ],
+    isNeeded: (key) => categoryNeeded(key),
+  });
+assert(
+  'open plek noemt waarom en JO8 telt niet mee',
+  planned.assignments.length === 0 &&
+    planned.open.length === 1 &&
+    planned.open[0].slotId === 'own' &&
+    planned.open[0].reason.includes('Pupillen'),
+);
+{
+  const { scheidsFeatureOn, setScheidsEnabled } = await import('../src/frontend/scheids/store.js');
+  const instellingenSrc = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'),
+    'utf8',
+  );
+  assert('scheidsrechters staan standaard uit', scheidsFeatureOn() === false);
+  setScheidsEnabled(true);
+  assert('scheidsrechters-schakelaar gaat aan', scheidsFeatureOn() === true);
+  setScheidsEnabled(false);
+  assert(
+    'instellingen heeft de scheidsrechters-schakelaar',
+    scheidsFeatureOn() === false && instellingenSrc.includes('data-testid="scheids-schakelaar"'),
+  );
+}
+}
+
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
 assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
 
