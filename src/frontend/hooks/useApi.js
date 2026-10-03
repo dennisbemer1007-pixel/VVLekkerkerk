@@ -326,6 +326,17 @@ export const api = {
   reassignEnrollment: (id, data) =>
     json(`/enrollments/${id}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
   getClubSettings: () => json('/settings/club'),
+  setTournamentsEnabled: (enabled) =>
+    json('/settings/club', { method: 'PATCH', body: JSON.stringify({ tournamentsEnabled: Boolean(enabled) }) }),
+  listTournaments: () => json('/tournaments'),
+  createTournament: (seed) =>
+    json('/tournaments', { method: 'POST', body: JSON.stringify({ seed }) }),
+  getTournament: (id) => json(`/tournaments/${id}`),
+  saveTournament: (id, state) =>
+    json(`/tournaments/${id}`, { method: 'PUT', body: JSON.stringify({ state }) }),
+  scoreTournament: (id, body) =>
+    json(`/tournaments/${id}/scores`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteTournament: (id) => json(`/tournaments/${id}`, { method: 'DELETE' }),
   rolloverSeason: (data) =>
     json('/settings/club/rollover', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   privacyCleanup: () => json('/settings/privacy/cleanup', { method: 'POST', body: '{}' }),

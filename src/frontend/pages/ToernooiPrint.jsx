@@ -1,11 +1,18 @@
+import { useParams } from 'react-router-dom';
 import { PitchFigure } from '../toernooi/Pitch.jsx';
 import { useTournament } from '../toernooi/storage.js';
 import { BracketView, PouleBoards, QrBlock, ScheduleTable, dutchDate, liveUrl } from '../toernooi/views.jsx';
 
 export default function ToernooiPrint() {
-  const { view } = useTournament();
+  const { id } = useParams();
+  const { view, ready, error, publicToken } = useTournament(id);
+  if (!ready) return <p className="p-6 text-sm">Laden…</p>;
+  if (!view) return <p className="p-6 text-sm font-semibold">{error || 'Niet gevonden'}</p>;
+  return <PrintSheet view={view} url={liveUrl(publicToken)} />;
+}
+
+function PrintSheet({ view, url }) {
   const { state } = view;
-  const url = liveUrl();
 
   return (
     <div className="min-h-screen bg-white text-black">

@@ -100,9 +100,11 @@ import {
   assessFit,
   buildShifts,
   createExample,
+  normalizeTournament,
   partsForField,
   present,
   roundRobin,
+  unusedFullFields,
 } from '../src/frontend/toernooi/engine.js';
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
 import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
@@ -1412,6 +1414,83 @@ assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false &&
     'bar en keuken vullen de dag',
     shifts.length === 5 && shifts[0].start === '09:00' && shifts.at(-1).end === '16:00',
   );
+
+  const idle = unusedFullFields(example, view.matches);
+  assert('heel veld zonder passende categorie blijft leeg', idle.some((field) => field.name === 'Veld 4'));
+
+  assert(
+    'wissel standaard 3 minuten, expliciet 0 blijft 0',
+    normalizeTournament({}).changeoverMinutes === 3 &&
+      normalizeTournament({ changeoverMinutes: 0 }).changeoverMinutes === 0 &&
+      normalizeTournament({ breakEnabled: false }).breakEnabled === false,
+  );
+
+  const koBefore = view.matches.filter((match) => match.phase === 'knockout');
+  const allScores = {};
+  view.matches
+    .filter((match) => match.phase === 'poule')
+    .forEach((match) => {
+      allScores[match.id] = { played: true, home: 1, away: 0, penalties: null };
+    });
+  const afterPoules = present({ ...example, scores: allScores });
+  const koAfter = afterPoules.matches.filter(
+    (match) => match.phase === 'knockout' && match.homeId && match.awayId && match.slotIndex != null,
+  );
+  assert(
+    'knock-out scheids komt pas als de poules klaar zijn',
+    koBefore.length > 0 &&
+      koBefore.every((match) => !match.refereeId) &&
+      koAfter.length > 0 &&
+      koAfter.every((match) => match.refereeId),
+  );
+
+  const tieBase = normalizeTournament({
+    name: 'Tiebreak',
+    fields: [{ id: 'f', name: 'Veld 1', split: 'quarter' }],
+    teams: ['A', 'B', 'C', 'D'].map((id) => ({ id, name: id, category: 'JO9' })),
+    format: 'poules',
+    startTime: '09:00',
+    endTime: '18:00',
+    matchMinutes: 12,
+    changeoverMinutes: 3,
+    breakEnabled: false,
+  });
+  const tieView = present(tieBase);
+  const pair = (left, right) =>
+    tieView.matches.find(
+      (match) =>
+        match.phase === 'poule' &&
+        ((match.homeId === left && match.awayId === right) || (match.homeId === right && match.awayId === left)),
+    );
+  const line = (left, right, leftGoals, rightGoals) => {
+    const match = pair(left, right);
+    const swapped = match.homeId !== left;
+    return {
+      [match.id]: {
+        played: true,
+        home: swapped ? rightGoals : leftGoals,
+        away: swapped ? leftGoals : rightGoals,
+        penalties: null,
+      },
+    };
+  };
+  const h2h = present({
+    ...tieBase,
+    scores: { ...line('A', 'B', 1, 0), ...line('B', 'C', 5, 0) },
+  });
+  const h2hTable = h2h.poules[0].table.map((row) => row.teamId);
+  assert('onderling resultaat gaat voor doelsaldo', h2hTable.indexOf('A') < h2hTable.indexOf('B'));
+  const gd = present({
+    ...tieBase,
+    scores: { ...line('A', 'B', 1, 1), ...line('A', 'C', 1, 0), ...line('B', 'C', 4, 0) },
+  });
+  const gdTable = gd.poules[0].table;
+  const rowA = gdTable.find((row) => row.teamId === 'A');
+  const rowB = gdTable.find((row) => row.teamId === 'B');
+  assert(
+    'gelijk onderling resultaat valt terug op doelsaldo',
+    rowA.points === rowB.points && gdTable.indexOf(rowB) < gdTable.indexOf(rowA),
+  );
 }
 
 {
@@ -1440,6 +1519,12 @@ const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check
   stdio: 'inherit',
 });
 assert('omgeving opschonen op een databasekopie', resetCheck.status === 0);
+
+const apiCheck = spawnSync(process.execPath, ['scripts/tournament-api-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('toernooi-api met schakelaar en rollen', apiCheck.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

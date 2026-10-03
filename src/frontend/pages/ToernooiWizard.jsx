@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import FieldEditor, { PitchFocus } from '../toernooi/Pitch.jsx';
 import {
   CATEGORIES,
@@ -6,6 +6,7 @@ import {
   partsForField,
   resizeFields,
   resizeTeams,
+  unusedFullFields,
   withPouleMode,
 } from '../toernooi/engine.js';
 import { useTournament } from '../toernooi/storage.js';
@@ -92,11 +93,16 @@ function Segment({ options, value, onChange, label }) {
 }
 
 export default function ToernooiWizard() {
-  const { state, setState, view } = useTournament();
+  const { id } = useParams();
+  const { state, setState, view, ready, error, publicToken } = useTournament(id);
   const [params, setParams] = useSearchParams();
   const requested = params.get('stap') || 'velden';
   const index = Math.max(0, STEPS.findIndex((step) => step.id === requested));
   const step = STEPS[index];
+
+  if (!ready) return <p className="text-sm text-gray-600">Laden…</p>;
+  if (error && !state) return <p className="text-sm font-semibold text-red-800">{error}</p>;
+  if (!state || !view) return null;
 
   const go = (id) => {
     const next = new URLSearchParams(params);
@@ -133,14 +139,14 @@ export default function ToernooiWizard() {
         ))}
       </div>
 
-      {step.id === 'velden' ? <StepVelden state={state} setState={setState} /> : null}
+      {step.id === 'velden' ? <StepVelden state={state} setState={setState} view={view} /> : null}
       {step.id === 'teams' ? <StepTeams state={state} setState={setState} view={view} /> : null}
       {step.id === 'tijd' ? <StepTijd state={state} setState={setState} view={view} /> : null}
       {step.id === 'diensten' ? <StepDiensten state={state} setState={setState} view={view} /> : null}
       {step.id === 'fluiten' ? <StepFluiten state={state} setState={setState} view={view} /> : null}
       {step.id === 'schema' ? <StepSchema view={view} /> : null}
-      {step.id === 'pdf' ? <StepPdf view={view} /> : null}
-      {step.id === 'dag' ? <StepDag state={state} setState={setState} view={view} /> : null}
+      {step.id === 'pdf' ? <StepPdf view={view} tournamentId={id} publicToken={publicToken} /> : null}
+      {step.id === 'dag' ? <StepDag state={state} setState={setState} view={view} publicToken={publicToken} /> : null}
 
       <div className="flex gap-2">
         {index > 0 ? (
@@ -158,8 +164,9 @@ export default function ToernooiWizard() {
   );
 }
 
-function StepVelden({ state, setState }) {
+function StepVelden({ state, setState, view }) {
   const fields = state.fields.map((field) => ({ ...field, parts: partsForField(field) }));
+  const idle = unusedFullFields(state, view.matches);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-6">
@@ -190,6 +197,11 @@ function StepVelden({ state, setState }) {
           />
         ))}
       </div>
+      {idle.map((field) => (
+        <p key={field.id} className="text-sm font-semibold text-gray-700" data-testid={`veld-leeg-${field.id}`}>
+          {field.name} blijft leeg. Deel het veld in helften of kwarten.
+        </p>
+      ))}
     </div>
   );
 }
@@ -205,6 +217,14 @@ function StepTeams({ state, setState, view }) {
     setState({
       ...state,
       teams: state.teams.map((team) => (team.id === id ? { ...team, ...patch } : team)),
+    });
+  };
+
+  const moveTeam = (teamId, pouleId) => {
+    const base = state.categoryMode === 'poule' ? state : withPouleMode(state);
+    setState({
+      ...base,
+      teams: base.teams.map((team) => (team.id === teamId ? { ...team, pouleId } : team)),
     });
   };
 
@@ -280,14 +300,57 @@ function StepTeams({ state, setState, view }) {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {view.poules.map((poule) => (
-          <p key={poule.id} className="rounded-full border border-vvl-border bg-white px-3 py-1 text-xs font-bold">
-            {poule.name}
-            <span className="ml-1 font-semibold text-gray-400">{poule.teams.length}</span>
-          </p>
-        ))}
-      </div>
+      {state.categoryMode === 'team' ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {view.poules.map((poule) => (
+            <section
+              key={poule.id}
+              className="rounded-sm border border-dashed border-vvl-border bg-white p-2"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const teamId = event.dataTransfer.getData('text/plain');
+                if (teamId) moveTeam(teamId, poule.id);
+              }}
+            >
+              <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">{poule.name}</h3>
+              <ul>
+                {poule.teams.map((team) => (
+                  <li
+                    key={team.id}
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData('text/plain', team.id)}
+                    className="flex cursor-grab items-center gap-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold">{team.name}</span>
+                    <select
+                      className="h-10 bg-transparent px-1 text-xs font-bold outline-none"
+                      aria-label={`Poule van ${team.name}`}
+                      value={poule.id}
+                      onChange={(event) => moveTeam(team.id, event.target.value)}
+                    >
+                      {view.poules.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {view.poules.map((poule) => (
+            <p key={poule.id} className="rounded-full border border-vvl-border bg-white px-3 py-1 text-xs font-bold">
+              {poule.name}
+              <span className="ml-1 font-semibold text-gray-400">{poule.teams.length}</span>
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -318,7 +381,20 @@ function PouleEditors({ state, setState }) {
     <div className="space-y-4">
       <NumberField label="Poules" value={state.poules.length || 1} min={1} max={8} onChange={setPouleCount} />
       {state.poules.map((poule) => (
-        <section key={poule.id} className="space-y-2">
+        <section
+          key={poule.id}
+          className="space-y-2"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const teamId = event.dataTransfer.getData('text/plain');
+            if (!teamId) return;
+            setState({
+              ...state,
+              teams: state.teams.map((item) => (item.id === teamId ? { ...item, pouleId: poule.id } : item)),
+            });
+          }}
+        >
           <div className="flex items-center gap-2">
             <input
               className="vvl-input font-bold"
@@ -346,7 +422,12 @@ function PouleEditors({ state, setState }) {
             {state.teams
               .filter((team) => team.pouleId === poule.id)
               .map((team) => (
-                <li key={team.id} className="flex items-center gap-2">
+                <li
+                  key={team.id}
+                  draggable
+                  onDragStart={(event) => event.dataTransfer.setData('text/plain', team.id)}
+                  className="flex cursor-grab items-center gap-2"
+                >
                   <input
                     className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold outline-none"
                     aria-label="Teamnaam"
@@ -565,23 +646,23 @@ function StepSchema({ view }) {
   );
 }
 
-function StepPdf({ view }) {
-  const url = liveUrl();
+function StepPdf({ view, tournamentId, publicToken }) {
+  const url = liveUrl(publicToken);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <a className="vvl-btn-primary" href="/mockup/toernooi/afdruk" target="_blank" rel="noreferrer">
+        <a className="vvl-btn-primary" href={`/toernooi/${tournamentId}/afdruk`} target="_blank" rel="noreferrer">
           Afdrukken
         </a>
         <QrBlock value={url} caption="Voor de bar" />
       </div>
-      <iframe title="Afdrukvoorbeeld" src="/mockup/toernooi/afdruk" className="h-[75vh] w-full border border-vvl-border bg-white" />
+      <iframe title="Afdrukvoorbeeld" src={`/toernooi/${tournamentId}/afdruk`} className="h-[75vh] w-full border border-vvl-border bg-white" />
       <p className="sr-only">{view.state.name}</p>
     </div>
   );
 }
 
-function StepDag({ state, setState, view }) {
+function StepDag({ state, setState, view, publicToken }) {
   const filters = useScheduleFilters();
   const setScore = (match, side, delta) => {
     setState((current) => {
@@ -684,10 +765,10 @@ function StepDag({ state, setState, view }) {
         </div>
       </details>
       <div className="flex items-center justify-between gap-3">
-        <a className="vvl-btn-outline" href="/mockup/toernooi/live">
+        <a className="vvl-btn-outline" href={liveUrl(publicToken)}>
           Live
         </a>
-        <QrBlock value={liveUrl()} size={112} caption="Voor de bar" />
+        <QrBlock value={liveUrl(publicToken)} size={112} caption="Voor de bar" />
       </div>
     </PitchFocus>
   );

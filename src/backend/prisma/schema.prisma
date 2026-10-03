@@ -205,6 +205,10 @@ model Service {
   sourceRule     ServiceRule? @relation(fields: [sourceRuleId], references: [id])
   activityId     Int?
   activity       Activity?    @relation(fields: [activityId], references: [id])
+  tournamentId   Int?
+  tournament     Tournament?  @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+  /** bar-1, keuken-2: koppelt een open dienst aan een toernooiblok */
+  tournamentShiftKey String?
   enrollments    Enrollment[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -313,7 +317,99 @@ model ClubSettings {
   seasonStartMonth     Int      @default(8)
   auditRetainMonths    Int      @default(24)
   inactiveRetainMonths Int      @default(24)
+  /** Uit: geen menu, geen route, API antwoordt 404. */
+  tournamentsEnabled   Boolean  @default(false)
   updatedAt            DateTime @updatedAt
+}
+
+model Tournament {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  date               String
+  startTime          String   @default("09:00")
+  endTime            String   @default("16:00")
+  matchMinutes       Int      @default(12)
+  changeoverMinutes  Int      @default(3)
+  breakEnabled       Boolean  @default(false)
+  breakStart         String   @default("12:00")
+  breakMinutes       Int      @default(30)
+  format             String   @default("poules")
+  advance            Int      @default(2)
+  categoryMode       String   @default("team")
+  refereeMode        String   @default("auto")
+  barShifts          Int      @default(0)
+  kitchenShifts      Int      @default(0)
+  publicToken        String   @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  fields             TournamentField[]
+  teams              TournamentTeam[]
+  poules             TournamentPoule[]
+  matches            TournamentMatch[]
+  services           Service[]
+}
+
+model TournamentField {
+  id           Int        @id @default(autoincrement())
+  tournamentId Int
+  key          String
+  name         String
+  split        String     @default("full")
+  partNames    String     @default("{}")
+  sortOrder    Int        @default(0)
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, key])
+}
+
+model TournamentPoule {
+  id           Int        @id @default(autoincrement())
+  tournamentId Int
+  key          String
+  name         String
+  category     String     @default("JO11")
+  sortOrder    Int        @default(0)
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, key])
+}
+
+model TournamentTeam {
+  id           Int        @id @default(autoincrement())
+  tournamentId Int
+  key          String
+  name         String
+  category     String     @default("JO9")
+  pouleKey     String     @default("")
+  sortOrder    Int        @default(0)
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, key])
+}
+
+model TournamentMatch {
+  id                Int        @id @default(autoincrement())
+  tournamentId      Int
+  engineKey         String
+  phase             String
+  category          String     @default("")
+  pouleKey          String     @default("")
+  round             Int        @default(0)
+  roundLabel        String     @default("")
+  slotIndex         Int?
+  partKey           String     @default("")
+  homeKey           String     @default("")
+  awayKey           String     @default("")
+  homeLabel         String     @default("")
+  awayLabel         String     @default("")
+  refereeKey        String     @default("")
+  played            Boolean    @default(false)
+  scoreHome         Int        @default(0)
+  scoreAway         Int        @default(0)
+  penaltiesTeamKey  String     @default("")
+  tournament        Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, engineKey])
 }
 
 model MailSettings {

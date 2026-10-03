@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTournamentsEnabled } from '../toernooi/feature.jsx';
 import Beheer from './Beheer.jsx';
 
 export const BEHEER_BUTTONS = [
@@ -19,6 +20,7 @@ export default function Meer() {
   const [params] = useSearchParams();
   const tab = params.get('tab') || '';
   const showPanel = BUTTONS.some((item) => item.tab && item.tab === tab);
+  const tournamentsOn = useTournamentsEnabled();
 
   return (
     <div className="space-y-4">
@@ -36,11 +38,13 @@ export default function Meer() {
           );
         })}
       </div>
-      <div className="border-t border-vvl-border pt-3">
-        <Link to="/mockup/toernooi" className="vvl-btn-outline min-h-11">
-          Toernooi
-        </Link>
-      </div>
+      {tournamentsOn ? (
+        <div className="border-t border-vvl-border pt-3">
+          <Link to="/toernooi" className="vvl-btn-outline min-h-11" data-testid="menu-toernooi">
+            Toernooi
+          </Link>
+        </div>
+      ) : null}
       {showPanel ? <Beheer mode="meer" hideChrome /> : null}
     </div>
   );

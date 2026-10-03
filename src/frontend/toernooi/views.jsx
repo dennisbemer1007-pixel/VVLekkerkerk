@@ -13,9 +13,10 @@ export function dutchDate(iso) {
   });
 }
 
-export function liveUrl() {
-  if (typeof window === 'undefined') return '/mockup/toernooi/live';
-  return `${window.location.origin}/mockup/toernooi/live`;
+export function liveUrl(token) {
+  const path = token ? `/t/${token}` : '/t';
+  if (typeof window === 'undefined') return path;
+  return `${window.location.origin}${path}`;
 }
 
 export function FitBanner({ fit }) {
@@ -96,8 +97,8 @@ function Chip({ active, children, onClick }) {
   );
 }
 
-function ChipRow({ children }) {
-  return <div className="flex gap-1.5 overflow-x-auto pb-0.5">{children}</div>;
+function ChipRow({ children, className = '' }) {
+  return <div className={`flex min-w-0 gap-1.5 overflow-x-auto pb-0.5 ${className}`}>{children}</div>;
 }
 
 export function useScheduleFilters() {
@@ -181,32 +182,50 @@ function buildRows(view, matches) {
 }
 
 export function ScheduleFilters({ view, filters }) {
+  const [open, setOpen] = useState(false);
+  const extraActive = Boolean(filters.fieldId || filters.teamId);
+  const showExtra = open || extraActive;
   return (
     <div className="space-y-2">
-      <ChipRow>
-        <Chip active={!filters.pouleId} onClick={() => filters.setPouleId('')}>
-          Alles
-        </Chip>
-        {view.poules.map((poule) => (
-          <Chip key={poule.id} active={filters.pouleId === poule.id} onClick={() => filters.setPouleId(filters.pouleId === poule.id ? '' : poule.id)}>
-            {poule.name}
+      <div className="flex items-center gap-1.5">
+        <ChipRow className="flex-1">
+          <Chip active={!filters.pouleId} onClick={() => filters.setPouleId('')}>
+            Alles
           </Chip>
-        ))}
-      </ChipRow>
-      <ChipRow>
-        {view.state.fields.map((field) => (
-          <Chip key={field.id} active={filters.fieldId === field.id} onClick={() => filters.selectField(field.id)}>
-            {field.name}
-          </Chip>
-        ))}
-      </ChipRow>
-      <ChipRow>
-        {view.state.teams.map((team) => (
-          <Chip key={team.id} active={filters.teamId === team.id} onClick={() => filters.setTeamId(filters.teamId === team.id ? '' : team.id)}>
-            {compactTeam(team.name)}
-          </Chip>
-        ))}
-      </ChipRow>
+          {view.poules.map((poule) => (
+            <Chip key={poule.id} active={filters.pouleId === poule.id} onClick={() => filters.setPouleId(filters.pouleId === poule.id ? '' : poule.id)}>
+              {poule.name}
+            </Chip>
+          ))}
+        </ChipRow>
+        <button
+          type="button"
+          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${showExtra ? 'border-black bg-black text-white' : 'border-vvl-border bg-white'}`}
+          aria-expanded={showExtra}
+          data-testid="schema-filter"
+          onClick={() => setOpen((current) => !current)}
+        >
+          Filter
+        </button>
+      </div>
+      {showExtra ? (
+        <>
+          <ChipRow>
+            {view.state.fields.map((field) => (
+              <Chip key={field.id} active={filters.fieldId === field.id} onClick={() => filters.selectField(field.id)}>
+                {field.name}
+              </Chip>
+            ))}
+          </ChipRow>
+          <ChipRow>
+            {view.state.teams.map((team) => (
+              <Chip key={team.id} active={filters.teamId === team.id} onClick={() => filters.setTeamId(filters.teamId === team.id ? '' : team.id)}>
+                {compactTeam(team.name)}
+              </Chip>
+            ))}
+          </ChipRow>
+        </>
+      ) : null}
     </div>
   );
 }

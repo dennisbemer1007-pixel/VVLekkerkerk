@@ -11,7 +11,7 @@ import {
   sendMail,
   verifyMailConnection,
 } from '../lib/mail.js';
-import { publicClubSettings, rolloverSeason } from '../lib/season.js';
+import { getClubSettings, publicClubSettings, rolloverSeason } from '../lib/season.js';
 import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
 import prisma from '../lib/prisma.js';
@@ -353,6 +353,32 @@ router.get(
       res.json(await publicClubSettings());
     } catch (err) {
       next(err);
+    }
+  }),
+);
+
+router.patch(
+  '/club',
+  requireRole('Admin')(async (req, res, next) => {
+    try {
+      if (typeof req.body?.tournamentsEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'tournamentsEnabled moet true of false zijn' });
+      }
+      await getClubSettings();
+      await prisma.clubSettings.update({
+        where: { id: 1 },
+        data: { tournamentsEnabled: req.body.tournamentsEnabled },
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'club.tournaments',
+        entity: 'ClubSettings',
+        entityId: 1,
+        detail: req.body.tournamentsEnabled ? 'aan' : 'uit',
+      });
+      return res.json(await publicClubSettings());
+    } catch (err) {
+      return next(err);
     }
   }),
 );

@@ -12,6 +12,7 @@ import personsRouter from './routes/persons.js';
 import planningRouter from './routes/planning.js';
 import servicesRouter from './routes/services.js';
 import settingsRouter from './routes/settings.js';
+import tournamentsRouter from './routes/tournaments.js';
 import teamsRouter from './routes/teams.js';
 import { ensureAdmin } from './lib/seed.js';
 import { trySyncPlanningFromMatches } from './lib/proposePlanning.js';
@@ -150,6 +151,7 @@ app.use('/api/swaps', swapsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/tournaments', tournamentsRouter);
 
 if (isProd) {
   const dist = path.join(__dirname, '../../dist');

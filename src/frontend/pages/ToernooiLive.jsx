@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import BrandMark from '../components/BrandMark.jsx';
 import { PitchFocus } from '../toernooi/Pitch.jsx';
-import { useTournament } from '../toernooi/storage.js';
+import { usePublicTournament } from '../toernooi/storage.js';
 import { BracketView, MatchTimeline, PouleBoards, compactTeam, dutchDate, matchesForTeam, nextMatchFor } from '../toernooi/views.jsx';
 
 export default function ToernooiLive() {
-  const { view } = useTournament();
+  const { token } = useParams();
+  const { view, ready, error } = usePublicTournament(token);
+  const [query, setQuery] = useState('');
+  if (!ready) return <p className="p-6 text-sm text-gray-600">Laden…</p>;
+  if (!view) return <p className="p-6 text-sm font-semibold">{error || 'Niet gevonden'}</p>;
+  return <LiveBoard view={view} query={query} setQuery={setQuery} token={token} />;
+}
+
+function LiveBoard({ view, query, setQuery, token }) {
   const teams = view.state.teams;
+  const filtered = teams.filter((team) => team.name.toLowerCase().includes(query.trim().toLowerCase()));
   const [teamId, setTeamId] = useState(teams[0]?.id || '');
   const [pickedId, setPickedId] = useState('');
   const [partId, setPartId] = useState('');
-  const selected = teams.some((team) => team.id === teamId) ? teamId : teams[0]?.id || '';
+  const selected = filtered.some((team) => team.id === teamId) ? teamId : filtered[0]?.id || '';
   const upcoming = useMemo(() => nextMatchFor(view, selected), [view, selected]);
   const played = useMemo(() => matchesForTeam(view, selected).filter((match) => match.score), [view, selected]);
   const last = played.at(-1);
@@ -29,7 +39,7 @@ export default function ToernooiLive() {
     <div className="min-h-screen bg-vvl-muted">
       <header className="sticky top-0 z-30 bg-black text-white">
         <div className="flex h-14 items-center px-4">
-          <BrandMark to="/mockup/toernooi/live" compact />
+          <BrandMark to={`/t/${token}`} compact />
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-4" data-testid="toernooi-live">
@@ -46,16 +56,28 @@ export default function ToernooiLive() {
             <p className="mt-1 text-sm text-gray-500">{dutchDate(view.state.date)}</p>
           </div>
 
-          <label className="block max-w-sm">
-            <span className="vvl-label">Mijn team</span>
-            <select className="vvl-input" value={selected} data-testid="mijn-team" onChange={(event) => setTeamId(event.target.value)}>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid max-w-sm gap-2">
+            <label className="block">
+              <span className="vvl-label">Zoek team</span>
+              <input
+                className="vvl-input"
+                value={query}
+                data-testid="team-zoeken"
+                placeholder="Teamnaam"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="vvl-label">Mijn team</span>
+              <select className="vvl-input" value={selected} data-testid="mijn-team" onChange={(event) => setTeamId(event.target.value)}>
+                {filtered.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <section className="rounded-sm border border-black bg-white px-4 py-3" data-testid="volgende-wedstrijd">
             {upcoming ? (

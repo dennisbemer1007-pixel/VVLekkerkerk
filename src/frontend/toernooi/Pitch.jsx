@@ -111,9 +111,19 @@ export function PitchSvg({
         ))}
       </g>
       <PitchMarkings />
-      <g fill="none" stroke="#fff" strokeWidth="0.7" strokeDasharray="1.7 1.35" strokeLinecap="round">
-        {split !== 'full' ? <line x1={x + 1} y1={midY} x2={x + w - 1} y2={midY} /> : null}
-        {split === 'quarter' ? <line x1={midX} y1={y + 1} x2={midX} y2={y + h - 1} /> : null}
+      <g fill="none" strokeLinecap="round">
+        {split !== 'full' ? (
+          <>
+            <line x1={x + 1} y1={midY} x2={x + w - 1} y2={midY} stroke="#111" strokeWidth="2.4" />
+            <line x1={x + 1} y1={midY} x2={x + w - 1} y2={midY} stroke="#fff" strokeWidth="1.55" strokeDasharray="2.4 1.15" />
+          </>
+        ) : null}
+        {split === 'quarter' ? (
+          <>
+            <line x1={midX} y1={y + 1} x2={midX} y2={y + h - 1} stroke="#111" strokeWidth="2.4" />
+            <line x1={midX} y1={y + 1} x2={midX} y2={y + h - 1} stroke="#fff" strokeWidth="1.55" strokeDasharray="2.4 1.15" />
+          </>
+        ) : null}
       </g>
       {list.map((part) => {
         const frame = frames[part.key];
@@ -129,19 +139,30 @@ export function PitchSvg({
               height={frame.h}
               fill="#06140a"
               stroke="none"
-              style={{ opacity: dim ? 0.62 : 0, transition: 'opacity 280ms ease' }}
+              style={{ opacity: dim ? 0.78 : 0, transition: 'opacity 280ms ease' }}
             />
             {lit && !print ? (
-              <rect
-                x={frame.x + 0.8}
-                y={frame.y + 0.8}
-                width={frame.w - 1.6}
-                height={frame.h - 1.6}
-                fill="#fff"
-                stroke="#000"
-                strokeWidth="2.4"
-                className="pitch-pulse"
-              />
+              <g style={{ filter: 'drop-shadow(0 0 1.6px #fff) drop-shadow(0 0 3.4px #fff)' }}>
+                <rect
+                  x={frame.x + 0.35}
+                  y={frame.y + 0.35}
+                  width={frame.w - 0.7}
+                  height={frame.h - 0.7}
+                  fill="#fff"
+                  stroke="#fff"
+                  strokeWidth="2.2"
+                  className="pitch-pulse"
+                />
+                <rect
+                  x={frame.x + 0.55}
+                  y={frame.y + 0.55}
+                  width={frame.w - 1.1}
+                  height={frame.h - 1.1}
+                  fill="none"
+                  stroke="#000"
+                  strokeWidth="3.6"
+                />
+              </g>
             ) : null}
           </g>
         );

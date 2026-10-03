@@ -1,7 +1,8 @@
 /**
- * Toernooi-mockup: indeling, schema en stand. Alleen frontend, geen database.
+ * Toernooi-indeling, schema en stand. Zelfde module op de server en in de wizard.
  * Regels: round-robin per poule, niemand twee keer tegelijk, rust waar het past,
  * en alleen een velddeel van de juiste grootte.
+ * Tiebreak: punten, onderling resultaat, doelsaldo, doelpunten voor.
  */
 
 export const CATEGORIES = [
@@ -615,9 +616,51 @@ export function standingsFor(poule, matches, scores) {
         away.points += 1;
       }
     });
-  return [...rows.values()]
-    .map((row) => ({ ...row, gd: row.gf - row.ga }))
-    .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.name.localeCompare(b.name, 'nl'));
+  const table = [...rows.values()].map((row) => ({ ...row, gd: row.gf - row.ga }));
+
+  const mutual = (aId, bId) => {
+    let pointsA = 0;
+    let pointsB = 0;
+    let played = false;
+    matches
+      .filter((match) => match.pouleId === poule.id && match.phase === 'poule')
+      .forEach((match) => {
+        const score = scores?.[match.id];
+        if (!score?.played) return;
+        const ids = [match.homeId, match.awayId];
+        if (!ids.includes(aId) || !ids.includes(bId)) return;
+        played = true;
+        const hg = Number(score.home) || 0;
+        const ag = Number(score.away) || 0;
+        const aGoals = match.homeId === aId ? hg : ag;
+        const bGoals = match.homeId === bId ? hg : ag;
+        if (aGoals > bGoals) pointsA += 3;
+        else if (bGoals > aGoals) pointsB += 3;
+        else {
+          pointsA += 1;
+          pointsB += 1;
+        }
+      });
+    if (!played || pointsA === pointsB) return 0;
+    return pointsB - pointsA;
+  };
+
+  return table.sort(
+    (a, b) =>
+      b.points - a.points ||
+      mutual(a.teamId, b.teamId) ||
+      b.gd - a.gd ||
+      b.gf - a.gf ||
+      a.name.localeCompare(b.name, 'nl'),
+  );
+}
+
+/** Heel veld waar geen categorie op past: blijft leeg, met een hint om te delen. */
+export function unusedFullFields(state, matches) {
+  const used = new Set(
+    (matches || []).filter((match) => match.slotIndex != null && match.part?.fieldId).map((match) => match.part.fieldId),
+  );
+  return (state?.fields || []).filter((field) => field.split === 'full' && !used.has(field.id));
 }
 
 function pouleComplete(poule, matches, scores) {
@@ -784,6 +827,35 @@ export function present(state) {
   };
 }
 
+export function todayIso() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** Leeg toernooi: pauze uit, 12 minuten spelen, 3 minuten wissel. */
+export function createEmpty() {
+  return normalizeTournament({
+    name: 'Nieuw toernooi',
+    date: todayIso(),
+    fields: [{ id: 'f1', name: 'Veld 1', split: 'quarter', partNames: {} }],
+    teams: [1, 2, 3, 4].map((index) => ({
+      id: `t${index}`,
+      name: `Team ${index}`,
+      category: 'JO9',
+    })),
+    format: 'poules',
+    advance: 2,
+    matchMinutes: 12,
+    changeoverMinutes: 3,
+    breakEnabled: false,
+    barShifts: 0,
+    kitchenShifts: 0,
+    scores: {},
+  });
+}
+
 export function createExample() {
   const jo9 = [
     'JO9-1 Lekkerkerk',
@@ -873,7 +945,8 @@ export function normalizeTournament(input) {
     startTime: parseTime(base.startTime) != null ? base.startTime : '09:00',
     endTime: parseTime(base.endTime) != null ? base.endTime : '16:00',
     matchMinutes: Math.max(1, Number(base.matchMinutes) || 12),
-    changeoverMinutes: Math.max(0, Number(base.changeoverMinutes) || 0),
+    changeoverMinutes:
+      base.changeoverMinutes == null ? 3 : Math.max(0, Number(base.changeoverMinutes) || 0),
     breakEnabled: Boolean(base.breakEnabled),
     breakStart: parseTime(base.breakStart) != null ? base.breakStart : '12:00',
     breakMinutes: Math.max(0, Number(base.breakMinutes) || 0),
