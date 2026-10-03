@@ -3,7 +3,7 @@
  * - Zet SQLite op DATA_DIR (vaste schijf) als die gezet is
  * - Back-upt de live database vóór schemawijzigingen
  * - Past alleen de additieve SQL-migraties voor toernooien en scheidsrechters toe
- * - Geen `prisma db push` (dat kan tabellen herbouwen)
+ * - Schema alleen via additieve SQL; geen tabellen herbouwen
  * - Laadt demo-data alleen als SEED_DEMO=true en de database leeg is
  */
 import { execSync } from 'child_process';

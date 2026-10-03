@@ -1478,11 +1478,16 @@ assert(
     instellingenSrc.includes('data-testid="toernooien-schakelaar"') &&
       instellingenSrc.includes('data-testid="toernooien-switch"'),
   );
+  const liveDeploySrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/liveDeploy.js'),
+    'utf8',
+  );
   assert(
     'live-start back-upt en past alleen SQL toe, geen db push',
-    renderStartSrc.includes('20261003160000_tournaments') &&
-      renderStartSrc.includes('20261003180000_referees') &&
+    liveDeploySrc.includes('20261003160000_tournaments') &&
+      liveDeploySrc.includes('20261003180000_referees') &&
       renderStartSrc.includes('backupSqlite') &&
+      renderStartSrc.includes('applyNamedMigrationsOnce') &&
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
   );
