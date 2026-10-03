@@ -57,3 +57,33 @@
     @apply animate-bell-pulse text-white;
   }
 }
+
+@keyframes pitch-pulse {
+  0%,
+  100% {
+    fill-opacity: 0.04;
+    stroke-opacity: 0.65;
+  }
+  50% {
+    fill-opacity: 0.42;
+    stroke-opacity: 1;
+  }
+}
+
+.pitch-pulse {
+  animation: pitch-pulse 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch-pulse {
+    animation: none;
+    fill-opacity: 0.22;
+    stroke-opacity: 1;
+  }
+}
+
+@media print {
+  .pitch-pulse {
+    animation: none;
+  }
+}

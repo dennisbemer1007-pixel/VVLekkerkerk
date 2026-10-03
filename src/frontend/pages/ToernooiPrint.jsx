@@ -1,5 +1,4 @@
 import { PitchFigure } from '../toernooi/Pitch.jsx';
-import { partsForField } from '../toernooi/engine.js';
 import { useTournament } from '../toernooi/storage.js';
 import { BracketView, PouleBoards, QrBlock, ScheduleTable, dutchDate, liveUrl } from '../toernooi/views.jsx';
 
@@ -50,20 +49,13 @@ export default function ToernooiPrint() {
             </div>
           </header>
           <h2 className="text-sm font-black uppercase">Velden</h2>
-          <div className="velden-grid grid gap-6 sm:grid-cols-2">
-            {state.fields.map((field) => {
-              const parts = partsForField(field);
-              return (
-                <div key={field.id} className="veld-blok">
-                  <h3 className="mb-2 font-black uppercase">{field.name}</h3>
-                  <div className={`grid gap-3 ${parts.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                    {parts.map((part) => (
-                      <PitchFigure key={part.id} name={part.name} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="velden-grid grid gap-8 sm:grid-cols-2">
+            {state.fields.map((field) => (
+              <div key={field.id} className="veld-blok">
+                <h3 className="mb-2 font-black uppercase">{field.name}</h3>
+                <PitchFigure field={field} />
+              </div>
+            ))}
           </div>
         </section>
 

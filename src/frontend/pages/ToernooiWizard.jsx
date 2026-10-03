@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import FieldEditor from '../toernooi/Pitch.jsx';
+import FieldEditor, { PitchFocus } from '../toernooi/Pitch.jsx';
 import {
   CATEGORIES,
   createExample,
@@ -9,7 +9,17 @@ import {
   withPouleMode,
 } from '../toernooi/engine.js';
 import { useTournament } from '../toernooi/storage.js';
-import { BracketView, FitBanner, PouleBoards, QrBlock, ScheduleTable, dutchDate, liveUrl } from '../toernooi/views.jsx';
+import {
+  BracketView,
+  FitBanner,
+  PouleBoards,
+  QrBlock,
+  ScheduleStage,
+  compactTeam,
+  dutchDate,
+  liveUrl,
+  useScheduleFilters,
+} from '../toernooi/views.jsx';
 
 const STEPS = [
   { id: 'velden', label: 'Velden' },
@@ -29,7 +39,7 @@ function NumberField({ label, value, min, max, onChange, testId }) {
     <label className="block">
       <span className="vvl-label">{label}</span>
       <input
-        className="vvl-input w-28"
+        className="vvl-input w-24"
         type="number"
         inputMode="numeric"
         min={min}
@@ -47,21 +57,37 @@ function NumberField({ label, value, min, max, onChange, testId }) {
 
 function CategorySelect({ value, onChange, label = 'Categorie' }) {
   return (
-    <select className="vvl-input" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      className="h-11 bg-transparent px-1 text-xs font-bold uppercase outline-none"
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
       {CATEGORIES.map((category) => (
         <option key={category.id} value={category.id}>
-          {category.id} · {SIZE_SHORT[category.size]}
+          {category.id}
         </option>
       ))}
     </select>
   );
 }
 
-function Choice({ active, children, onClick }) {
+function Segment({ options, value, onChange, label }) {
   return (
-    <button type="button" className={`min-h-11 flex-1 ${active ? 'vvl-btn-primary' : 'vvl-btn-outline'}`} onClick={onClick}>
-      {children}
-    </button>
+    <div className="flex rounded-sm border border-vvl-border bg-white p-0.5" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className={`min-h-10 flex-1 rounded-sm px-2 text-xs font-bold uppercase tracking-wide transition duration-200 ${
+            value === option.id ? 'bg-black text-white' : 'text-gray-500 hover:text-black'
+          }`}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -79,26 +105,26 @@ export default function ToernooiWizard() {
   };
 
   return (
-    <div className="space-y-4" data-testid={`toernooi-step-${step.id}`}>
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-6" data-testid={`toernooi-step-${step.id}`}>
+      <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="page-title">{state.name || 'Toernooi'}</h1>
-          <p className="text-sm font-semibold text-gray-600">{dutchDate(state.date)}</p>
+          <h1 className="break-words font-heading text-[1.35rem] font-black uppercase leading-none tracking-tight md:text-3xl">{state.name || 'Toernooi'}</h1>
+          <p className="mt-1 text-sm text-gray-500">{dutchDate(state.date)}</p>
         </div>
         <button type="button" className="vvl-btn-outline shrink-0 text-xs" onClick={() => setState(createExample())}>
           Voorbeeld
         </button>
       </div>
 
-      <div className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Stappen">
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Stappen">
         {STEPS.map((item, itemIndex) => (
           <button
             key={item.id}
             type="button"
             role="tab"
             aria-selected={item.id === step.id}
-            className={`min-h-11 shrink-0 px-3 text-xs font-bold uppercase ${
-              item.id === step.id ? 'bg-black text-white' : 'bg-white text-black'
+            className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-bold uppercase tracking-wide transition duration-200 ${
+              item.id === step.id ? 'bg-black text-white' : 'bg-white text-gray-500 hover:text-black'
             }`}
             onClick={() => go(item.id)}
           >
@@ -135,20 +161,22 @@ export default function ToernooiWizard() {
 function StepVelden({ state, setState }) {
   const fields = state.fields.map((field) => ({ ...field, parts: partsForField(field) }));
   return (
-    <div className="space-y-4">
-      <label className="block max-w-md">
-        <span className="vvl-label">Naam</span>
-        <input className="vvl-input" value={state.name} onChange={(event) => setState({ ...state, name: event.target.value })} />
-      </label>
-      <NumberField
-        label="Aantal velden"
-        value={state.fields.length}
-        min={1}
-        max={8}
-        testId="aantal-velden"
-        onChange={(count) => setState({ ...state, fields: resizeFields(state.fields, count) })}
-      />
-      <div className="grid gap-3 lg:grid-cols-2">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-6">
+        <label className="block min-w-[16rem] flex-1">
+          <span className="vvl-label">Naam</span>
+          <input className="vvl-input" value={state.name} onChange={(event) => setState({ ...state, name: event.target.value })} />
+        </label>
+        <NumberField
+          label="Velden"
+          value={state.fields.length}
+          min={1}
+          max={8}
+          testId="aantal-velden"
+          onChange={(count) => setState({ ...state, fields: resizeFields(state.fields, count) })}
+        />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
         {fields.map((field) => (
           <FieldEditor
             key={field.id}
@@ -180,11 +208,21 @@ function StepTeams({ state, setState, view }) {
     });
   };
 
+  const groups = [];
+  state.teams.forEach((team) => {
+    let group = groups.find((item) => item.category === team.category);
+    if (!group) {
+      group = { category: team.category, teams: [] };
+      groups.push(group);
+    }
+    group.teams.push(team);
+  });
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-4">
         <NumberField
-          label="Aantal teams"
+          label="Teams"
           value={state.teams.length}
           min={2}
           max={32}
@@ -201,39 +239,52 @@ function StepTeams({ state, setState, view }) {
             })
           }
         />
-        <div className="flex min-w-[16rem] flex-1 gap-1">
-          <Choice active={state.categoryMode === 'team'} onClick={() => setMode('team')}>
-            Per team
-          </Choice>
-          <Choice active={state.categoryMode === 'poule'} onClick={() => setMode('poule')}>
-            Per poule
-          </Choice>
+        <div className="min-w-[16rem] flex-1">
+          <Segment
+            label="Categorie"
+            value={state.categoryMode}
+            onChange={setMode}
+            options={[
+              { id: 'team', label: 'Per team' },
+              { id: 'poule', label: 'Per poule' },
+            ]}
+          />
         </div>
       </div>
 
       {state.categoryMode === 'poule' ? (
         <PouleEditors state={state} setState={setState} />
       ) : (
-        <ul className="space-y-2">
-          {state.teams.map((team) => (
-            <li key={team.id} className="grid gap-2 sm:grid-cols-[1fr_11rem]">
-              <input
-                className="vvl-input"
-                aria-label="Teamnaam"
-                value={team.name}
-                onChange={(event) => setTeam(team.id, { name: event.target.value })}
-              />
-              <CategorySelect value={team.category} onChange={(category) => setTeam(team.id, { category })} />
-            </li>
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.category}>
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">
+                {group.category}
+                <span className="ml-2 normal-case tracking-normal">{SIZE_SHORT[CATEGORIES.find((item) => item.id === group.category)?.size]}</span>
+              </h2>
+              <ul className="mt-2 divide-y divide-vvl-border border-y border-vvl-border bg-white">
+                {group.teams.map((team) => (
+                  <li key={team.id} className="flex items-center gap-2 pr-1">
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold outline-none"
+                      aria-label="Teamnaam"
+                      value={team.name}
+                      onChange={(event) => setTeam(team.id, { name: event.target.value })}
+                    />
+                    <CategorySelect value={team.category} onChange={(category) => setTeam(team.id, { category })} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2">
         {view.poules.map((poule) => (
-          <p key={poule.id} className="vvl-card px-3 py-2 text-sm">
-            <span className="font-black uppercase">{poule.name}</span>
-            <span className="text-gray-600"> · {poule.teams.length} · {SIZE_SHORT[poule.size]}</span>
+          <p key={poule.id} className="rounded-full border border-vvl-border bg-white px-3 py-1 text-xs font-bold">
+            {poule.name}
+            <span className="ml-1 font-semibold text-gray-400">{poule.teams.length}</span>
           </p>
         ))}
       </div>
@@ -264,11 +315,11 @@ function PouleEditors({ state, setState }) {
   };
 
   return (
-    <div className="space-y-3">
-      <NumberField label="Aantal poules" value={state.poules.length || 1} min={1} max={8} onChange={setPouleCount} />
+    <div className="space-y-4">
+      <NumberField label="Poules" value={state.poules.length || 1} min={1} max={8} onChange={setPouleCount} />
       {state.poules.map((poule) => (
-        <section key={poule.id} className="vvl-card space-y-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_11rem]">
+        <section key={poule.id} className="space-y-2">
+          <div className="flex items-center gap-2">
             <input
               className="vvl-input font-bold"
               aria-label="Poulenaam"
@@ -291,13 +342,13 @@ function PouleEditors({ state, setState }) {
               }
             />
           </div>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-vvl-border border-y border-vvl-border bg-white">
             {state.teams
               .filter((team) => team.pouleId === poule.id)
               .map((team) => (
-                <li key={team.id} className="grid gap-2 sm:grid-cols-[1fr_9rem]">
+                <li key={team.id} className="flex items-center gap-2">
                   <input
-                    className="vvl-input"
+                    className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold outline-none"
                     aria-label="Teamnaam"
                     value={team.name}
                     onChange={(event) =>
@@ -308,7 +359,7 @@ function PouleEditors({ state, setState }) {
                     }
                   />
                   <select
-                    className="vvl-input"
+                    className="h-11 bg-transparent px-2 text-xs font-bold outline-none"
                     aria-label={`Poule van ${team.name}`}
                     value={team.pouleId}
                     onChange={(event) =>
@@ -336,22 +387,21 @@ function PouleEditors({ state, setState }) {
 function StepTijd({ state, setState, view }) {
   const set = (patch) => setState({ ...state, ...patch });
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-1 sm:flex-row">
-        <Choice active={state.format === 'poules'} onClick={() => set({ format: 'poules' })}>
-          Poules
-        </Choice>
-        <Choice active={state.format === 'knockout'} onClick={() => set({ format: 'knockout' })}>
-          Sudden death
-        </Choice>
-        <Choice active={state.format === 'poules-knockout'} onClick={() => set({ format: 'poules-knockout' })}>
-          Poules + knock-out
-        </Choice>
-      </div>
+    <div className="max-w-3xl space-y-6">
+      <Segment
+        label="Opzet"
+        value={state.format}
+        onChange={(format) => set({ format })}
+        options={[
+          { id: 'poules', label: 'Poules' },
+          { id: 'knockout', label: 'Sudden death' },
+          { id: 'poules-knockout', label: 'Poules + knock-out' },
+        ]}
+      />
       {state.format === 'poules-knockout' ? (
-        <NumberField label="Doorgaan per poule" value={state.advance} min={1} max={4} onChange={(advance) => set({ advance })} />
+        <NumberField label="Doorgaan" value={state.advance} min={1} max={4} onChange={(advance) => set({ advance })} />
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <label className="block">
           <span className="vvl-label">Datum</span>
           <input className="vvl-input" type="date" value={state.date} onChange={(event) => set({ date: event.target.value })} />
@@ -364,8 +414,8 @@ function StepTijd({ state, setState, view }) {
           <span className="vvl-label">Einde</span>
           <input className="vvl-input" type="time" value={state.endTime} onChange={(event) => set({ endTime: event.target.value })} />
         </label>
-        <NumberField label="Wedstrijd (min)" value={state.matchMinutes} min={5} max={90} onChange={(matchMinutes) => set({ matchMinutes })} />
-        <NumberField label="Wissel (min)" value={state.changeoverMinutes} min={0} max={30} onChange={(changeoverMinutes) => set({ changeoverMinutes })} />
+        <NumberField label="Minuten" value={state.matchMinutes} min={5} max={90} onChange={(matchMinutes) => set({ matchMinutes })} />
+        <NumberField label="Wissel" value={state.changeoverMinutes} min={0} max={30} onChange={(changeoverMinutes) => set({ changeoverMinutes })} />
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <button
@@ -393,27 +443,27 @@ function StepTijd({ state, setState, view }) {
 function StepDiensten({ state, setState, view }) {
   const set = (patch) => setState({ ...state, ...patch });
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-4">
+    <div className="max-w-xl space-y-6">
+      <div className="flex flex-wrap gap-6">
         <NumberField label="Bar" value={state.barShifts} min={0} max={8} onChange={(barShifts) => set({ barShifts })} />
         <NumberField label="Keuken" value={state.kitchenShifts} min={0} max={8} onChange={(kitchenShifts) => set({ kitchenShifts })} />
       </div>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-vvl-border border-y border-vvl-border bg-white">
         {view.shifts.map((shift) => (
-          <li key={shift.id} className="vvl-card flex items-center justify-between gap-3 text-sm">
-            <span className="font-black uppercase">{shift.name}</span>
-            <span className="font-semibold">
+          <li key={shift.id} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
+            <span className="font-bold">{shift.name}</span>
+            <span className="tabular-nums text-gray-500">
               {shift.start}–{shift.end}
             </span>
           </li>
         ))}
       </ul>
-      <p className="text-sm font-semibold">Straks open diensten in Diensten.</p>
     </div>
   );
 }
 
 function StepFluiten({ state, setState, view }) {
+  const filters = useScheduleFilters();
   const choose = (mode) => {
     if (mode === 'manual') {
       const manualReferees = {};
@@ -427,64 +477,90 @@ function StepFluiten({ state, setState, view }) {
   };
 
   const scheduled = view.matches.filter((match) => match.slot);
+  const selected = scheduled.find((match) => match.id === filters.matchId);
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-1 sm:flex-row">
-        <Choice active={state.refereeMode === 'manual'} onClick={() => choose('manual')}>
-          Zelf indelen
-        </Choice>
-        <Choice active={state.refereeMode === 'auto'} onClick={() => choose('auto')}>
-          Teams fluiten elkaar
-        </Choice>
-      </div>
-      <ul className="space-y-2">
-        {scheduled.map((match) => (
-          <li key={match.id} className="vvl-card grid gap-2 text-sm md:grid-cols-[7rem_1fr_14rem] md:items-center">
-            <span className="font-bold">{match.slot?.label}</span>
-            <span>
-              {match.homeLabel}
-              <span className="text-gray-500"> – </span>
-              {match.awayLabel}
-            </span>
-            {state.refereeMode === 'manual' ? (
-              <select
-                className="vvl-input"
-                aria-label={`Scheidsrechter ${match.homeLabel}`}
-                value={state.manualReferees[match.id] || ''}
-                onChange={(event) =>
-                  setState({
-                    ...state,
-                    manualReferees: { ...state.manualReferees, [match.id]: event.target.value },
-                  })
-                }
+    <PitchFocus view={view} activePartId={selected?.partId || filters.partId} onSelectPart={filters.selectPart}>
+      <Segment
+        label="Fluiten"
+        value={state.refereeMode}
+        onChange={choose}
+        options={[
+          { id: 'auto', label: 'Teams fluiten elkaar' },
+          { id: 'manual', label: 'Zelf' },
+        ]}
+      />
+      <div className="space-y-1.5">
+        {scheduled
+          .filter((match) => !filters.partId || match.partId === filters.partId)
+          .map((match) => {
+            const active = match.id === filters.matchId;
+            return (
+              <div
+                key={match.id}
+                className={`grid gap-2 rounded-sm border bg-white px-3 py-2 transition duration-200 md:grid-cols-[4.5rem_minmax(0,1fr)_12rem] md:items-center ${
+                  active ? 'border-black shadow-[0_10px_28px_rgba(0,0,0,0.08)]' : 'border-vvl-border'
+                }`}
               >
-                <option value="">—</option>
-                {state.teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-semibold">{match.refereeName || '—'}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+                <button type="button" className="text-left" onClick={() => filters.selectMatch(match)}>
+                  <span className="text-xs font-bold tabular-nums text-gray-400">{match.slot?.label}</span>
+                  <span className="mt-0.5 block truncate text-sm font-semibold md:hidden">
+                    {compactTeam(match.homeLabel)} – {compactTeam(match.awayLabel)}
+                  </span>
+                </button>
+                <button type="button" className="hidden truncate text-left text-sm font-semibold md:block" onClick={() => filters.selectMatch(match)}>
+                  {compactTeam(match.homeLabel)}
+                  <span className="px-1 font-normal text-gray-400">–</span>
+                  {compactTeam(match.awayLabel)}
+                </button>
+                {state.refereeMode === 'manual' ? (
+                  <select
+                    className="vvl-input h-9 text-xs"
+                    aria-label={`Scheidsrechter ${match.homeLabel}`}
+                    value={state.manualReferees[match.id] || ''}
+                    onChange={(event) =>
+                      setState({
+                        ...state,
+                        manualReferees: { ...state.manualReferees, [match.id]: event.target.value },
+                      })
+                    }
+                  >
+                    <option value="">—</option>
+                    {state.teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-xs font-semibold text-gray-500">{match.refereeName ? compactTeam(match.refereeName) : '—'}</span>
+                )}
+              </div>
+            );
+          })}
+      </div>
+    </PitchFocus>
   );
 }
 
 function StepSchema({ view }) {
+  const knockout = view.matches.some((match) => match.phase === 'knockout' && match.slotIndex != null);
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {view.fit.ok ? null : <FitBanner fit={view.fit} />}
-      <ScheduleTable view={view} />
       {view.unplaced.length ? (
         <p className="text-sm font-semibold text-red-800">{view.unplaced.length} niet ingepland.</p>
       ) : null}
+      <ScheduleStage view={view} showReferee />
       <PouleBoards poules={view.poules} />
-      <BracketView matches={view.matches} />
+      {knockout ? (
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Knock-out</summary>
+          <div className="mt-4">
+            <BracketView matches={view.matches} />
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -506,6 +582,7 @@ function StepPdf({ view }) {
 }
 
 function StepDag({ state, setState, view }) {
+  const filters = useScheduleFilters();
   const setScore = (match, side, delta) => {
     setState((current) => {
       const prev = current.scores[match.id];
@@ -541,72 +618,92 @@ function StepDag({ state, setState, view }) {
     }));
   };
 
+  const scheduled = view.matches.filter((match) => match.slot && (!filters.partId || match.partId === filters.partId));
+  const selected = view.matches.find((match) => match.id === filters.matchId);
   const groups = [];
-  view.matches
-    .filter((match) => match.slot)
-    .forEach((match) => {
-      let group = groups.find((item) => item.label === match.slot.label);
-      if (!group) {
-        group = { label: match.slot.label, matches: [] };
-        groups.push(group);
-      }
-      group.matches.push(match);
-    });
+  scheduled.forEach((match) => {
+    let group = groups.find((item) => item.label === match.slot.label);
+    if (!group) {
+      group = { label: match.slot.label, matches: [] };
+      groups.push(group);
+    }
+    group.matches.push(match);
+  });
 
   return (
-    <div className="mx-auto max-w-md space-y-4">
+    <PitchFocus view={view} activePartId={selected?.partId || filters.partId} onSelectPart={filters.selectPart}>
       {groups.map((group) => (
-        <section key={group.label} className="space-y-2">
-          <h2 className="text-sm font-black uppercase">{group.label}</h2>
-          {group.matches.map((match) => (
-            <article key={match.id} className="vvl-card space-y-3" data-testid={`score-${match.id}`}>
-              <p className="text-xs font-bold uppercase text-gray-500">
-                {match.part?.name} · {match.pouleName || match.roundLabel}
-              </p>
-              <ScoreLine label={match.homeLabel} value={match.score ? match.score.home : null} onMinus={() => setScore(match, 'home', -1)} onPlus={() => setScore(match, 'home', 1)} />
-              <ScoreLine label={match.awayLabel} value={match.score ? match.score.away : null} onMinus={() => setScore(match, 'away', -1)} onPlus={() => setScore(match, 'away', 1)} />
-              {match.phase === 'knockout' && match.score && match.score.home === match.score.away ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" className="vvl-btn-outline text-xs" onClick={() => penalties(match, match.homeId)}>
-                    {match.homeLabel} na strafschoppen
-                  </button>
-                  <button type="button" className="vvl-btn-outline text-xs" onClick={() => penalties(match, match.awayId)}>
-                    {match.awayLabel} na strafschoppen
-                  </button>
-                </div>
-              ) : null}
-              {match.score ? (
-                <button type="button" className="text-xs font-bold uppercase text-gray-500" onClick={() => clearScore(match.id)}>
-                  Wis
+        <section key={group.label} className="space-y-1.5">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">{group.label}</h2>
+          {group.matches.map((match) => {
+            const open = match.id === filters.matchId;
+            return (
+              <article key={match.id} className="rounded-sm border border-vvl-border bg-white" data-testid={`score-${match.id}`}>
+                <button type="button" className="flex w-full items-center gap-2 px-3 py-2.5 text-left" onClick={() => filters.selectMatch(match)}>
+                  <span className="shrink-0 rounded-sm bg-black px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                    {match.part?.name?.replace(/^Veld\s*/i, '') || ''}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    {compactTeam(match.homeLabel)}
+                    <span className="px-1 font-normal text-gray-400">–</span>
+                    {compactTeam(match.awayLabel)}
+                  </span>
+                  <span className="text-sm font-black tabular-nums">{match.score ? `${match.score.home}–${match.score.away}` : ''}</span>
                 </button>
-              ) : null}
-            </article>
-          ))}
+                {open ? (
+                  <div className="space-y-3 border-t border-vvl-border px-3 py-3">
+                    <ScoreLine label={match.homeLabel} value={match.score ? match.score.home : null} onMinus={() => setScore(match, 'home', -1)} onPlus={() => setScore(match, 'home', 1)} />
+                    <ScoreLine label={match.awayLabel} value={match.score ? match.score.away : null} onMinus={() => setScore(match, 'away', -1)} onPlus={() => setScore(match, 'away', 1)} />
+                    {match.phase === 'knockout' && match.score && match.score.home === match.score.away ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" className="vvl-btn-outline text-xs" onClick={() => penalties(match, match.homeId)}>
+                          {match.homeLabel} na strafschoppen
+                        </button>
+                        <button type="button" className="vvl-btn-outline text-xs" onClick={() => penalties(match, match.awayId)}>
+                          {match.awayLabel} na strafschoppen
+                        </button>
+                      </div>
+                    ) : null}
+                    {match.score ? (
+                      <button type="button" className="text-xs font-bold uppercase text-gray-400" onClick={() => clearScore(match.id)}>
+                        Wis
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
         </section>
       ))}
       <PouleBoards poules={view.poules} />
-      <BracketView matches={view.matches} />
+      <details>
+        <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Knock-out</summary>
+        <div className="mt-4">
+          <BracketView matches={view.matches} />
+        </div>
+      </details>
       <div className="flex items-center justify-between gap-3">
         <a className="vvl-btn-outline" href="/mockup/toernooi/live">
           Live
         </a>
-        <QrBlock value={liveUrl()} size={128} caption="Voor de bar" />
+        <QrBlock value={liveUrl()} size={112} caption="Voor de bar" />
       </div>
-    </div>
+    </PitchFocus>
   );
 }
 
 function ScoreLine({ label, value, onMinus, onPlus }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="min-w-0 flex-1 font-bold leading-tight">{label}</span>
-      <button type="button" className="h-14 w-14 bg-black text-3xl font-black text-white" onClick={onMinus} aria-label={`${label} min`}>
+      <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{compactTeam(label)}</span>
+      <button type="button" className="h-12 w-12 bg-black text-2xl font-black text-white" onClick={onMinus} aria-label={`${label} min`}>
         –
       </button>
-      <span className="w-10 text-center text-3xl font-black tabular-nums" data-testid="score-waarde">
+      <span className="w-8 text-center text-2xl font-black tabular-nums" data-testid="score-waarde">
         {value == null ? '–' : value}
       </span>
-      <button type="button" className="h-14 w-14 bg-black text-3xl font-black text-white" onClick={onPlus} aria-label={`${label} plus`}>
+      <button type="button" className="h-12 w-12 bg-black text-2xl font-black text-white" onClick={onPlus} aria-label={`${label} plus`}>
         +
       </button>
     </div>
