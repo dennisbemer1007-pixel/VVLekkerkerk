@@ -40,7 +40,7 @@ export function ScheidsMijn() {
   const me = viewerPerson(user, board.people);
   const [swapSlotId, setSwapSlotId] = useState('');
   const [msg, setMsg] = useState('');
-  if (!me) return null;
+  if (!scheids.enabled || !me) return null;
 
   const mine = board.slots.filter((slot) => slot.person?.email === me.email);
   const incoming = (scheids.swaps || []).filter((swap) => swap.toEmail === me.email && swap.status === 'wacht');
@@ -146,7 +146,8 @@ export function ScheidsOpen() {
   const board = useScheidsBoard();
   const me = viewerPerson(user, board.people);
   const [msg, setMsg] = useState('');
-  if (!me?.levels?.length) return null;
+  const scheids = useScheidsState();
+  if (!scheids.enabled || !me?.levels?.length) return null;
   const open = board.slots.filter((slot) => slot.open && me.levels.includes(slot.level));
   if (!open.length) return null;
 

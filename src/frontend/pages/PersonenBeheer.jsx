@@ -502,7 +502,7 @@ export default function PersonenBeheer() {
       };
       if (editId) {
         await api.updatePerson(editId, data);
-        savePersonLevels({ id: editId, email: data.email }, refereeLevels);
+        if (scheids.enabled) savePersonLevels({ id: editId, email: data.email }, refereeLevels);
         closeForm();
       } else if (mode === 'invite') {
         const res = await api.invitePerson(data);
@@ -584,9 +584,11 @@ export default function PersonenBeheer() {
     }
     if (filterAccount === 'yes' && !p.hasAccount) return false;
     if (filterAccount === 'no' && p.hasAccount) return false;
-    const levels = levelsForPerson(p, scheids);
-    if (filterReferee === 'none' && levels.length) return false;
-    if (filterReferee && filterReferee !== 'none' && !levels.includes(filterReferee)) return false;
+    if (scheids.enabled) {
+      const levels = levelsForPerson(p, scheids);
+      if (filterReferee === 'none' && levels.length) return false;
+      if (filterReferee && filterReferee !== 'none' && !levels.includes(filterReferee)) return false;
+    }
     return true;
   });
 
@@ -734,14 +736,16 @@ export default function PersonenBeheer() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="vvl-label">Scheidsrechter</label>
-            <select className="vvl-input" value={filterReferee} onChange={(e) => setFilterReferee(e.target.value)} aria-label="Scheidsrechter">
-              {REFEREE_FILTERS.map((f) => (
-                <option key={f.value || 'alle'} value={f.value}>{f.label}</option>
-              ))}
-            </select>
-          </div>
+          {scheids.enabled ? (
+            <div>
+              <label className="vvl-label">Scheidsrechter</label>
+              <select className="vvl-input" value={filterReferee} onChange={(e) => setFilterReferee(e.target.value)} aria-label="Scheidsrechter">
+                {REFEREE_FILTERS.map((f) => (
+                  <option key={f.value || 'alle'} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
             <input
               type="checkbox"
@@ -837,7 +841,7 @@ export default function PersonenBeheer() {
                     {p.name}
                     {!p.active ? ' (inactief)' : ''}
                   </span>
-                  <RefereeBadges levels={levelsForPerson(p, scheids)} />
+                  {scheids.enabled ? <RefereeBadges levels={levelsForPerson(p, scheids)} /> : null}
                   <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 md:hidden">
                     {p.email || 'geen e-mail'}
                     {p.phone ? ` · ${p.phone}` : ''}
@@ -1018,10 +1022,12 @@ export default function PersonenBeheer() {
                   ))}
                 </select>
               </div>
-              <RefereeLevelField
-                value={form.refereeLevels}
-                onChange={(refereeLevels) => setForm({ ...form, refereeLevels })}
-              />
+              {scheids.enabled ? (
+                <RefereeLevelField
+                  value={form.refereeLevels}
+                  onChange={(refereeLevels) => setForm({ ...form, refereeLevels })}
+                />
+              ) : null}
               {editId ? (
                 <GuardianPicker
                   persons={persons}

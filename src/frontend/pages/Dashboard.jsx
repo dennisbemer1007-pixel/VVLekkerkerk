@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
 import { api } from '../hooks/useApi.js';
 import { formatSlotDate } from '../scheids/example.js';
-import { useScheidsBoard } from '../scheids/store.js';
+import { useScheidsBoard, useScheidsEnabled } from '../scheids/store.js';
 import { occupancyStatus } from '../utils/formatDate.js';
 
 const OBLIGATION_SHORT = {
@@ -27,10 +27,11 @@ export default function Dashboard({ focus = 'week' }) {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState(null);
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
+  const scheidsAan = useScheidsEnabled();
   const scheidsBoard = useScheidsBoard();
-  const scheidsOpen = scheidsBoard.slots.filter(
-    (slot) => slot.open && slot.reason && slot.reason !== 'Nog niet ingepland.',
-  );
+  const scheidsOpen = scheidsAan
+    ? scheidsBoard.slots.filter((slot) => slot.open && slot.reason && slot.reason !== 'Nog niet ingepland.')
+    : [];
 
   const loadPlanningPeriod = () => {
     if (!can('beheer')) return Promise.resolve();

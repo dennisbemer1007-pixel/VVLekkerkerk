@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import BeheerNavButtons from '../components/BeheerNavButtons.jsx';
 import { levelLabel, categoryNeeded } from '../scheids/categories.js';
 import { formatSlotDate } from '../scheids/example.js';
@@ -9,6 +10,7 @@ import {
   replanScheids,
   setCategoryNeeded,
   useScheidsBoard,
+  useScheidsEnabled,
   useScheidsState,
 } from '../scheids/store.js';
 
@@ -44,6 +46,7 @@ function RefereeSelect({ slot, board }) {
 }
 
 export default function Scheidsrechters() {
+  const enabled = useScheidsEnabled();
   const board = useScheidsBoard();
   const scheids = useScheidsState();
   const [date, setDate] = useState('');
@@ -51,6 +54,7 @@ export default function Scheidsrechters() {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const categories = useMemo(() => categoriesForSettings(), []);
   const dates = useMemo(() => [...new Set(board.slots.map((slot) => slot.date))], [board.slots]);
+  if (!enabled) return <Navigate to="/meer" replace />;
 
   const filtered = board.slots.filter((slot) => {
     if (date && slot.date !== date) return false;

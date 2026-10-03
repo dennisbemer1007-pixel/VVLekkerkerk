@@ -1373,13 +1373,28 @@ assert(
     ],
     isNeeded: (key) => categoryNeeded(key),
   });
-  assert(
-    'open plek noemt waarom en JO8 telt niet mee',
-    planned.assignments.length === 0 &&
-      planned.open.length === 1 &&
-      planned.open[0].slotId === 'own' &&
-      planned.open[0].reason.includes('Pupillen'),
+assert(
+  'open plek noemt waarom en JO8 telt niet mee',
+  planned.assignments.length === 0 &&
+    planned.open.length === 1 &&
+    planned.open[0].slotId === 'own' &&
+    planned.open[0].reason.includes('Pupillen'),
+);
+{
+  const { scheidsFeatureOn, setScheidsEnabled } = await import('../src/frontend/scheids/store.js');
+  const instellingenSrc = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'),
+    'utf8',
   );
+  assert('scheidsrechters staan standaard uit', scheidsFeatureOn() === false);
+  setScheidsEnabled(true);
+  assert('scheidsrechters-schakelaar gaat aan', scheidsFeatureOn() === true);
+  setScheidsEnabled(false);
+  assert(
+    'instellingen heeft de scheidsrechters-schakelaar',
+    scheidsFeatureOn() === false && instellingenSrc.includes('data-testid="scheids-schakelaar"'),
+  );
+}
 }
 
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);

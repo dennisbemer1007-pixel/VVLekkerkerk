@@ -1,5 +1,6 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { BEHEER_BUTTONS } from '../pages/Meer.jsx';
+import ScheidsNavLink from '../scheids/ScheidsNavLink.jsx';
 
 /** Zelfde knoppenrij als onder Beheer, ook op Aandacht en Wedstrijden. */
 export default function BeheerNavButtons() {
@@ -25,13 +26,7 @@ export default function BeheerNavButtons() {
           </Link>
         );
       })}
-      <Link
-        to="/scheidsrechters"
-        data-testid="scheids-nav"
-        className={pathname === '/scheidsrechters' ? 'vvl-btn-primary min-h-11' : 'vvl-btn-outline min-h-11'}
-      >
-        Scheidsrechters
-      </Link>
+      <ScheidsNavLink />
     </div>
   );
 }

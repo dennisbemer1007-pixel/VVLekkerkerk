@@ -1,4 +1,5 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import ScheidsNavLink from '../scheids/ScheidsNavLink.jsx';
 import Beheer from './Beheer.jsx';
 
 export const BEHEER_BUTTONS = [
@@ -17,7 +18,6 @@ const BUTTONS = BEHEER_BUTTONS;
 
 export default function Meer() {
   const [params] = useSearchParams();
-  const { pathname } = useLocation();
   const tab = params.get('tab') || '';
   const showPanel = BUTTONS.some((item) => item.tab && item.tab === tab);
 
@@ -36,13 +36,7 @@ export default function Meer() {
             </Link>
           );
         })}
-        <Link
-          to="/scheidsrechters"
-          data-testid="scheids-nav"
-          className={pathname === '/scheidsrechters' ? 'vvl-btn-primary min-h-11' : 'vvl-btn-outline min-h-11'}
-        >
-          Scheidsrechters
-        </Link>
+        <ScheidsNavLink />
       </div>
       {showPanel ? <Beheer mode="meer" hideChrome /> : null}
     </div>

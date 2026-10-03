@@ -7,6 +7,7 @@ const STORAGE_KEY = 'vvl-scheids-voorbeeld-v1';
 
 function emptyState() {
   return {
+    enabled: false,
     byId: {},
     byEmail: {},
     categoryOn: {},
@@ -91,6 +92,18 @@ function getSnapshot() {
 
 export function useScheidsState() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function scheidsFeatureOn() {
+  return Boolean(state.enabled);
+}
+
+export function useScheidsEnabled() {
+  return Boolean(useScheidsState().enabled);
+}
+
+export function setScheidsEnabled(enabled) {
+  emit({ ...state, enabled: Boolean(enabled) });
 }
 
 export function useScheidsBoard() {
