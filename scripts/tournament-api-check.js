@@ -81,7 +81,7 @@ async function main() {
     const off = await call('/api/tournaments');
     const liveOff = await call('/api/tournaments/live/onbekend');
     const statusOff = await call('/api/tournaments/status');
-    assert('uit: lijst, live en status zijn 404', off.status === 404 && liveOff.status === 404 && statusOff.status === 404);
+    assert('uit: lijst en live zijn 404, status meldt uit', off.status === 404 && liveOff.status === 404 && statusOff.status === 200 && statusOff.json.enabled === false);
 
     const adminLogin = await call('/api/auth/login', {
       method: 'POST',

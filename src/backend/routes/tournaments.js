@@ -14,6 +14,14 @@ import {
 const router = Router();
 const BEHEER = requireRole('Barcommissie', 'Admin');
 
+router.get('/status', async (_req, res, next) => {
+  try {
+    res.json({ enabled: await tournamentsEnabled() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.use(async (_req, res, next) => {
   try {
     if (!(await tournamentsEnabled())) {
@@ -23,10 +31,6 @@ router.use(async (_req, res, next) => {
   } catch (err) {
     return next(err);
   }
-});
-
-router.get('/status', (_req, res) => {
-  res.json({ enabled: true });
 });
 
 router.get('/live/:token', async (req, res, next) => {

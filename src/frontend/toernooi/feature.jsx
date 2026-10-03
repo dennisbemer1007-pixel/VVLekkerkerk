@@ -17,7 +17,8 @@ export function TournamentFeatureProvider({ children }) {
       const token = getToken();
       if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch('/api/tournaments/status', { headers, cache: 'no-store' });
-      const on = res.ok;
+      const body = await res.json().catch(() => ({}));
+      const on = res.ok && body.enabled === true;
       setEnabled(on);
       setReady(true);
       return on;

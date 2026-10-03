@@ -116,7 +116,8 @@ async function main() {
       call('/api/referees/people/1/levels', { method: 'PUT', body: { levels: ['pupillen'] } }),
       call('/api/referees/plan', { method: 'POST', body: {} }),
     ]);
-    assert('uit: status, overzicht, mijn, niveaus en plan zijn 404', off.every((row) => row.status === 404));
+    assert('uit: status meldt uit', off[0].status === 200 && off[0].json.enabled === false);
+    assert('uit: overzicht, mijn, niveaus en plan zijn 404', off.slice(1).every((row) => row.status === 404));
 
     const adminLogin = await call('/api/auth/login', { method: 'POST', body: { email: admin.email, password } });
     const barLogin = await call('/api/auth/login', { method: 'POST', body: { email: bar.email, password } });

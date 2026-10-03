@@ -11,6 +11,7 @@ import {
   mineFor,
   overview,
   proposeSwap,
+  refereesEnabled,
   rejectSwap,
   replanReferees,
   setCategoryNeeded,
@@ -19,6 +20,14 @@ import {
 
 const router = Router();
 const BEHEER = requireRole('Barcommissie', 'Admin');
+
+router.get('/status', async (_req, res, next) => {
+  try {
+    res.json({ enabled: await refereesEnabled() });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.use(async (_req, res, next) => {
   try {
@@ -34,10 +43,6 @@ function sendError(err, res, next) {
   if (err.status) return res.status(err.status).json({ error: err.message });
   return next(err);
 }
-
-router.get('/status', (_req, res) => {
-  res.json({ enabled: true });
-});
 
 router.get(
   '/overview',

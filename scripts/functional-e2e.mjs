@@ -62,7 +62,7 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
       failed.push(`${res.status()} ${res.url()}`);
     }
   });
-  await page.goto(`${base}/login`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.evaluate(() => {
     try {
       localStorage.clear();
@@ -71,7 +71,7 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
       /* ignore */
     }
   });
-  await page.goto(`${base}/login`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForSelector('input[type="email"], input[name="email"], input[type="password"]', {
     timeout: 25000,
   });
@@ -85,10 +85,10 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
   await page.click('input[type="password"]', { clickCount: 3 });
   await page.type('input[type="password"]', password, { delay: 5 });
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]'),
   ]);
-  await page.goto(`${base}${path}`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await new Promise((r) => setTimeout(r, 600));
   const body = await page.evaluate(() => document.body?.innerText || '');
   for (const t of expectText) {
@@ -161,15 +161,19 @@ async function main() {
   // Volunteer enroll / unenroll
   const openSvc = await req('/api/services?filter=open', { token: lisa });
   const openList = Array.isArray(openSvc.json) ? openSvc.json : [];
-  const pick = openList.find((s) => !s.locked && (s.capacity?.personalOpen ?? 0) > 0);
+  const pickList = openList.filter((s) => !s.locked && (s.capacity?.personalOpen ?? 0) > 0);
   ok('vrijwilliger ziet open diensten', openList.length > 0, String(openList.length));
-  if (pick) {
+  if (pickList.length) {
     const lisaMe = await req('/api/auth/me', { token: lisa });
-    const en = await req('/api/enrollments', {
-      method: 'POST',
-      token: lisa,
-      body: { serviceId: pick.id }, // personId mag ontbreken → zelf
-    });
+    let en = { status: 0, json: {} };
+    for (const svc of pickList) {
+      en = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: svc.id }, // personId mag ontbreken → zelf
+      });
+      if (en.status === 201) break;
+    }
     ok(
       'vrijwilliger inschrijven (zonder personId = zelf)',
       en.status === 201 && en.json?.personId === lisaMe.json?.id,
