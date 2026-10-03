@@ -19,6 +19,9 @@ import Uitnodiging from './pages/Uitnodiging.jsx';
 import WachtwoordReset from './pages/WachtwoordReset.jsx';
 import WachtwoordVergeten from './pages/WachtwoordVergeten.jsx';
 import Wedstrijden from './pages/Wedstrijden.jsx';
+import ToernooiLive from './pages/ToernooiLive.jsx';
+import ToernooiPrint from './pages/ToernooiPrint.jsx';
+import ToernooiWizard from './pages/ToernooiWizard.jsx';
 
 function Protected({ children, feature, adminOnly = false }) {
   const { isLoggedIn, loading, can, homePath, user } = useAuth();
@@ -60,6 +63,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/mockup/toernooi/live" element={<ToernooiLive />} />
+      <Route path="/mockup/toernooi/afdruk" element={<ToernooiPrint />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/wachtwoord-vergeten" element={<WachtwoordVergeten />} />
       <Route path="/wachtwoord/:token" element={<WachtwoordReset />} />
@@ -92,6 +97,7 @@ export default function App() {
               <Route path="/meer" element={<Protected feature="beheer"><Meer /></Protected>} />
               <Route path="/beheer" element={<Protected feature="beheer"><Beheer mode="full" /></Protected>} />
               <Route path="/team" element={<Protected feature="teams"><TeamDashboard /></Protected>} />
+              <Route path="/mockup/toernooi" element={<Protected feature="beheer"><ToernooiWizard /></Protected>} />
               <Route path="/teams" element={<Protected feature="teams"><Navigate to="/team" replace /></Protected>} />
               <Route path="/uitnodigen" element={<Protected feature="beheer"><Beheer mode="invite" /></Protected>} />
               <Route path="*" element={<Navigate to="/" replace />} />

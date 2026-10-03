@@ -36,6 +36,11 @@ export default function Meer() {
           );
         })}
       </div>
+      <div className="border-t border-vvl-border pt-3">
+        <Link to="/mockup/toernooi" className="vvl-btn-outline min-h-11">
+          Toernooi
+        </Link>
+      </div>
       {showPanel ? <Beheer mode="meer" hideChrome /> : null}
     </div>
   );
