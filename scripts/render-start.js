@@ -22,6 +22,12 @@ import {
   TOURNAMENT_MIGRATION,
   REFEREE_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
+import {
+  compareBackupToLive,
+  incidentBackupPath,
+  publicServiceDiff,
+  restoreProtectedServices,
+} from '../src/backend/lib/serviceDiff.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -109,22 +115,56 @@ try {
 
 const mail = await inspectMail(prisma);
 console.log(
-  '[render-start] Mail: secret=%s smtp=%s sealed=%s decrypts=%s from=%s',
+  '[render-start] Mail: secret=%s smtp=%s sealed=%s decrypts=%s',
   mail.secretSet ? 'ja' : 'nee',
   mail.smtpPresent ? 'ja' : 'nee',
   mail.smtpSealed ? 'ja' : 'nee',
   mail.smtpDecrypts === null ? 'n.v.t.' : mail.smtpDecrypts ? 'ja' : 'NEE',
-  mail.fromEmail || '(leeg)',
 );
+
+const namedBackup = incidentBackupPath(stateDir);
+let serviceDiff = null;
+let restoreResult = { restored: [], skipped: 0 };
+if (fs.existsSync(namedBackup)) {
+  serviceDiff = await compareBackupToLive(prisma, namedBackup);
+  console.log(
+    '[render-start] Dienst-diff: backup=%s live=%s ontbreekt=%s personen=%s handmatig=%s leeg-auto=%s',
+    serviceDiff.backupCount,
+    serviceDiff.liveCount,
+    serviceDiff.missing?.length || 0,
+    serviceDiff.withPerson,
+    serviceDiff.manual,
+    serviceDiff.emptyAuto,
+  );
+  if (serviceDiff.withPerson || serviceDiff.manual) {
+    restoreResult = await restoreProtectedServices(prisma, namedBackup, serviceDiff);
+    console.log('[render-start] Hersteld: %s', restoreResult.restored.join(','));
+  } else {
+    console.log('[render-start] Niets herstellen: ontbrekende rijen zijn lege AUTO-diensten');
+  }
+} else {
+  console.warn('[render-start] Incident-backup ontbreekt:', namedBackup);
+}
+
+const publicDiff = publicServiceDiff(serviceDiff, restoreResult);
+if (publicDiff) {
+  const reportJson = JSON.stringify(publicDiff, null, 2);
+  fs.writeFileSync(path.join(stateDir, 'service-diff-report.json'), reportJson);
+  const incidentReport = path.join(stateDir, 'service-diff-incident.json');
+  if (!fs.existsSync(incidentReport)) fs.writeFileSync(incidentReport, reportJson);
+}
 
 const statusFile = writeDeployStatus(stateDir, {
   at: new Date().toISOString(),
-  backup,
+  backupExists: Boolean(backup?.exists),
+  backupBytes: backup?.bytes ?? null,
   counts: {
     personsBefore,
     servicesBefore,
     personsAfter,
     servicesAfter,
+    personsNow: await prisma.person.count(),
+    servicesNow: await prisma.service.count(),
   },
   migrations,
   flags,
@@ -133,10 +173,9 @@ const statusFile = writeDeployStatus(stateDir, {
     smtpPresent: mail.smtpPresent,
     smtpSealed: mail.smtpSealed,
     smtpDecrypts: mail.smtpDecrypts,
-    fromEmail: mail.fromEmail,
-    user: mail.user,
     enabled: mail.enabled,
   },
+  serviceDiff: publicDiff,
 });
 console.log('[render-start] Status:', statusFile);
 

@@ -21,8 +21,7 @@ import { UPLOADS_DIR, ensureUploadDirs, isUnsafeUploadPath } from './lib/uploads
 import { clientErrorPayload } from './lib/clientError.js';
 import { ensureClubDefaults } from './lib/clubDefaults.js';
 import { maybeRunDutyReminders } from './lib/reminders.js';
-import { inspectMail, readDeployStatus, deployStateDir, resolveLiveDbFile } from './lib/liveDeploy.js';
-import { publicClubSettings } from './lib/season.js';
+import { readDeployStatus, deployStateDir, resolveLiveDbFile } from './lib/liveDeploy.js';
 import fs from 'fs';
 import serviceRulesRouter from './routes/serviceRules.js';
 import activitiesRouter from './routes/activities.js';
@@ -111,25 +110,9 @@ app.get('/api/health', async (_req, res) => {
       const root = path.join(__dirname, '../..');
       const dbFile = resolveLiveDbFile(root);
       const status = readDeployStatus(deployStateDir(dbFile));
-      extra.backup = status?.backup || null;
-      extra.deployCounts = status?.counts || null;
-      extra.migrations = status?.migrations || null;
-      extra.counts = {
-        persons: await prisma.person.count(),
-        services: await prisma.service.count(),
-      };
-      try {
-        const club = await publicClubSettings();
-        extra.flags = {
-          tournamentsEnabled: Boolean(club.tournamentsEnabled),
-          refereesEnabled: Boolean(club.refereesEnabled),
-        };
-      } catch {
-        extra.flags = status?.flags || null;
-      }
-      extra.mail = await inspectMail(prisma);
-    } catch (err) {
-      extra.healthDetail = err.message;
+      extra.serviceDiff = status?.serviceDiff || null;
+    } catch {
+      extra.serviceDiff = null;
     }
     res.json({ ok: true, name: 'VVL Planning App', db: true, ...extra });
     maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));

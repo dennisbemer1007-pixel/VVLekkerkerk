@@ -16,6 +16,7 @@ import { cleanupPrivacy } from '../lib/privacy.js';
 import { writeAudit } from '../lib/audit.js';
 import prisma from '../lib/prisma.js';
 import { previewEnvironmentReset, runEnvironmentReset } from '../lib/environmentReset.js';
+import { deployStateDir, readDeployStatus, resolveLiveDbFile } from '../lib/liveDeploy.js';
 import {
   customMailTemplates,
   dienstLabel,
@@ -421,6 +422,36 @@ router.post(
         detail: `${result.oldLabel} → ${result.seasonLabel}`,
       });
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.get(
+  '/deploy-status',
+  requireRole('Admin')(async (_req, res, next) => {
+    try {
+      const dbFile = resolveLiveDbFile(process.cwd());
+      const status = readDeployStatus(deployStateDir(dbFile));
+      if (!status) return res.json({ error: 'Geen deploy-status' });
+      res.json({
+        at: status.at,
+        backupExists: Boolean(status.backupExists),
+        backupBytes: status.backupBytes ?? null,
+        counts: status.counts || null,
+        flags: status.flags || null,
+        mail: status.mail
+          ? {
+              secretSet: Boolean(status.mail.secretSet),
+              smtpPresent: Boolean(status.mail.smtpPresent),
+              smtpSealed: Boolean(status.mail.smtpSealed),
+              smtpDecrypts: status.mail.smtpDecrypts,
+              enabled: Boolean(status.mail.enabled),
+            }
+          : null,
+        serviceDiff: status.serviceDiff || null,
+      });
     } catch (err) {
       next(err);
     }

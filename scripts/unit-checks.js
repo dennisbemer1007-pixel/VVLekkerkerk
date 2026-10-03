@@ -8,6 +8,7 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
 import { splitSqlStatements, isIgnorableMigrationError } from '../src/backend/lib/liveDeploy.js';
+import { classifyServiceGap, sqlIntList, toId } from '../src/backend/lib/serviceDiff.js';
 import { clientErrorPayload } from '../src/backend/lib/clientError.js';
 import { isUnsafeUploadPath } from '../src/backend/lib/uploads.js';
 import { sealSecret, unsealSecret } from '../src/backend/lib/secrets.js';
@@ -1508,6 +1509,41 @@ assert(
     isIgnorableMigrationError('duplicate column name: tournamentsEnabled') &&
       isIgnorableMigrationError('table Tournament already exists') &&
       !isIgnorableMigrationError('syntax error'),
+  );
+}
+
+{
+  const now = new Date('2026-10-03T12:00:00');
+  const empty = classifyServiceGap({
+    service: { id: 1, date: '2026-10-10', type: 'BAR', time: '09:00 - 12:00', origin: 'AUTO', locked: false, kind: 'PERSONAL', matchId: null },
+    now,
+  });
+  const assigned = classifyServiceGap({
+    service: { id: 2, date: '2026-09-01', type: 'KITCHEN', time: '16:30 - 19:30', origin: 'AUTO', locked: false, kind: 'MIXED', matchId: 9 },
+    enrollments: [{ id: 1, noShow: false }, { id: 2, noShow: true }],
+    swaps: [{ id: 3 }],
+    match: { id: 9, opponent: 'X', home: true, teamName: 'JO12-1' },
+    now,
+  });
+  const manual = classifyServiceGap({
+    service: { id: 3, date: '2026-10-04', type: 'BAR', time: '12:00 - 16:30', origin: 'MANUAL', locked: false, kind: 'PERSONAL' },
+    now,
+  });
+  assert('lege auto-dienst niet herstellen', empty.shouldRestore === false && empty.when === 'future' && empty.hasPerson === false);
+  assert(
+    'dienst met inschrijvingen wel herstellen',
+    assigned.shouldRestore && assigned.hasPerson && assigned.when === 'past' && assigned.noShows === 1 && assigned.swaps === 1 && assigned.match.team === 'JO12-1',
+  );
+  assert('handmatige dienst wel herstellen', manual.shouldRestore && manual.manual && manual.when === 'future');
+  assert('sqlite-ids als bigint matchen gewone ids', toId(69n) === 69 && toId('69') === 69);
+  assert('sql-id-lijst negeert ongeldige waarden', sqlIntList([1n, 1, 'x', null, 2]) === '1,2');
+  const healthSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/server.js'),
+    'utf8',
+  );
+  assert(
+    'publieke health lekt geen mail of backuppad',
+    !healthSrc.includes('inspectMail') && !healthSrc.includes('extra.backup') && !healthSrc.includes('fromEmail'),
   );
 }
 
