@@ -5,6 +5,8 @@ import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
 import { api } from '../hooks/useApi.js';
+import { useRefereeFeature } from '../scheids/feature.jsx';
+import { formatSlotDate } from '../scheids/format.js';
 import { occupancyStatus } from '../utils/formatDate.js';
 
 const OBLIGATION_SHORT = {
@@ -19,6 +21,9 @@ function serviceStatus(s) {
 
 export default function Dashboard({ focus = 'week' }) {
   const { can } = useAuth();
+  const { enabled: scheidsAan } = useRefereeFeature();
+  const magBeheer = can('beheer');
+  const [scheidsOpen, setScheidsOpen] = useState([]);
   const [stats, setStats] = useState(null);
   const [weekServices, setWeekServices] = useState([]);
   const [periodServices, setPeriodServices] = useState([]);
@@ -83,6 +88,17 @@ export default function Dashboard({ focus = 'week' }) {
 
   const toggleFilter = (key) => setStatusFilter((cur) => (cur === key ? null : key));
 
+  useEffect(() => {
+    if (!scheidsAan || !magBeheer) {
+      setScheidsOpen([]);
+      return;
+    }
+    api
+      .getRefereeAttention()
+      .then((rows) => setScheidsOpen(Array.isArray(rows) ? rows : []))
+      .catch(() => setScheidsOpen([]));
+  }, [scheidsAan, magBeheer]);
+
   const gaps = stats?.controls?.assignmentGaps || [];
 
   if (focus === 'aandacht') {
@@ -116,7 +132,7 @@ export default function Dashboard({ focus = 'week' }) {
             showNoShowMeta
           />
         </div>
-        {gaps.length ? (
+        {gaps.length || scheidsOpen.length ? (
           <section className="space-y-2" data-testid="autoplan-redenen">
             <h2 className="font-heading text-base font-black uppercase">Waarom niet automatisch</h2>
             <p className="text-sm text-gray-700">
@@ -127,6 +143,14 @@ export default function Dashboard({ focus = 'week' }) {
                 <li key={row.personId || row.name} className="px-3 py-2 text-sm">
                   <span className="font-semibold">{row.name}</span>
                   <span className="block text-gray-700">{row.reason || 'Geen geschikt moment.'}</span>
+                </li>
+              ))}
+              {scheidsOpen.map((slot) => (
+                <li key={slot.matchId} className="px-3 py-2 text-sm" data-testid="scheids-aandacht-reden">
+                  <span className="font-semibold">
+                    {slot.team} · {formatSlotDate(slot.date)} · {slot.time}
+                  </span>
+                  <span className="block text-gray-700">{slot.reason}</span>
                 </li>
               ))}
             </ul>

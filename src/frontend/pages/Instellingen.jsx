@@ -4,6 +4,7 @@ import SettingsNavList from '../components/SettingsNavList.jsx';
 import { api } from '../hooks/useApi.js';
 import { isAdminRoleName } from '../navConfig.js';
 import { useTournamentFeature } from '../toernooi/feature.jsx';
+import { useRefereeFeature } from '../scheids/feature.jsx';
 
 const LINKS = [
   { to: '/beheer?tab=regels', label: 'Dienstregels' },
@@ -262,6 +263,61 @@ function ToernooiSwitch() {
   );
 }
 
+function ScheidsSchakelaar() {
+  const { refresh } = useRefereeFeature();
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .getClubSettings()
+      .then((club) => setEnabled(Boolean(club.refereesEnabled)))
+      .catch((err) => setError(err.message || 'Laden mislukt'));
+  }, []);
+
+  async function toggle() {
+    setBusy(true);
+    setError('');
+    try {
+      const club = await api.setRefereesEnabled(!enabled);
+      setEnabled(Boolean(club.refereesEnabled));
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'Opslaan mislukt');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="vvl-card space-y-2" data-testid="scheids-schakelaar">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-base font-black uppercase">Scheidsrechters</h2>
+          <p className="text-sm text-gray-700">Uit verbergt alles. De API antwoordt dan 404.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Scheidsrechters"
+          data-testid="scheids-schakelaar-knop"
+          disabled={busy}
+          onClick={toggle}
+          className="inline-flex min-h-11 items-center gap-2"
+        >
+          <span className="text-xs font-bold uppercase tracking-wide">{enabled ? 'Aan' : 'Uit'}</span>
+          <span className={`relative h-7 w-12 rounded-full ${enabled ? 'bg-black' : 'bg-vvl-border'}`}>
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white ${enabled ? 'left-5' : 'left-0.5'}`} />
+          </span>
+        </button>
+      </div>
+      {error ? <p className="text-sm font-semibold text-red-800">{error}</p> : null}
+    </div>
+  );
+}
+
 export default function Instellingen() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -273,6 +329,8 @@ export default function Instellingen() {
         <h1 className="font-heading text-xl font-black uppercase">Instellingen</h1>
         <p className="mt-1 text-sm text-vvl-accent">Beheer clubinstellingen en planningregels.</p>
       </div>
+
+      {admin ? <ScheidsSchakelaar /> : null}
 
       <SettingsNavList items={LINKS} />
 

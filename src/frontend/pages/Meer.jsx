@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTournamentsEnabled } from '../toernooi/feature.jsx';
+import ScheidsNavLink from '../scheids/ScheidsNavLink.jsx';
 import Beheer from './Beheer.jsx';
 
 export const BEHEER_BUTTONS = [
@@ -37,6 +38,7 @@ export default function Meer() {
             </Link>
           );
         })}
+        <ScheidsNavLink />
       </div>
       {tournamentsOn ? (
         <div className="border-t border-vvl-border pt-3">

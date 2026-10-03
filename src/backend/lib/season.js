@@ -57,6 +57,7 @@ export async function publicClubSettings() {
     planningLabel: round?.label || 'Planning',
     planningRoundId: round?.id || null,
     tournamentsEnabled: Boolean(s.tournamentsEnabled),
+    refereesEnabled: Boolean(s.refereesEnabled),
   };
 }
 

@@ -21,10 +21,14 @@ import { UPLOADS_DIR, ensureUploadDirs, isUnsafeUploadPath } from './lib/uploads
 import { clientErrorPayload } from './lib/clientError.js';
 import { ensureClubDefaults } from './lib/clubDefaults.js';
 import { maybeRunDutyReminders } from './lib/reminders.js';
+import { inspectMail, readDeployStatus, deployStateDir, resolveLiveDbFile } from './lib/liveDeploy.js';
+import { publicClubSettings } from './lib/season.js';
+import fs from 'fs';
 import serviceRulesRouter from './routes/serviceRules.js';
 import activitiesRouter from './routes/activities.js';
 import swapsRouter from './routes/swaps.js';
 import notificationsRouter from './routes/notifications.js';
+import refereesRouter from './routes/referees.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,7 +106,32 @@ app.use(
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, name: 'VVL Planning App', db: true });
+    const extra = {};
+    try {
+      const root = path.join(__dirname, '../..');
+      const dbFile = resolveLiveDbFile(root);
+      const status = readDeployStatus(deployStateDir(dbFile));
+      extra.backup = status?.backup || null;
+      extra.deployCounts = status?.counts || null;
+      extra.migrations = status?.migrations || null;
+      extra.counts = {
+        persons: await prisma.person.count(),
+        services: await prisma.service.count(),
+      };
+      try {
+        const club = await publicClubSettings();
+        extra.flags = {
+          tournamentsEnabled: Boolean(club.tournamentsEnabled),
+          refereesEnabled: Boolean(club.refereesEnabled),
+        };
+      } catch {
+        extra.flags = status?.flags || null;
+      }
+      extra.mail = await inspectMail(prisma);
+    } catch (err) {
+      extra.healthDetail = err.message;
+    }
+    res.json({ ok: true, name: 'VVL Planning App', db: true, ...extra });
     maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));
   } catch (err) {
     console.error('[Health] Database niet bereikbaar:', err.message);
@@ -193,6 +222,7 @@ app.use('/api/service-rules', serviceRulesRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/swaps', swapsRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/referees', refereesRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/tournaments', tournamentsRouter);
@@ -203,6 +233,16 @@ app.use('/api', (_req, res) => {
 
 if (isProd) {
   const dist = path.join(__dirname, '../../dist');
+  app.get('/robots.txt', (_req, res) => {
+    const built = path.join(dist, 'robots.txt');
+    const source = path.join(__dirname, '../frontend/public/robots.txt');
+    const file = fs.existsSync(built) ? built : source;
+    if (!fs.existsSync(file)) {
+      res.status(404).type('text/plain').send('User-agent: *\nDisallow: /\n');
+      return;
+    }
+    res.type('text/plain').send(fs.readFileSync(file, 'utf8'));
+  });
   app.use(express.static(dist));
   app.get('*', (_req, res) => {
     res.sendFile(path.join(dist, 'index.html'));

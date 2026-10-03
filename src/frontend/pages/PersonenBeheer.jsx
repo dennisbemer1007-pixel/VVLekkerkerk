@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import DesktopOnly from '../components/DesktopOnly.jsx';
 import NlDateInput from '../components/NlDateInput.jsx';
 import { api } from '../hooks/useApi.js';
+import RefereeLevelField, { RefereeBadges } from '../scheids/RefereeLevelField.jsx';
+import { REFEREE_LEVELS } from '../scheids/categories.js';
+import { useRefereeFeature } from '../scheids/feature.jsx';
 import { toDateInputValue } from '../utils/formatDate.js';
 
 const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
@@ -394,7 +397,11 @@ function PersonImport({ onDone }) {
 }
 
 export default function PersonenBeheer() {
+  const { enabled: scheidsOn } = useRefereeFeature();
   const [persons, setPersons] = useState([]);
+  const [levelsById, setLevelsById] = useState({});
+  const [refereeLevels, setRefereeLevels] = useState([]);
+  const [filterReferee, setFilterReferee] = useState('');
   const [teams, setTeams] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
@@ -419,6 +426,14 @@ export default function PersonenBeheer() {
     try {
       setPersons(await api.getPersons(true, { includeNameless }));
       setTeams(await api.getTeams());
+      if (scheidsOn) {
+        const rows = await api.getRefereePeople().catch(() => []);
+        const map = {};
+        for (const row of rows || []) map[row.id] = row.levels || [];
+        setLevelsById(map);
+      } else {
+        setLevelsById({});
+      }
       const stats = await api.getStats().catch(() => null);
       const map = {};
       for (const row of stats?.dutyStats || []) map[row.id] = row.barThisSeason ?? row.barThisYear ?? 0;
@@ -430,18 +445,21 @@ export default function PersonenBeheer() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheidsOn]);
 
   const closeForm = () => {
     setFormOpen(false);
     setEditId(null);
     setForm(emptyForm);
+    setRefereeLevels([]);
     // Houd inviteResult staan zodat de link op de pagina blijft tot je hem sluit.
   };
 
   const openAdd = () => {
     setEditId(null);
     setForm(emptyForm);
+    setRefereeLevels([]);
     setInviteResult(null);
     setCopied(false);
     setCopiedPersonId(null);
@@ -462,6 +480,7 @@ export default function PersonenBeheer() {
       exemptedUntil: p.exemptedUntil || '',
       guardianId: p.guardianId ? String(p.guardianId) : '',
     });
+    setRefereeLevels(levelsById[p.id] || []);
     setFormOpen(true);
   };
 
@@ -485,22 +504,25 @@ export default function PersonenBeheer() {
         teamId: form.teamId || null,
         guardianId: form.guardianId || null,
       };
+      let savedId = editId;
       if (editId) {
         await api.updatePerson(editId, data);
-        closeForm();
       } else if (mode === 'invite') {
         const res = await api.invitePerson(data);
+        savedId = res.person?.id || null;
         setInviteResult(res);
         setCopied(false);
         setCopiedPersonId(null);
-        // Houd de popup open zodat de link altijd te kopiëren is, ook als de mail ging.
         setForm(emptyForm);
+        setRefereeLevels([]);
         setEditId(null);
         setFormOpen(true);
       } else {
-        await api.createPerson(data);
-        closeForm();
+        const created = await api.createPerson(data);
+        savedId = created?.id || null;
       }
+      if (scheidsOn && savedId) await api.setRefereeLevels(savedId, refereeLevels);
+      if (mode !== 'invite') closeForm();
       await load();
     } catch (err) {
       setError(err.message);
@@ -568,6 +590,12 @@ export default function PersonenBeheer() {
     }
     if (filterAccount === 'yes' && !p.hasAccount) return false;
     if (filterAccount === 'no' && p.hasAccount) return false;
+    if (scheidsOn && filterReferee) {
+      const levels = levelsById[p.id] || [];
+      if (filterReferee === '__none__') {
+        if (levels.length) return false;
+      } else if (!levels.includes(filterReferee)) return false;
+    }
     return true;
   });
 
@@ -726,6 +754,23 @@ export default function PersonenBeheer() {
             />
             Toon ook namen zonder account
           </label>
+          {scheidsOn ? (
+            <div>
+              <label className="vvl-label">Scheidsrechter</label>
+              <select
+                className="vvl-input"
+                value={filterReferee}
+                onChange={(e) => setFilterReferee(e.target.value)}
+                aria-label="Scheidsrechter"
+              >
+                <option value="">Alle</option>
+                {REFEREE_LEVELS.map((level) => (
+                  <option key={level.id} value={level.id}>{level.label}</option>
+                ))}
+                <option value="__none__">Niet beschikbaar</option>
+              </select>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -808,6 +853,7 @@ export default function PersonenBeheer() {
                 <td className="truncate p-2 font-semibold">
                   {p.name}
                   {!p.active ? ' (inactief)' : ''}
+                  {scheidsOn ? <RefereeBadges levels={levelsById[p.id]} /> : null}
                   <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 md:hidden">
                     {p.email || 'geen e-mail'}
                     {p.phone ? ` · ${p.phone}` : ''}
@@ -976,6 +1022,9 @@ export default function PersonenBeheer() {
                   ))}
                 </select>
               </div>
+              {scheidsOn ? (
+                <RefereeLevelField value={refereeLevels} onChange={setRefereeLevels} />
+              ) : null}
               <div className="sm:col-span-2">
                 <label className="vvl-label">Verplichting</label>
                 <select

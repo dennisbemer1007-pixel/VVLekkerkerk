@@ -40,7 +40,7 @@ const PERSONEN = {
   match: ['/mensen', '/uitnodigen'],
 };
 const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', short: 'Ruilen', icon: 'swap', match: ['/mijn-ruilen'] };
-const MEER = { to: '/meer', label: 'Beheer', short: 'Beheer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/beheer'] };
+const MEER = { to: '/meer', label: 'Beheer', short: 'Beheer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/beheer', '/scheidsrechters'] };
 const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', short: 'Instel.', icon: 'gear', match: ['/instellingen'], desktopOnly: true };
 
 const SETTINGS_TABS = new Set(['regels', 'mail', 'club', 'activiteiten']);
@@ -78,7 +78,7 @@ export function navItemActive(item, pathname, search, role) {
     return pathname === '/beheer' && SETTINGS_TABS.has(tab);
   }
   if (item.to === '/meer') {
-    if (['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens'].includes(pathname)) return true;
+    if (['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens', '/scheidsrechters'].includes(pathname)) return true;
     if (pathname !== '/beheer') return false;
     if (admin && SETTINGS_TABS.has(tab)) return false;
     return true;

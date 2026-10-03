@@ -1,12 +1,27 @@
 /**
  * Startscript voor Render.
  * - Zet SQLite op DATA_DIR (vaste schijf) als die gezet is
+ * - Back-upt de live database vóór schemawijzigingen
+ * - Past alleen de additieve SQL-migraties voor toernooien en scheidsrechters toe
+ * - Geen `prisma db push` (dat kan tabellen herbouwen)
  * - Laadt demo-data alleen als SEED_DEMO=true en de database leeg is
  */
 import { execSync } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ensureDataDir, sqliteUrlForDataDir } from '../src/backend/lib/dataDir.js';
+import {
+  applyNamedMigrationsOnce,
+  backupDirFor,
+  backupSqlite,
+  inspectMail,
+  resolveLiveDbFile,
+  writeDeployStatus,
+  deployStateDir,
+  TOURNAMENT_MIGRATION,
+  REFEREE_MIGRATION,
+} from '../src/backend/lib/liveDeploy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -39,18 +54,93 @@ if (process.env.SEED_DEMO === 'true' && !process.env.ADMIN_PASSWORD) {
 console.log('[render-start] DATABASE_URL=', process.env.DATABASE_URL);
 console.log('[render-start] SEED_DEMO=', process.env.SEED_DEMO);
 console.log('[render-start] APP_URL=', process.env.APP_URL || '(niet gezet)');
+console.log('[render-start] MAIL_SECRET=', process.env.MAIL_SECRET ? 'gezet' : 'ONTBREEKT');
+console.log('[render-start] SQL-migraties (geen db push):', TOURNAMENT_MIGRATION, REFEREE_MIGRATION);
 
-execSync('npx prisma db push --schema=src/backend/prisma/schema.prisma --accept-data-loss', {
+const dbFile = resolveLiveDbFile(root);
+if (process.env.DATA_DIR && (!dbFile || !fs.existsSync(dbFile))) {
+  console.error('[render-start] Geen database op de schijf (%s). Stoppen om dataverlies te voorkomen.', dbFile);
+  process.exit(1);
+}
+
+console.log('[render-start] prisma generate (geen db push)');
+execSync('npx prisma generate --schema=src/backend/prisma/schema.prisma', {
   cwd: root,
   stdio: 'inherit',
   env: process.env,
 });
 
 const { default: prisma } = await import('../src/backend/lib/prisma.js');
-const services = await prisma.service.count();
-const people = await prisma.person.count();
+const stateDir = deployStateDir(dbFile);
 
-if (process.env.SEED_DEMO === 'true' && (services === 0 || people <= 1)) {
+let backup = null;
+if (dbFile && fs.existsSync(dbFile)) {
+  backup = await backupSqlite(prisma, dbFile, backupDirFor(dbFile));
+  console.log('[render-start] Backup: %s (%s bytes)', backup.path, backup.bytes);
+  if (!fs.existsSync(backup.path)) {
+    console.error('[render-start] Backupbestand ontbreekt na schrijven.');
+    process.exit(1);
+  }
+} else {
+  console.warn('[render-start] Geen bestaand SQLite-bestand — backup overgeslagen');
+}
+
+const personsBefore = await prisma.person.count();
+const servicesBefore = await prisma.service.count();
+console.log('[render-start] Voor migratie: %s diensten, %s personen', servicesBefore, personsBefore);
+
+const migrations = await applyNamedMigrationsOnce(prisma, root, stateDir);
+console.log('[render-start] Migraties:', JSON.stringify(migrations));
+
+const personsAfter = await prisma.person.count();
+const servicesAfter = await prisma.service.count();
+console.log('[render-start] Na migratie: %s diensten, %s personen', servicesAfter, personsAfter);
+
+let flags = { tournamentsEnabled: false, refereesEnabled: false };
+try {
+  const club = await prisma.clubSettings.findUnique({ where: { id: 1 } });
+  flags = {
+    tournamentsEnabled: Boolean(club?.tournamentsEnabled),
+    refereesEnabled: Boolean(club?.refereesEnabled),
+  };
+} catch (err) {
+  console.warn('[render-start] ClubSettings flags:', err.message);
+}
+
+const mail = await inspectMail(prisma);
+console.log(
+  '[render-start] Mail: secret=%s smtp=%s sealed=%s decrypts=%s from=%s',
+  mail.secretSet ? 'ja' : 'nee',
+  mail.smtpPresent ? 'ja' : 'nee',
+  mail.smtpSealed ? 'ja' : 'nee',
+  mail.smtpDecrypts === null ? 'n.v.t.' : mail.smtpDecrypts ? 'ja' : 'NEE',
+  mail.fromEmail || '(leeg)',
+);
+
+const statusFile = writeDeployStatus(stateDir, {
+  at: new Date().toISOString(),
+  backup,
+  counts: {
+    personsBefore,
+    servicesBefore,
+    personsAfter,
+    servicesAfter,
+  },
+  migrations,
+  flags,
+  mail: {
+    secretSet: mail.secretSet,
+    smtpPresent: mail.smtpPresent,
+    smtpSealed: mail.smtpSealed,
+    smtpDecrypts: mail.smtpDecrypts,
+    fromEmail: mail.fromEmail,
+    user: mail.user,
+    enabled: mail.enabled,
+  },
+});
+console.log('[render-start] Status:', statusFile);
+
+if (process.env.SEED_DEMO === 'true' && (servicesAfter === 0 || personsAfter <= 1)) {
   console.log('[render-start] Lege DB — demo-data laden…');
   execSync('node scripts/seed-mock.js', {
     cwd: root,
@@ -58,10 +148,8 @@ if (process.env.SEED_DEMO === 'true' && (services === 0 || people <= 1)) {
     env: process.env,
   });
 } else {
-  console.log('[render-start] Bestaande data behouden (%s diensten, %s personen)', services, people);
+  console.log('[render-start] Bestaande data behouden (%s diensten, %s personen)', servicesAfter, personsAfter);
 }
-
-await prisma.$disconnect();
 
 console.log('[render-start] Server starten…');
 await import('../src/backend/server.js');

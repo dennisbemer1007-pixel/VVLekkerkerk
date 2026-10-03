@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { TournamentFeatureProvider } from './toernooi/feature.jsx';
+import { RefereeFeatureProvider } from './scheids/feature.jsx';
 import './styles.css';
 
 createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <TournamentFeatureProvider>
-          <App />
+          <RefereeFeatureProvider>
+            <App />
+          </RefereeFeatureProvider>
         </TournamentFeatureProvider>
       </AuthProvider>
     </BrowserRouter>

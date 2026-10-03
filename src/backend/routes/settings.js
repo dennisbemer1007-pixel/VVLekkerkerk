@@ -26,6 +26,7 @@ import {
   renderMail,
 } from '../lib/mailTemplates.js';
 import { resolvePublicAppUrl } from '../lib/appUrl.js';
+import { syncRefereeSlots } from '../lib/referees.js';
 
 const router = Router();
 const ADMIN = ADMIN_ROLES;
@@ -361,21 +362,42 @@ router.patch(
   '/club',
   requireRole('Admin')(async (req, res, next) => {
     try {
-      if (typeof req.body?.tournamentsEnabled !== 'boolean') {
-        return res.status(400).json({ error: 'tournamentsEnabled moet true of false zijn' });
+      const tournaments = req.body?.tournamentsEnabled;
+      const referees = req.body?.refereesEnabled;
+      const hasTournaments = typeof tournaments === 'boolean';
+      const hasReferees = typeof referees === 'boolean';
+      if (!hasTournaments && !hasReferees) {
+        return res.status(400).json({
+          error: 'tournamentsEnabled of refereesEnabled moet true of false zijn',
+        });
       }
       await getClubSettings();
+      const data = {};
+      if (hasTournaments) data.tournamentsEnabled = tournaments;
+      if (hasReferees) data.refereesEnabled = referees;
       await prisma.clubSettings.update({
         where: { id: 1 },
-        data: { tournamentsEnabled: req.body.tournamentsEnabled },
+        data,
       });
-      await writeAudit({
-        actorId: req.person.id,
-        action: 'club.tournaments',
-        entity: 'ClubSettings',
-        entityId: 1,
-        detail: req.body.tournamentsEnabled ? 'aan' : 'uit',
-      });
+      if (hasTournaments) {
+        await writeAudit({
+          actorId: req.person.id,
+          action: 'club.tournaments',
+          entity: 'ClubSettings',
+          entityId: 1,
+          detail: tournaments ? 'aan' : 'uit',
+        });
+      }
+      if (hasReferees) {
+        if (referees) await syncRefereeSlots();
+        await writeAudit({
+          actorId: req.person.id,
+          action: 'club.referees',
+          entity: 'ClubSettings',
+          entityId: 1,
+          detail: referees ? 'aan' : 'uit',
+        });
+      }
       return res.json(await publicClubSettings());
     } catch (err) {
       return next(err);
