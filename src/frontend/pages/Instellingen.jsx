@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import SettingsNavList from '../components/SettingsNavList.jsx';
 import { api } from '../hooks/useApi.js';
 import { isAdminRoleName } from '../navConfig.js';
+import { useTournamentFeature } from '../toernooi/feature.jsx';
 
 const LINKS = [
   { to: '/beheer?tab=regels', label: 'Dienstregels' },
@@ -218,6 +219,49 @@ function TestMailBlok({ defaultTo = '' }) {
   );
 }
 
+function ToernooiSwitch() {
+  const { enabled, refresh } = useTournamentFeature();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function toggle() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.setTournamentsEnabled(!enabled);
+      await refresh();
+    } catch (err) {
+      setError(err.message || 'Opslaan mislukt');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="space-y-3 border-t border-vvl-border pt-6" data-testid="toernooien-schakelaar">
+      <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Toernooien</h2>
+      <p className="text-sm text-gray-700">
+        Uit staat er geen menu, geen pagina en de API antwoordt 404. Aan maakt toernooien, het schema en de live-pagina beschikbaar.
+      </p>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        data-testid="toernooien-switch"
+        disabled={busy}
+        onClick={toggle}
+        className={`inline-flex min-h-11 items-center gap-3 rounded-sm border px-4 text-sm font-bold uppercase tracking-wide ${
+          enabled ? 'border-black bg-black text-white' : 'border-vvl-border bg-white text-gray-700'
+        }`}
+      >
+        <span className={`h-3 w-3 rounded-full ${enabled ? 'bg-white' : 'bg-gray-300'}`} />
+        {enabled ? 'Aan' : 'Uit'}
+      </button>
+      {error ? <p className="text-sm font-semibold text-red-800">{error}</p> : null}
+    </section>
+  );
+}
+
 export default function Instellingen() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -231,6 +275,8 @@ export default function Instellingen() {
       </div>
 
       <SettingsNavList items={LINKS} />
+
+      {admin ? <ToernooiSwitch /> : null}
 
       {admin ? <TestMailBlok defaultTo={user?.email || ''} /> : null}
 

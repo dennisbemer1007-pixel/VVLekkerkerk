@@ -291,8 +291,12 @@ async function main() {
 
   console.log('\nMockdata klaar:');
   console.log(counts);
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@vvl.local').toLowerCase();
+  const adminPassword =
+    process.env.ADMIN_PASSWORD?.trim() ||
+    (process.env.SEED_DEMO === 'true' ? 'demo-test-2026' : 'admin123');
   console.log('\nInloggen (wachtwoord voor demo-accounts: demo123)');
-  console.log('  Admin:            admin@vvl.local / admin123');
+  console.log(`  Admin:            ${adminEmail} / ${adminPassword}`);
   console.log('  Barcommissie:     mark@vvl.demo / demo123');
   console.log('  Teamcoördinator:  sandra@vvl.demo / demo123');
   console.log('  Vrijwilliger:     lisa@vvl.demo / demo123');

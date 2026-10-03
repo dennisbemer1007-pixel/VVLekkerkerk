@@ -101,6 +101,16 @@ import {
   weekStartsInRange,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
+import {
+  assessFit,
+  buildShifts,
+  createExample,
+  normalizeTournament,
+  partsForField,
+  present,
+  roundRobin,
+  unusedFullFields,
+} from '../src/frontend/toernooi/engine.js';
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
 import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
 import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
@@ -1380,6 +1390,174 @@ assert(
 }
 
 {
+  const names = partsForField({ id: 'f3', name: 'Veld 3', split: 'quarter', partNames: {} }).map((part) => part.name);
+  assert('kwartveld heet Veld 3a t/m 3d', names.join(',') === 'Veld 3a,Veld 3b,Veld 3c,Veld 3d');
+  const renamed = partsForField({ id: 'f3', name: 'Veld 3', split: 'half', partNames: { a: 'Bosrand' } });
+  assert('helft kan een eigen naam', renamed[0].name === 'Bosrand' && renamed[1].name === 'Veld 3b');
+
+  const four = ['A', 'B', 'C', 'D'].map((name) => ({ id: name, name }));
+  const rounds = roundRobin(four);
+  const pairs = rounds.flatMap((round) => round.map((match) => [match.home.id, match.away.id].sort().join('')));
+  const seenInRound = rounds.every((round) => new Set(round.flatMap((match) => [match.home.id, match.away.id])).size === 4);
+  assert(
+    'round-robin van 4 is zes unieke duels',
+    rounds.length === 3 && pairs.length === 6 && new Set(pairs).size === 6 && seenInRound,
+  );
+  const three = roundRobin(['A', 'B', 'C'].map((name) => ({ id: name, name })));
+  assert('round-robin van 3 heeft een bye', three.length === 3 && three.every((round) => round.length === 1));
+
+  const example = createExample();
+  const view = present(example);
+  const placed = view.matches.filter((match) => match.slotIndex != null);
+  const clash = new Set();
+  let double = false;
+  let wrongSize = false;
+  placed.forEach((match) => {
+    [match.homeId, match.awayId].filter(Boolean).forEach((id) => {
+      const key = `${match.slotIndex}:${id}`;
+      if (clash.has(key)) double = true;
+      clash.add(key);
+    });
+    if (match.part && match.part.size !== match.size) wrongSize = true;
+  });
+  const slotsByTeam = new Map();
+  placed.forEach((match) => {
+    [match.homeId, match.awayId].filter(Boolean).forEach((id) => {
+      if (!slotsByTeam.has(id)) slotsByTeam.set(id, []);
+      slotsByTeam.get(id).push(match.slotIndex);
+    });
+  });
+  let noRest = false;
+  slotsByTeam.forEach((slots) => {
+    slots.sort((a, b) => a - b);
+    for (let i = 1; i < slots.length; i += 1) if (slots[i] < slots[i - 1] + 2) noRest = true;
+  });
+  const refClash = placed.some((match) => {
+    if (!match.refereeId) return false;
+    return placed.some(
+      (other) =>
+        other.slotIndex === match.slotIndex &&
+        (other.homeId === match.refereeId || other.awayId === match.refereeId || other.refereeId === match.refereeId && other.id !== match.id),
+    );
+  });
+  const cross = placed.filter((match) => match.phase === 'knockout' && match.round === 1 && match.category === 'JO9');
+  assert(
+    'voorbeeldtoernooi past op de juiste veldgrootte',
+    example.teams.length === 16 &&
+      example.fields.filter((field) => field.split === 'quarter').length === 1 &&
+      view.fit.ok &&
+      view.unplaced.length === 0 &&
+      !double &&
+      !wrongSize &&
+      !noRest &&
+      !refClash &&
+      placed.some((match) => match.category === 'JO9' && match.part?.size === 'quarter') &&
+      placed.some((match) => match.category === 'JO11' && match.part?.size === 'half') &&
+      !placed.some((match) => match.category === 'JO9' && match.part?.size !== 'quarter'),
+  );
+  assert(
+    'kruisfinale kruist de poules',
+    cross.length === 2 &&
+      cross.some((match) => match.homeLabel === '1e JO9 A' && match.awayLabel === '2e JO9 B') &&
+      cross.some((match) => match.homeLabel === '1e JO9 B' && match.awayLabel === '2e JO9 A'),
+  );
+
+  const sample = placed.find((match) => match.phase === 'poule' && match.category === 'JO9');
+  const scored = present({
+    ...example,
+    scores: { [sample.id]: { played: true, home: 2, away: 0, penalties: null } },
+  });
+  const row = scored.poules.find((poule) => poule.id === sample.pouleId).table.find((item) => item.teamId === sample.homeId);
+  assert('winst levert 3 punten', row.points === 3 && row.gf === 2 && row.gd === 2);
+
+  const tight = assessFit({ ...example, fields: example.fields.map((field) => ({ ...field, split: 'full' })) });
+  assert('heel veld voor JO9 past niet', tight.ok === false && /kwart/.test(tight.text));
+
+  const shifts = buildShifts(example);
+  assert(
+    'bar en keuken vullen de dag',
+    shifts.length === 5 && shifts[0].start === '09:00' && shifts.at(-1).end === '16:00',
+  );
+
+  const idle = unusedFullFields(example, view.matches);
+  assert('heel veld zonder passende categorie blijft leeg', idle.some((field) => field.name === 'Veld 4'));
+
+  assert(
+    'wissel standaard 3 minuten, expliciet 0 blijft 0',
+    normalizeTournament({}).changeoverMinutes === 3 &&
+      normalizeTournament({ changeoverMinutes: 0 }).changeoverMinutes === 0 &&
+      normalizeTournament({ breakEnabled: false }).breakEnabled === false,
+  );
+
+  const koBefore = view.matches.filter((match) => match.phase === 'knockout');
+  const allScores = {};
+  view.matches
+    .filter((match) => match.phase === 'poule')
+    .forEach((match) => {
+      allScores[match.id] = { played: true, home: 1, away: 0, penalties: null };
+    });
+  const afterPoules = present({ ...example, scores: allScores });
+  const koAfter = afterPoules.matches.filter(
+    (match) => match.phase === 'knockout' && match.homeId && match.awayId && match.slotIndex != null,
+  );
+  assert(
+    'knock-out scheids komt pas als de poules klaar zijn',
+    koBefore.length > 0 &&
+      koBefore.every((match) => !match.refereeId) &&
+      koAfter.length > 0 &&
+      koAfter.every((match) => match.refereeId),
+  );
+
+  const tieBase = normalizeTournament({
+    name: 'Tiebreak',
+    fields: [{ id: 'f', name: 'Veld 1', split: 'quarter' }],
+    teams: ['A', 'B', 'C', 'D'].map((id) => ({ id, name: id, category: 'JO9' })),
+    format: 'poules',
+    startTime: '09:00',
+    endTime: '18:00',
+    matchMinutes: 12,
+    changeoverMinutes: 3,
+    breakEnabled: false,
+  });
+  const tieView = present(tieBase);
+  const pair = (left, right) =>
+    tieView.matches.find(
+      (match) =>
+        match.phase === 'poule' &&
+        ((match.homeId === left && match.awayId === right) || (match.homeId === right && match.awayId === left)),
+    );
+  const line = (left, right, leftGoals, rightGoals) => {
+    const match = pair(left, right);
+    const swapped = match.homeId !== left;
+    return {
+      [match.id]: {
+        played: true,
+        home: swapped ? rightGoals : leftGoals,
+        away: swapped ? leftGoals : rightGoals,
+        penalties: null,
+      },
+    };
+  };
+  const h2h = present({
+    ...tieBase,
+    scores: { ...line('A', 'B', 1, 0), ...line('B', 'C', 5, 0) },
+  });
+  const h2hTable = h2h.poules[0].table.map((row) => row.teamId);
+  assert('onderling resultaat gaat voor doelsaldo', h2hTable.indexOf('A') < h2hTable.indexOf('B'));
+  const gd = present({
+    ...tieBase,
+    scores: { ...line('A', 'B', 1, 1), ...line('A', 'C', 1, 0), ...line('B', 'C', 4, 0) },
+  });
+  const gdTable = gd.poules[0].table;
+  const rowA = gdTable.find((row) => row.teamId === 'A');
+  const rowB = gdTable.find((row) => row.teamId === 'B');
+  assert(
+    'gelijk onderling resultaat valt terug op doelsaldo',
+    rowA.points === rowB.points && gdTable.indexOf(rowB) < gdTable.indexOf(rowA),
+  );
+}
+
+{
   const prevNode = process.env.NODE_ENV;
   const prevMail = process.env.MAIL_SECRET;
   const prevApp = process.env.APP_URL;
@@ -1419,12 +1597,38 @@ assert(
   }
 }
 
+{
+  const printSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/ToernooiPrint.jsx'),
+    'utf8',
+  );
+  assert(
+    'afdruk houdt veldkop bij het veld',
+    printSrc.includes('veld-blok') && printSrc.includes('break-inside: avoid'),
+  );
+  const seedSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/seed-mock.js'),
+    'utf8',
+  );
+  assert(
+    'seed-mock toont demo-wachtwoord bij SEED_DEMO',
+    seedSrc.includes("SEED_DEMO === 'true' ? 'demo-test-2026' : 'admin123'") &&
+      !seedSrc.includes('admin@vvl.local / admin123'),
+  );
+}
+
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const resetCheck = spawnSync(process.execPath, ['scripts/environment-reset-check.js'], {
   cwd: unitRoot,
   stdio: 'inherit',
 });
 assert('omgeving opschonen op een databasekopie', resetCheck.status === 0);
+
+const apiCheck = spawnSync(process.execPath, ['scripts/tournament-api-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('toernooi-api met schakelaar en rollen', apiCheck.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

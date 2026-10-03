@@ -215,6 +215,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
     mail,
     club,
     planningsrondes,
+    toernooien,
   ] = await Promise.all([
     db.service.count(),
     db.enrollment.count(),
@@ -236,6 +237,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
     db.mailSettings.findUnique({ where: { id: 1 } }),
     db.clubSettings.findUnique({ where: { id: 1 } }),
     planningResetCount(db),
+    db.tournament.count(),
   ]);
 
   const maillog = countMailLogFiles(mailLogDirectories(dbPath || resolveSqliteFilePath(), destDir));
@@ -253,6 +255,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
       { key: 'links', label: 'Uitnodigings- en resetlinks', count: links },
       { key: 'maillog', label: 'Maillog', count: maillog },
       { key: 'personen', label: 'Personen zonder rol Barcommissie of Admin', count: personenWeg },
+      { key: 'toernooien', label: 'Toernooien', count: toernooien },
     ],
     blijft: [
       { key: 'accounts', label: 'Barcommissie- en admin-accounts', count: personenBlijven },
@@ -293,6 +296,11 @@ async function wipeInside(tx, { actorId, backupFilename }) {
   await tx.enrollment.deleteMany();
   await tx.serviceTeamDuty.deleteMany();
   await tx.service.deleteMany();
+  await tx.tournamentMatch.deleteMany();
+  await tx.tournamentTeam.deleteMany();
+  await tx.tournamentPoule.deleteMany();
+  await tx.tournamentField.deleteMany();
+  await tx.tournament.deleteMany();
   await tx.match.deleteMany();
   await tx.personAbsence.deleteMany();
 
