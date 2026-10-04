@@ -1719,8 +1719,25 @@ assert(
       renderStartSrc.includes('backupSqlite') &&
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
+      renderStartSrc.includes('unlinkGuardianCopiedTeam') &&
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
+  );
+  const liveRepairsSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/liveRepairs.js'),
+    'utf8',
+  );
+  const settingsSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/settings.js'),
+    'utf8',
+  );
+  assert(
+    'live-repair logt verplaatste wedstrijden/diensten/koppelingen',
+    liveRepairsSrc.includes('matches: matches.count') &&
+      liveRepairsSrc.includes('duties: duties.count') &&
+      liveRepairsSrc.includes('memberships: memberships.length') &&
+      liveRepairsSrc.includes('membershipsRemoved: links.count') &&
+      settingsSrc.includes('repairs: status.repairs'),
   );
   assert(
     'clubsettings heeft beide schakelaars, standaard uit',
