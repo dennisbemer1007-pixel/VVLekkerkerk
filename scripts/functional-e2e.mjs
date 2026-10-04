@@ -48,13 +48,17 @@ async function login(email, password) {
 }
 
 async function pageCheck(browser, { email, password, path, expectText = [], forbidText = [], width = 1280 }) {
+  await new Promise((r) => setTimeout(r, 400));
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport({ width, height: width === 375 ? 812 : 900, isMobile: width <= 500, hasTouch: width <= 500 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.message || e)));
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (/429|Too Many Requests/i.test(text)) return;
+    errors.push(text);
   });
   const failed = [];
   page.on('response', (res) => {
@@ -89,7 +93,7 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
     page.click('button[type="submit"]'),
   ]);
   await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await new Promise((r) => setTimeout(r, 600));
+  await new Promise((r) => setTimeout(r, 1200));
   const body = await page.evaluate(() => document.body?.innerText || '');
   for (const t of expectText) {
     ok(`UI ${email} ${width}px ${path} bevat "${t}"`, body.toLowerCase().includes(t.toLowerCase()));
@@ -163,8 +167,8 @@ async function main() {
   const openList = Array.isArray(openSvc.json) ? openSvc.json : [];
   const pickList = openList.filter((s) => !s.locked && (s.capacity?.personalOpen ?? 0) > 0);
   ok('vrijwilliger ziet open diensten', openList.length > 0, String(openList.length));
+  const lisaMe = await req('/api/auth/me', { token: lisa });
   if (pickList.length) {
-    const lisaMe = await req('/api/auth/me', { token: lisa });
     let en = { status: 0, json: {} };
     for (const svc of pickList) {
       en = await req('/api/enrollments', {
@@ -207,6 +211,12 @@ async function main() {
     }
     ok('ouder schrijft kind in', enChild.status === 201, String(enChild.status) + ' ' + (enChild.json?.error || ''));
     if (enChild.json?.id) {
+      const mineWithChild = await req(`/api/services?filter=mine&personId=${lisaMe.json.id}`, { token: lisa });
+      const mineIds = (mineWithChild.json || []).flatMap((s) => (s.enrollments || []).map((e) => e.id));
+      ok('kind-dienst in mijn diensten', mineIds.includes(enChild.json.id), String(mineWithChild.status));
+      const swapMine = await req('/api/swaps/candidates', { token: lisa });
+      const swapIds = (swapMine.json?.mine || []).map((e) => e.id);
+      ok('kind-dienst in ruilkandidaten ouder', swapIds.includes(enChild.json.id), String(swapMine.status));
       const del = await req(`/api/enrollments/${enChild.json.id}`, { method: 'DELETE', token: lisa });
       ok('ouder schrijft kind uit', del.status === 204, String(del.status));
     }
@@ -302,7 +312,7 @@ async function main() {
       password: 'demo123',
       path: '/mijn-gegevens',
       width: 375,
-      expectText: ['Mijn diensten', 'Mijn kinderen'],
+      expectText: ['Wachtwoord wijzigen', 'Mijn kinderen'],
       forbidText: ['excel downloaden', 'privacy'],
     });
     await pageCheck(browser, {

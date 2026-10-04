@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
+import DownloadPlanningButtons from '../components/DownloadPlanningButtons.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
@@ -17,18 +19,20 @@ function serviceStatus(s) {
 
 export default function Planning({ variant = 'rooster' }) {
   const { personId, can, user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState('');
   const [services, setServices] = useState([]);
   const [period, setPeriod] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [round, setRound] = useState(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [excelBusy, setExcelBusy] = useState(false);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [listFilters, setListFilters] = useState({ person: '', from: '', to: '' });
   const [kind, setKind] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const statusFromUrl = searchParams.get('status');
+  const [statusFilter, setStatusFilter] = useState(
+    statusFromUrl === 'full' || statusFromUrl === 'almost' || statusFromUrl === 'open' ? statusFromUrl : '',
+  );
   const [onlyNoShow, setOnlyNoShow] = useState(false);
   const [people, setPeople] = useState([]);
   const [seasonCounts, setSeasonCounts] = useState({});
@@ -101,52 +105,13 @@ export default function Planning({ variant = 'rooster' }) {
     return undefined;
   }, [variant, isCommittee]);
 
-  const downloadPdf = async () => {
-    setPdfBusy(true);
-    setError('');
-    try {
-      // Komende 6 weken, actieve diensten — gelijk aan het planningsbeeld
-      const from = new Date();
-      from.setHours(0, 0, 0, 0);
-      const to = new Date(from);
-      to.setDate(to.getDate() + 6 * 7 - 1);
-      to.setHours(23, 59, 59, 999);
-      const blob = await api.downloadPlanningPdf({
-        from: from.toISOString().slice(0, 10),
-        to: to.toISOString().slice(0, 10),
-        weeks: 6,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vvl-rooster.pdf';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setPdfBusy(false);
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'full' || status === 'almost' || status === 'open') {
+      setShowAllRooster(false);
+      setStatusFilter(status);
     }
-  };
-
-  const downloadExcel = async () => {
-    setExcelBusy(true);
-    setError('');
-    try {
-      const params = period ? { from: period.from, to: period.to } : {};
-      const blob = await api.downloadPlanningExcel(params);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vvl-planning.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setExcelBusy(false);
-    }
-  };
+  }, [searchParams]);
 
   const updateFromMatches = async () => {
     setUpdateBusy(true);
@@ -171,7 +136,7 @@ export default function Planning({ variant = 'rooster' }) {
     }
   };
 
-  const enrollAs = async (serviceId, targetId) => {
+  const enrollAs = async (serviceId, targetId, { assignTeamSpot = false } = {}) => {
     setError('');
     setMsg('');
     try {
@@ -179,6 +144,7 @@ export default function Planning({ variant = 'rooster' }) {
         serviceId,
         personId: targetId,
         ignoreMatchBlock: isCommittee,
+        assignTeamSpot: Boolean(assignTeamSpot && isCommittee),
       });
       const who = children.find((c) => c.id === targetId);
       setMsg(who ? `${who.name} staat ingeschreven.` : `${user?.name || 'Je'} staat ingeschreven.`);
@@ -191,6 +157,7 @@ export default function Planning({ variant = 'rooster' }) {
               serviceId,
               personId: targetId,
               ignoreMatchBlock: true,
+              assignTeamSpot: Boolean(assignTeamSpot && isCommittee),
             });
             setMsg(`${user?.name || 'Je'} staat ingeschreven.`);
             await load();
@@ -322,22 +289,7 @@ export default function Planning({ variant = 'rooster' }) {
               {updateBusy ? 'Bijwerken…' : 'Diensten bijwerken'}
             </button>
           ) : null}
-          <button
-            type="button"
-            className="vvl-btn-outline min-h-[44px] text-center"
-            disabled={excelBusy}
-            onClick={downloadExcel}
-          >
-            {excelBusy ? 'Excel laden…' : 'Excel'}
-          </button>
-          <button
-            type="button"
-            className="vvl-btn-primary min-h-[44px] text-center"
-            disabled={pdfBusy}
-            onClick={downloadPdf}
-          >
-            {pdfBusy ? 'PDF laden…' : 'PDF rooster'}
-          </button>
+          <DownloadPlanningButtons period={period} />
         </div>
       ) : null}
 
@@ -480,7 +432,7 @@ export default function Planning({ variant = 'rooster' }) {
                 query={assignQuery}
                 onQuery={setAssignQuery}
                 busy={false}
-                onAssign={(personId) => enrollAs(s.id, personId)}
+                onAssign={(personId, opts) => enrollAs(s.id, personId, opts)}
                 onRemove={handleUitschrijven}
               />
             ) : (
@@ -581,7 +533,8 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
       ) : null}
       {teamOnlyLeft ? (
         <p className="text-sm text-amber-900">
-          De open plekken zijn teamplekken. Alleen de bardienstcoördinator vult hier ouders in.
+          De open plekken zijn teamplekken. De bardienstcoördinator vult ouders via Team. Als barcommissie kun je hier
+          iemand op die teamplek zetten.
         </p>
       ) : null}
       <label className="block">
@@ -592,7 +545,6 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Typ minstens 2 letters"
           autoFocus
-          disabled={teamOnlyLeft}
         />
       </label>
       {q.length >= 2 ? (
@@ -606,8 +558,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
               <button
                 type="button"
                 className="vvl-btn-primary shrink-0 px-3 text-xs"
-                disabled={teamOnlyLeft}
-                onClick={() => onAssign(p.id)}
+                onClick={() => onAssign(p.id, { assignTeamSpot: teamOnlyLeft })}
               >
                 Zet
               </button>

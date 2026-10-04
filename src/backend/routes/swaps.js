@@ -9,6 +9,7 @@ import { PENDING_SWAP_STATUSES, swapBlockers } from '../lib/swapRules.js';
 import { pendingForEnrollment, pendingForPerson } from '../lib/swapQueries.js';
 import { createNotification, notifyBarcommissie } from '../lib/notifications.js';
 import { dateInQuery, includesText, queryText } from '../lib/listFilters.js';
+import { householdPersonIds, inHousehold, notifyPersonAndGuardian } from '../lib/household.js';
 
 const router = Router();
 
@@ -189,15 +190,16 @@ router.get(
   requireAuth(async (req, res, next) => {
     try {
       const me = req.person.id;
+      const household = await householdPersonIds(prisma, me);
       const where = isAdminRole(req.person.role)
         ? {
             OR: [
-              { requesterId: me },
-              { counterpartyId: me },
+              { requesterId: { in: household } },
+              { counterpartyId: { in: household } },
               { status: { in: PENDING_SWAP_STATUSES } },
             ],
           }
-        : { OR: [{ requesterId: me }, { counterpartyId: me }] };
+        : { OR: [{ requesterId: { in: household } }, { counterpartyId: { in: household } }] };
 
       let swaps = await prisma.swapRequest.findMany({
         where,
@@ -205,7 +207,9 @@ router.get(
         orderBy: { createdAt: 'desc' },
       });
       if (req.query.scope === 'mine') {
-        swaps = swaps.filter((s) => s.requesterId === me || s.counterpartyId === me);
+        swaps = swaps.filter(
+          (s) => inHousehold(household, s.requesterId) || inHousehold(household, s.counterpartyId),
+        );
       }
       const q = queryText(req.query);
       if (q) {
@@ -235,6 +239,7 @@ router.get(
   requireAuth(async (req, res, next) => {
     try {
       const today = startOfDay(new Date());
+      const household = await householdPersonIds(prisma, req.person.id);
       const where = {
         kind: 'PERSONAL',
         noShow: false,
@@ -246,8 +251,8 @@ router.get(
         orderBy: [{ service: { date: 'asc' } }],
         take: 400,
       });
-      const mine = rows.filter((e) => e.personId === req.person.id).map(mapEnrollment);
-      const others = rows.filter((e) => e.personId !== req.person.id).map(mapEnrollment);
+      const mine = rows.filter((e) => inHousehold(household, e.personId)).map(mapEnrollment);
+      const others = rows.filter((e) => !inHousehold(household, e.personId)).map(mapEnrollment);
       res.json({ mine, others });
     } catch (err) {
       next(err);
@@ -270,8 +275,9 @@ router.post(
       if (!fromEnrollment || !toEnrollment) {
         return res.status(404).json({ error: 'Een van de diensten is niet gevonden' });
       }
-      if (fromEnrollment.personId !== req.person.id) {
-        return res.status(403).json({ error: 'Je kunt alleen een eigen dienst inruilen' });
+      const household = await householdPersonIds(prisma, req.person.id);
+      if (!inHousehold(household, fromEnrollment.personId)) {
+        return res.status(403).json({ error: 'Je kunt alleen een eigen dienst of die van je kind inruilen' });
       }
 
       const check = await evaluatePair(fromEnrollment, toEnrollment);
@@ -311,11 +317,10 @@ router.post(
       });
 
       const summary = swapSummary(swap);
-      await createNotification({
-        personId: swap.counterpartyId,
+      await notifyPersonAndGuardian(createNotification, prisma, swap.counterpartyId, {
         type: 'SWAP_INCOMING',
         title: 'Nieuw ruilverzoek',
-        body: `${swap.requester.name} wil met je ruilen: ${summary}`,
+        body: `${swap.requester.name} wil ruilen: ${summary}`,
         link: '/ruilen',
         swapId: swap.id,
       });
@@ -346,8 +351,9 @@ router.post(
         include: SWAP_INCLUDE,
       });
       if (!swap) return res.status(404).json({ error: 'Ruilverzoek niet gevonden' });
-      if (swap.counterpartyId !== req.person.id) {
-        return res.status(403).json({ error: 'Alleen de andere persoon kan dit verzoek accepteren' });
+      const household = await householdPersonIds(prisma, req.person.id);
+      if (!inHousehold(household, swap.counterpartyId)) {
+        return res.status(403).json({ error: 'Alleen de andere persoon (of de ouder) kan dit verzoek accepteren' });
       }
       if (swap.status !== 'PENDING_PEER') {
         return res.status(400).json({ error: 'Dit verzoek kan niet meer geaccepteerd worden' });
@@ -385,11 +391,10 @@ router.post(
         include: SWAP_INCLUDE,
       });
       const summary = swapSummary(fresh);
-      await createNotification({
-        personId: swap.requesterId,
+      await notifyPersonAndGuardian(createNotification, prisma, swap.requesterId, {
         type: 'SWAP_ACCEPTED',
         title: 'Ruilverzoek geaccepteerd',
-        body: `${swap.counterparty.name} heeft je ruilverzoek geaccepteerd. De ruiling is doorgevoerd: ${summary}`,
+        body: `${swap.counterparty.name} heeft het ruilverzoek geaccepteerd. De ruiling is doorgevoerd: ${summary}`,
         link: '/ruilen',
         swapId: swap.id,
       });
@@ -420,7 +425,9 @@ router.post(
         include: SWAP_INCLUDE,
       });
       if (!swap) return res.status(404).json({ error: 'Ruilverzoek niet gevonden' });
-      const involved = swap.requesterId === req.person.id || swap.counterpartyId === req.person.id;
+      const household = await householdPersonIds(prisma, req.person.id);
+      const involved =
+        inHousehold(household, swap.requesterId) || inHousehold(household, swap.counterpartyId);
       if (!involved && !isAdminRole(req.person.role)) {
         return res.status(403).json({ error: 'Je mag dit verzoek niet intrekken' });
       }
@@ -451,10 +458,9 @@ router.post(
       });
 
       const otherId =
-        req.person.id === swap.requesterId ? swap.counterpartyId : swap.requesterId;
+        inHousehold(household, swap.requesterId) ? swap.counterpartyId : swap.requesterId;
       if (otherId && otherId !== req.person.id) {
-        await createNotification({
-          personId: otherId,
+        await notifyPersonAndGuardian(createNotification, prisma, otherId, {
           type: 'SWAP_CANCELLED',
           title: 'Ruilverzoek ingetrokken',
           body: `${req.person.name} heeft het ruilverzoek ingetrokken.`,
@@ -490,7 +496,8 @@ router.post(
       });
       if (!swap) return res.status(404).json({ error: 'Ruilverzoek niet gevonden' });
 
-      const asPeer = swap.counterpartyId === req.person.id && swap.status === 'PENDING_PEER';
+      const household = await householdPersonIds(prisma, req.person.id);
+      const asPeer = inHousehold(household, swap.counterpartyId) && swap.status === 'PENDING_PEER';
       const asCommittee =
         isAdminRole(req.person.role) && PENDING_SWAP_STATUSES.includes(swap.status);
       if (!asPeer && !asCommittee) {
@@ -522,11 +529,10 @@ router.post(
       });
 
       const reasonText = rejectReason ? ` Reden: ${rejectReason}` : '';
-      await createNotification({
-        personId: swap.requesterId,
+      await notifyPersonAndGuardian(createNotification, prisma, swap.requesterId, {
         type: 'SWAP_REJECTED',
         title: 'Ruilverzoek geweigerd',
-        body: `${req.person.name} heeft je ruilverzoek geweigerd.${reasonText}`,
+        body: `${req.person.name} heeft het ruilverzoek geweigerd.${reasonText}`,
         link: '/ruilen',
         swapId: swap.id,
       });

@@ -29,6 +29,7 @@ const emptyForm = {
   exempted: false,
   exemptedUntil: '',
   guardianId: '',
+  active: true,
 };
 
 function IconButton({ title, onClick, children, tone = 'default', size = 'md' }) {
@@ -50,38 +51,6 @@ function IconButton({ title, onClick, children, tone = 'default', size = 'md' })
       {children}
       <span className="sr-only">{title}</span>
     </button>
-  );
-}
-
-function GuardianPicker({ persons, value, onChange, excludeId }) {
-  const [query, setQuery] = useState('');
-  const options = persons
-    .filter((p) => p.id !== excludeId)
-    .filter((p) => !query.trim() || p.name.toLowerCase().includes(query.trim().toLowerCase()))
-    .slice(0, 60);
-  const selected = persons.find((p) => String(p.id) === String(value));
-
-  return (
-    <div className="space-y-1 sm:col-span-2">
-      <label className="vvl-label">Kind van / gekoppeld aan ouder</label>
-      <input
-        className="vvl-input"
-        placeholder="Zoek op naam om te koppelen…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <select className="vvl-input" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">— Geen —</option>
-        {selected && !options.some((o) => o.id === selected.id) ? (
-          <option value={selected.id}>{selected.name}</option>
-        ) : null}
-        {options.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }
 
@@ -416,6 +385,7 @@ export default function PersonenBeheer() {
   const [filterRole, setFilterRole] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
+  const [filterActive, setFilterActive] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
@@ -478,6 +448,7 @@ export default function PersonenBeheer() {
       exempted: Boolean(p.exempted),
       exemptedUntil: p.exemptedUntil || '',
       guardianId: p.guardianId ? String(p.guardianId) : '',
+      active: p.active !== false,
     });
     setRefereeLevels(levelsById[p.id] || []);
     setFormOpen(true);
@@ -489,8 +460,8 @@ export default function PersonenBeheer() {
     setInviteResult(null);
     setCopied(false);
     const email = form.email.trim();
-    if (!editId && !email && !form.guardianId) {
-      setError('Vul een e-mailadres in, of koppel aan een ouder.');
+    if (!editId && !email) {
+      setError('Vul een e-mailadres in.');
       return;
     }
     if (!editId && mode === 'invite' && !email) {
@@ -501,8 +472,9 @@ export default function PersonenBeheer() {
       const data = {
         ...form,
         teamId: form.teamId || null,
-        guardianId: form.guardianId || null,
       };
+      if (editId) delete data.guardianId;
+      else data.guardianId = null;
       let savedId = editId;
       if (editId) {
         await api.updatePerson(editId, data);
@@ -555,6 +527,17 @@ export default function PersonenBeheer() {
     }
   };
 
+  const setActive = async (p, active) => {
+    if (!active && !window.confirm(`${p.name} deactiveren?`)) return;
+    setError('');
+    try {
+      await api.updatePerson(p.id, { active });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const resend = async (p) => {
     setError('');
     setBulkMsg('');
@@ -589,6 +572,8 @@ export default function PersonenBeheer() {
     }
     if (filterAccount === 'yes' && !p.hasAccount) return false;
     if (filterAccount === 'no' && p.hasAccount) return false;
+    if (filterActive === 'yes' && p.active === false) return false;
+    if (filterActive === 'no' && p.active !== false) return false;
     if (scheidsOn && filterReferee) {
       const levels = levelsById[p.id] || [];
       if (filterReferee === '__none__') {
@@ -742,6 +727,14 @@ export default function PersonenBeheer() {
               ))}
             </select>
           </div>
+          <div>
+            <label className="vvl-label">Status</label>
+            <select className="vvl-input" value={filterActive} onChange={(e) => setFilterActive(e.target.value)}>
+              <option value="">Alle</option>
+              <option value="yes">Actief</option>
+              <option value="no">Inactief</option>
+            </select>
+          </div>
           <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
             <input
               type="checkbox"
@@ -826,14 +819,14 @@ export default function PersonenBeheer() {
                   aria-label="Selecteer alles"
                 />
               </th>
-              <th className="p-2 font-bold">Naam</th>
-              <th className="hidden w-36 p-2 font-bold md:table-cell">E-mail</th>
-              <th className="hidden w-28 p-2 font-bold lg:table-cell">Telefoon</th>
+              <th className="w-28 p-2 font-bold sm:w-36">Naam</th>
+              <th className="hidden w-40 p-2 font-bold sm:table-cell">E-mail</th>
+              <th className="hidden w-28 p-2 font-bold md:table-cell">Telefoon</th>
               <th className="hidden w-24 p-2 font-bold sm:table-cell">Rol</th>
-              <th className="hidden w-24 p-2 font-bold xl:table-cell">Team</th>
-              <th className="hidden w-20 p-2 font-bold lg:table-cell">Vrijgest.</th>
-              <th className="w-16 p-2 font-bold sm:w-20">Acc.</th>
-              <th className="w-[5.5rem] p-2 font-bold"> </th>
+              <th className="hidden w-24 p-2 font-bold lg:table-cell">Team</th>
+              <th className="hidden w-20 p-2 font-bold md:table-cell">Vrijgest.</th>
+              <th className="w-14 p-2 font-bold sm:w-16">Acc.</th>
+              <th className="w-28 p-2 font-bold"> </th>
             </tr>
           </thead>
           <tbody>
@@ -849,27 +842,35 @@ export default function PersonenBeheer() {
                     aria-label={`Selecteer ${p.name}`}
                   />
                 </td>
-                <td className="truncate p-2 font-semibold">
+                <td className="max-w-[9rem] truncate p-2 font-semibold">
                   {p.name}
                   {!p.active ? ' (inactief)' : ''}
                   {scheidsOn ? <RefereeBadges levels={levelsById[p.id]} /> : null}
-                  <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 md:hidden">
+                  <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 sm:hidden">
                     {p.email || 'geen e-mail'}
                     {p.phone ? ` · ${p.phone}` : ''}
                     {p.exempted ? ' · vrijgesteld' : ''}
                   </span>
                 </td>
-                <td className="hidden truncate p-2 md:table-cell">{p.email || '—'}</td>
-                <td className="hidden truncate p-2 lg:table-cell">{p.phone || '—'}</td>
+                <td className="hidden truncate p-2 sm:table-cell">{p.email || '—'}</td>
+                <td className="hidden truncate p-2 md:table-cell">{p.phone || '—'}</td>
                 <td className="hidden truncate p-2 sm:table-cell">{p.role}</td>
-                <td className="hidden truncate p-2 xl:table-cell">{p.team?.name || '—'}</td>
-                <td className="hidden truncate p-2 lg:table-cell">{p.exempted ? 'Ja' : 'Nee'}</td>
+                <td className="hidden truncate p-2 lg:table-cell">{p.team?.name || '—'}</td>
+                <td className="hidden truncate p-2 md:table-cell">{p.exempted ? 'Ja' : 'Nee'}</td>
                 <td className="truncate p-2 text-xs sm:text-sm">
                   {p.hasAccount ? 'Wel' : p.invitePending ? 'Open' : 'Geen'}
                 </td>
                 <td className="p-1 sm:p-2">
                   <div className="flex flex-wrap justify-end gap-1">
                     <IconButton size="sm" title={`${p.name} bewerken`} onClick={() => openEdit(p)}>✏️</IconButton>
+                    <button
+                      type="button"
+                      className="vvl-btn-outline px-2 text-xs min-h-8"
+                      title={p.active === false ? `${p.name} activeren` : `${p.name} deactiveren`}
+                      onClick={() => setActive(p, p.active === false)}
+                    >
+                      {p.active === false ? 'Activeren' : 'Deactiveren'}
+                    </button>
                     {!p.hasAccount && p.email ? (
                       <IconButton size="sm" title={`Uitnodiging sturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
                     ) : null}
@@ -987,13 +988,13 @@ export default function PersonenBeheer() {
                 </div>
               ) : null}
               <div>
-                <label className="vvl-label">E-mail {form.guardianId ? '' : '*'}</label>
+                <label className="vvl-label">E-mail *</label>
                 <input
                   type="email"
                   className="vvl-input"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required={!editId && !form.guardianId}
+                  required={!editId}
                 />
               </div>
               <div>
@@ -1037,12 +1038,14 @@ export default function PersonenBeheer() {
                 </select>
               </div>
               {editId ? (
-                <GuardianPicker
-                  persons={persons}
-                  value={form.guardianId}
-                  onChange={(v) => setForm({ ...form, guardianId: v })}
-                  excludeId={editId}
-                />
+                <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.active !== false}
+                    onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                  />
+                  Actief
+                </label>
               ) : null}
               {editId ? (
                 <p className="text-xs text-gray-600 sm:col-span-2">

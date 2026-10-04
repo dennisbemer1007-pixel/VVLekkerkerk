@@ -28,6 +28,7 @@ import {
   updatePlanningRound,
 } from '../lib/planningRounds.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
+import { personShiftRows } from '../lib/planningExport.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
@@ -607,6 +608,13 @@ router.get(
         (s.enrollments || []).map((e) => e.person?.name).filter(Boolean).join(', '),
       ]);
       const adminExport = isAdminRole(req.person.role);
+      const peopleForCounts = adminExport
+        ? await prisma.person.findMany({
+            where: { active: true },
+            include: { team: true },
+            orderBy: { name: 'asc' },
+          })
+        : [];
       const inschrijfRows = services.flatMap((s) =>
         (s.enrollments || []).map((e) => {
           const row = [
@@ -640,18 +648,18 @@ router.get(
             : ['Datum', 'Tijd', 'Type', 'Naam', 'Soort', 'Bron', 'Inhaal', 'No-show', 'Reden'],
           rows: inschrijfRows,
         },
+        {
+          name: 'Per persoon',
+          headers: ['Naam', 'Diensten', 'No-shows', 'Laatste dienst'],
+          rows: personShiftRows(services, adminExport ? peopleForCounts : []),
+        },
       ];
 
       if (adminExport) {
-        const people = await prisma.person.findMany({
-          where: { active: true },
-          include: { team: true },
-          orderBy: { name: 'asc' },
-        });
         sheets.push({
           name: 'Personen',
           headers: ['Persoonsnr', 'Naam', 'Rol', 'Verplichting', 'Team', 'Vrijgesteld', 'Inhaal'],
-          rows: people.map((p) => [
+          rows: peopleForCounts.map((p) => [
             p.personNumber || '',
             p.name,
             p.role,

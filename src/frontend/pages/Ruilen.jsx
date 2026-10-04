@@ -28,6 +28,7 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
   const [mine, setMine] = useState([]);
   const [others, setOthers] = useState([]);
   const [swaps, setSwaps] = useState([]);
+  const [children, setChildren] = useState([]);
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [toQuery, setToQuery] = useState('');
@@ -41,15 +42,25 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
   const load = useCallback(async () => {
     const params = {};
     if (scope === 'mine') params.scope = 'mine';
-    const [candidates, list] = await Promise.all([api.getSwapCandidates(), api.getSwaps(params)]);
+    const [candidates, list, kids] = await Promise.all([
+      api.getSwapCandidates(),
+      api.getSwaps(params),
+      api.getMyChildren().catch(() => []),
+    ]);
     setMine(candidates.mine || []);
     setOthers(candidates.others || []);
     setSwaps(list || []);
+    setChildren(Array.isArray(kids) ? kids : []);
   }, [scope]);
 
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
+
+  const householdIds = useMemo(
+    () => [user?.id, ...children.map((child) => child.id)].filter(Boolean).map(Number),
+    [user?.id, children],
+  );
 
   const filteredOthers = useMemo(() => {
     const q = toQuery.trim().toLowerCase();
@@ -142,7 +153,9 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
             <option value="">Kies een van jouw komende diensten</option>
             {mine.map((enrollment) => (
               <option key={enrollment.id} value={enrollment.id}>
-                {serviceLabel(enrollment)}
+                {Number(enrollment.personId) === Number(user?.id)
+                  ? serviceLabel(enrollment)
+                  : `${personName(enrollment)} · ${serviceLabel(enrollment)}`}
               </option>
             ))}
           </select>
@@ -172,7 +185,7 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
           Ruilverzoek sturen
         </button>
         {!mine.length ? (
-          <p className="text-sm text-gray-600">Je hebt geen komende persoonlijke dienst om te ruilen.</p>
+          <p className="text-sm text-gray-600">Jij of je kind heeft geen komende persoonlijke dienst om te ruilen.</p>
         ) : null}
       </form>
       ) : null}
@@ -207,8 +220,8 @@ export default function Ruilen({ scope = 'mine', mode = 'list', basePath = '/rui
           )
         }
         detail={swaps.filter((swap) => swap.id === selectedId).map((swap) => {
-          const asCounterparty = swap.counterpartyId === user?.id;
-          const asRequester = swap.requesterId === user?.id;
+          const asCounterparty = householdIds.includes(Number(swap.counterpartyId));
+          const asRequester = householdIds.includes(Number(swap.requesterId));
           return (
             <article key={swap.id} className="vvl-card space-y-2">
               <p className="text-xs font-bold uppercase text-vvl-accent">{STATUS_LABEL[swap.status] || swap.status}</p>

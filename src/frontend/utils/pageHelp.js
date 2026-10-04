@@ -5,8 +5,9 @@ export const PAGE_HELP = {
     purpose:
       'Dit is je startscherm. Voor de barcommissie staan hier controles op open diensten en openstaande verplichtingen.',
     actions: [
-      'Klik op een controlekaart om de concrete lijst te zien',
-      'Planning en beheer open je via het menu',
+      'Klik op Vol, Nog 1 of Open om het gefilterde rooster te zien',
+      'Niet ingepland en No-show gehad gaan naar Aandacht',
+      'Download Excel of het rooster-PDF',
       'Ruilverzoeken volg je via het notificatiebelletje rechtsboven',
     ],
   },

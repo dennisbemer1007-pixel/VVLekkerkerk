@@ -18,7 +18,14 @@ function dotClass(status) {
   return 'bg-red-500';
 }
 
-export default function ServiceLine({ service, selected, onSelect, actionLabel, onAction }) {
+export default function ServiceLine({
+  service,
+  selected,
+  onSelect,
+  actionLabel,
+  onAction,
+  householdIds = [],
+}) {
   const status = serviceStatus(service);
   const type = service.type === 'KITCHEN' ? 'Keuken' : 'Bar';
   const when = new Date(service.date).toLocaleDateString('nl-NL', {
@@ -26,6 +33,11 @@ export default function ServiceLine({ service, selected, onSelect, actionLabel, 
     day: 'numeric',
     month: 'short',
   });
+  const ids = new Set((householdIds || []).map(Number));
+  const householdNames = (service.enrollments || [])
+    .filter((row) => ids.has(Number(row.personId)))
+    .map((row) => row.person?.name)
+    .filter(Boolean);
 
   return (
     <div
@@ -42,6 +54,7 @@ export default function ServiceLine({ service, selected, onSelect, actionLabel, 
         </span>
         <span className="mt-0.5 block text-xs text-gray-600">
           {type} · {occupancyFraction(service)}
+          {householdNames.length ? ` · ${householdNames.join(', ')}` : ''}
         </span>
       </button>
       {actionLabel ? (

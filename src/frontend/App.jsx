@@ -89,7 +89,7 @@ export default function App() {
               <Route path="/inschrijven" element={<Protected feature="inschrijven"><LegacyInschrijven /></Protected>} />
               <Route path="/diensten" element={<Protected feature="inschrijven"><Inschrijven mode="open" /></Protected>} />
               <Route path="/mijn-diensten" element={<Protected feature="inschrijven"><Inschrijven mode="mine" /></Protected>} />
-              <Route path="/open" element={<Protected feature="dashboard"><Planning variant="open" /></Protected>} />
+              <Route path="/open" element={<Protected feature="dashboard"><Dashboard /></Protected>} />
               <Route path="/aandacht" element={<Protected feature="dashboard"><Dashboard focus="aandacht" /></Protected>} />
               <Route path="/rooster" element={<Protected feature="planning"><Planning variant="rooster" /></Protected>} />
               <Route path="/planning" element={<Protected feature="planning"><Navigate to="/rooster" replace /></Protected>} />
