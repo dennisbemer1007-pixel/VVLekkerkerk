@@ -3,6 +3,19 @@ import fs from 'fs';
 import path from 'path';
 import { startOfDay, toIsoDate } from './dates.js';
 
+/**
+ * Alleen herstellen als live minder diensten heeft dan de incident-backup.
+ * 3 okt-backup (177) vs live (208) is geen dataverlies: ontbrekende ids
+ * zijn oude AUTO-rijen die bewust weg zijn. Die niet massaal terugzetten.
+ */
+export function shouldAttemptIncidentRestore(diff) {
+  if (!diff || diff.error) return false;
+  const live = Number(diff.liveCount) || 0;
+  const backup = Number(diff.backupCount) || 0;
+  if (backup > 0 && live >= backup) return false;
+  return Boolean(diff.withPerson || diff.manual);
+}
+
 /** Backup van vóór de startup-sync op 3 okt 2026. */
 export const INCIDENT_BACKUP_NAME = 'vvl-2026-10-03T17-34-13-503Z.db';
 
@@ -215,11 +228,23 @@ function serviceCreateData(row) {
   };
 }
 
+async function liveFkOrNull(delegate, id) {
+  const value = toId(id);
+  if (!value) return null;
+  try {
+    const row = await delegate.findUnique({ where: { id: value } });
+    return row ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function restoreProtectedServices(livePrisma, backupFile, classified) {
   const wanted = (classified.missing || []).filter((row) => row.shouldRestore);
   if (!wanted.length) return { restored: [], skipped: (classified.missing || []).length };
   const backup = clientFor(backupFile);
   const restored = [];
+  const skippedFk = [];
   try {
     const ids = sqlIntList(wanted.map((row) => row.id));
     const services = await backupRows(backup, `SELECT * FROM "Service" WHERE id IN (${ids})`);
@@ -240,80 +265,116 @@ export async function restoreProtectedServices(livePrisma, backupFile, classifie
       : [];
     for (const service of services) {
       const id = toId(service.id);
-      const exists = await livePrisma.service.findUnique({ where: { id } });
-      if (exists) continue;
-      await livePrisma.service.create({ data: serviceCreateData(service) });
-      restored.push(id);
+      try {
+        const exists = await livePrisma.service.findUnique({ where: { id } });
+        if (exists) continue;
+        const data = serviceCreateData(service);
+        data.matchId = await liveFkOrNull(livePrisma.match, data.matchId);
+        data.assignedTeamId = await liveFkOrNull(livePrisma.team, data.assignedTeamId);
+        data.sourceRuleId = await liveFkOrNull(livePrisma.serviceRule, data.sourceRuleId);
+        data.activityId = await liveFkOrNull(livePrisma.activity, data.activityId);
+        await livePrisma.service.create({ data });
+        restored.push(id);
+      } catch (err) {
+        skippedFk.push({ id, reason: err.message });
+        console.warn('[serviceDiff] Dienst %s niet hersteld: %s', id, err.message);
+      }
     }
     for (const duty of teamDuties) {
       const id = toId(duty.id);
-      const exists = await livePrisma.serviceTeamDuty.findUnique({ where: { id } }).catch(() => null);
-      if (exists) continue;
-      const serviceOk = await livePrisma.service.findUnique({ where: { id: toId(duty.serviceId) } });
-      if (!serviceOk) continue;
-      await livePrisma.serviceTeamDuty.create({
-        data: {
-          id,
-          serviceId: toId(duty.serviceId),
-          teamId: toId(duty.teamId),
-          reserved: toId(duty.reserved) ?? 1,
-        },
-      });
+      try {
+        const exists = await livePrisma.serviceTeamDuty.findUnique({ where: { id } }).catch(() => null);
+        if (exists) continue;
+        const serviceOk = await livePrisma.service.findUnique({ where: { id: toId(duty.serviceId) } });
+        const teamId = await liveFkOrNull(livePrisma.team, duty.teamId);
+        if (!serviceOk || !teamId) continue;
+        await livePrisma.serviceTeamDuty.create({
+          data: {
+            id,
+            serviceId: toId(duty.serviceId),
+            teamId,
+            reserved: toId(duty.reserved) ?? 1,
+          },
+        });
+      } catch (err) {
+        skippedFk.push({ id, kind: 'duty', reason: err.message });
+      }
     }
     for (const enrollment of enrollments) {
       const id = toId(enrollment.id);
-      const exists = await livePrisma.enrollment.findUnique({ where: { id } });
-      if (exists) continue;
-      const serviceOk = await livePrisma.service.findUnique({
-        where: { id: toId(enrollment.serviceId) },
-      });
-      if (!serviceOk) continue;
-      await livePrisma.enrollment.create({
-        data: {
-          id,
-          serviceId: toId(enrollment.serviceId),
-          personId: toId(enrollment.personId),
-          source: enrollment.source,
-          kind: enrollment.kind,
-          forTeamId: toId(enrollment.forTeamId),
-          reason: enrollment.reason,
-          makeup: toBool(enrollment.makeup),
-          noShow: toBool(enrollment.noShow),
-          remindedAt: asDate(enrollment.remindedAt),
-          createdAt: asDate(enrollment.createdAt),
-        },
-      });
+      try {
+        const exists = await livePrisma.enrollment.findUnique({ where: { id } });
+        if (exists) continue;
+        const serviceOk = await livePrisma.service.findUnique({
+          where: { id: toId(enrollment.serviceId) },
+        });
+        const personId = await liveFkOrNull(livePrisma.person, enrollment.personId);
+        if (!serviceOk || !personId) continue;
+        await livePrisma.enrollment.create({
+          data: {
+            id,
+            serviceId: toId(enrollment.serviceId),
+            personId,
+            source: enrollment.source,
+            kind: enrollment.kind,
+            forTeamId: await liveFkOrNull(livePrisma.team, enrollment.forTeamId),
+            reason: enrollment.reason,
+            makeup: toBool(enrollment.makeup),
+            noShow: toBool(enrollment.noShow),
+            remindedAt: asDate(enrollment.remindedAt),
+            createdAt: asDate(enrollment.createdAt),
+          },
+        });
+      } catch (err) {
+        skippedFk.push({ id, kind: 'enrollment', reason: err.message });
+      }
     }
     for (const swap of swaps) {
       const id = toId(swap.id);
-      const exists = await livePrisma.swapRequest.findUnique({ where: { id } });
-      if (exists) continue;
-      const fromOk = await livePrisma.enrollment.findUnique({
-        where: { id: toId(swap.fromEnrollmentId) },
-      });
-      const toOk = await livePrisma.enrollment.findUnique({
-        where: { id: toId(swap.toEnrollmentId) },
-      });
-      if (!fromOk || !toOk) continue;
-      await livePrisma.swapRequest.create({
-        data: {
-          id,
-          fromEnrollmentId: toId(swap.fromEnrollmentId),
-          toEnrollmentId: toId(swap.toEnrollmentId),
-          requesterId: toId(swap.requesterId),
-          counterpartyId: toId(swap.counterpartyId),
-          status: swap.status,
-          matchBlockWarning: toBool(swap.matchBlockWarning),
-          note: swap.note,
-          rejectReason: swap.rejectReason,
-          decidedById: toId(swap.decidedById),
-          decidedAt: asDate(swap.decidedAt),
-          createdAt: asDate(swap.createdAt),
-          updatedAt: asDate(swap.updatedAt),
-        },
-      });
+      try {
+        const exists = await livePrisma.swapRequest.findUnique({ where: { id } });
+        if (exists) continue;
+        const fromOk = await livePrisma.enrollment.findUnique({
+          where: { id: toId(swap.fromEnrollmentId) },
+        });
+        const toOk = await livePrisma.enrollment.findUnique({
+          where: { id: toId(swap.toEnrollmentId) },
+        });
+        if (!fromOk || !toOk) continue;
+        await livePrisma.swapRequest.create({
+          data: {
+            id,
+            fromEnrollmentId: toId(swap.fromEnrollmentId),
+            toEnrollmentId: toId(swap.toEnrollmentId),
+            requesterId: await liveFkOrNull(livePrisma.person, swap.requesterId),
+            counterpartyId: await liveFkOrNull(livePrisma.person, swap.counterpartyId),
+            status: swap.status,
+            matchBlockWarning: toBool(swap.matchBlockWarning),
+            note: swap.note,
+            rejectReason: swap.rejectReason,
+            decidedById: await liveFkOrNull(livePrisma.person, swap.decidedById),
+            decidedAt: asDate(swap.decidedAt),
+            createdAt: asDate(swap.createdAt),
+            updatedAt: asDate(swap.updatedAt),
+          },
+        });
+      } catch (err) {
+        skippedFk.push({ id, kind: 'swap', reason: err.message });
+      }
     }
-    return { restored, skipped: (classified.missing || []).length - restored.length };
+    return {
+      restored,
+      skipped: (classified.missing || []).length - restored.length,
+      skippedFk,
+    };
+  } catch (err) {
+    console.warn('[serviceDiff] Herstel afgebroken, start gaat door: %s', err.message);
+    return {
+      restored,
+      skipped: (classified.missing || []).length - restored.length,
+      skippedFk,
+      error: err.message,
+    };
   } finally {
     await backup.$disconnect();
   }

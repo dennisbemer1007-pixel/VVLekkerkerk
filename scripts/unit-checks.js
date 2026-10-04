@@ -8,7 +8,7 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
 import { splitSqlStatements, isIgnorableMigrationError } from '../src/backend/lib/liveDeploy.js';
-import { classifyServiceGap, sqlIntList, toId } from '../src/backend/lib/serviceDiff.js';
+import { classifyServiceGap, sqlIntList, toId, shouldAttemptIncidentRestore } from '../src/backend/lib/serviceDiff.js';
 import { inHousehold } from '../src/backend/lib/household.js';
 import { personShiftRows } from '../src/backend/lib/planningExport.js';
 import { clientErrorPayload } from '../src/backend/lib/clientError.js';
@@ -1988,6 +1988,8 @@ assert(
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
       renderStartSrc.includes('unlinkGuardianCopiedTeam') &&
+      renderStartSrc.includes('shouldAttemptIncidentRestore') &&
+      renderStartSrc.includes('Dienst-herstel niet fataal') &&
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
   );
@@ -2050,6 +2052,18 @@ assert(
     assigned.shouldRestore && assigned.hasPerson && assigned.when === 'past' && assigned.noShows === 1 && assigned.swaps === 1 && assigned.match.team === 'JO12-1',
   );
   assert('handmatige dienst wel herstellen', manual.shouldRestore && manual.manual && manual.when === 'future');
+  assert(
+    'oude kleinere backup niet massaal terugzetten op grotere live-db',
+    shouldAttemptIncidentRestore({ liveCount: 208, backupCount: 177, withPerson: 1, manual: 39 }) === false,
+  );
+  assert(
+    'kleinere live met personen wel herstellen',
+    shouldAttemptIncidentRestore({ liveCount: 10, backupCount: 177, withPerson: 1, manual: 0 }) === true,
+  );
+  assert(
+    'zonder personen of handmatig niets herstellen',
+    shouldAttemptIncidentRestore({ liveCount: 10, backupCount: 177, withPerson: 0, manual: 0 }) === false,
+  );
   assert('sqlite-ids als bigint matchen gewone ids', toId(69n) === 69 && toId('69') === 69);
   assert('sql-id-lijst negeert ongeldige waarden', sqlIntList([1n, 1, 'x', null, 2]) === '1,2');
   const healthSrc = fs.readFileSync(

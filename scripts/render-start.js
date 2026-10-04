@@ -35,6 +35,7 @@ import {
   incidentBackupPath,
   publicServiceDiff,
   restoreProtectedServices,
+  shouldAttemptIncidentRestore,
 } from '../src/backend/lib/serviceDiff.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -192,11 +193,29 @@ if (fs.existsSync(namedBackup)) {
     serviceDiff.manual,
     serviceDiff.emptyAuto,
   );
-  if (serviceDiff.withPerson || serviceDiff.manual) {
-    restoreResult = await restoreProtectedServices(prisma, namedBackup, serviceDiff);
-    console.log('[render-start] Hersteld: %s', restoreResult.restored.join(','));
+  if (shouldAttemptIncidentRestore(serviceDiff)) {
+    try {
+      restoreResult = await restoreProtectedServices(prisma, namedBackup, serviceDiff);
+      console.log('[render-start] Hersteld: %s', restoreResult.restored.join(','));
+      if (restoreResult.skippedFk?.length) {
+        console.warn('[render-start] Overgeslagen FK:', JSON.stringify(restoreResult.skippedFk));
+      }
+    } catch (err) {
+      console.warn('[render-start] Dienst-herstel niet fataal:', err.message);
+      restoreResult = {
+        restored: [],
+        skipped: serviceDiff.missing?.length || 0,
+        error: err.message,
+      };
+    }
   } else {
-    console.log('[render-start] Niets herstellen: ontbrekende rijen zijn lege AUTO-diensten');
+    console.log(
+      '[render-start] Geen massaal incident-herstel (live=%s backup=%s personen=%s handmatig=%s)',
+      serviceDiff.liveCount,
+      serviceDiff.backupCount,
+      serviceDiff.withPerson,
+      serviceDiff.manual,
+    );
   }
 } else {
   console.warn('[render-start] Incident-backup ontbreekt:', namedBackup);
