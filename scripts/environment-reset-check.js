@@ -15,6 +15,7 @@ import {
   resolveSqliteFilePath,
   runEnvironmentReset,
 } from '../src/backend/lib/environmentReset.js';
+import { applyLiveMigrations } from '../src/backend/lib/liveDeploy.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failed = 0;
@@ -303,6 +304,13 @@ async function main() {
   if (!source) {
     console.log(`\n${failed} failed`);
     process.exit(1);
+  }
+
+  const prep = clientFor(source);
+  try {
+    await applyLiveMigrations(prep, root);
+  } finally {
+    await prep.$disconnect();
   }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vvl-opschonen-'));

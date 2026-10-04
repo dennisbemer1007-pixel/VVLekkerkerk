@@ -404,6 +404,13 @@ export const api = {
   sendDutyReminders: () => json('/planning/remind', { method: 'POST', body: '{}' }),
   setRefereesEnabled: (enabled) =>
     json('/settings/club', { method: 'PATCH', body: JSON.stringify({ refereesEnabled: enabled }) }),
+  setCalendarEnabled: (enabled) =>
+    json('/settings/club', { method: 'PATCH', body: JSON.stringify({ calendarEnabled: Boolean(enabled) }) }),
+  getMyCalendar: () => json('/calendar/me'),
+  rotateMyCalendar: () => json('/calendar/me/rotate', { method: 'POST', body: '{}' }),
+  getManagedCalendars: () => json('/calendar/teams?scope=managed'),
+  rotateTeamCalendar: (teamId) =>
+    json(`/calendar/teams/${teamId}/rotate`, { method: 'POST', body: '{}' }),
   getRefereeOverview: () => json('/referees/overview'),
   getRefereeAttention: () => json('/referees/attention'),
   getRefereePeople: () => json('/referees/people'),

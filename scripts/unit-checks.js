@@ -126,6 +126,27 @@ import {
   personTemplateSheets,
   personExportRowsSheets,
 } from '../src/backend/lib/personsXlsx.js';
+import {
+  calendarResponseHeaders,
+  etagMatches,
+  feedUrls,
+  foldLine,
+  icsEscapeText,
+  icsUnescape,
+  renderIcs,
+  unfoldIcs,
+  validateIcs,
+} from '../src/backend/lib/ics.js';
+import {
+  CALENDAR_RATE_MAX,
+  CALENDAR_RATE_WINDOW_MS,
+  calendarBlocked,
+  collectTeamIds,
+  dutyTitle,
+  namesOverlap,
+  personalEvents,
+  teamEvents,
+} from '../src/backend/lib/calendarEvents.js';
 
 let pass = 0;
 let fail = 0;
@@ -1939,6 +1960,331 @@ assert(
   );
 }
 
+{
+  const now = new Date('2026-10-04T12:00:00.000Z');
+  const appUrl = 'https://vvl-planning-demo.onrender.com';
+  const events = personalEvents({
+    now,
+    appUrl,
+    teamNames: ['JO11-1'],
+    refereesEnabled: true,
+    tournamentsEnabled: true,
+    matches: [
+      {
+        id: 7,
+        date: '2026-10-04T14:30:00.000Z',
+        time: '14:30',
+        home: true,
+        opponent: 'SV Capelle, JO11',
+        teamName: 'JO11-1',
+        durationMinutes: 90,
+        updatedAt: '2026-10-01T08:00:00.000Z',
+        hiddenName: 'Sanne de Geheim',
+      },
+      {
+        id: 8,
+        date: '2026-08-01T10:00:00.000Z',
+        time: '10:00',
+        home: false,
+        opponent: 'Oud',
+        teamName: 'JO11-1',
+        updatedAt: '2026-08-01T08:00:00.000Z',
+      },
+    ],
+    duties: [
+      {
+        enrollmentId: 3,
+        type: 'BAR',
+        date: '2026-10-03T22:00:00.000Z',
+        time: '09:00 - 13:00',
+        location: 'Bar',
+        updatedAt: '2026-10-02T08:00:00.000Z',
+        colleagueName: 'Sanne de Geheim',
+      },
+      {
+        enrollmentId: 4,
+        type: 'KITCHEN',
+        date: '2026-10-04T12:00:00.000Z',
+        time: '22:00 - 01:00',
+        location: 'Keuken',
+        updatedAt: '2026-10-02T09:00:00.000Z',
+        noShow: true,
+      },
+      {
+        enrollmentId: 5,
+        type: 'BAR',
+        date: '2026-10-04T12:00:00.000Z',
+        time: '18:00 - 21:00',
+        location: 'Bar',
+        draft: true,
+        updatedAt: '2026-10-02T09:00:00.000Z',
+      },
+    ],
+    referees: [
+      {
+        id: 9,
+        status: 'bevestigd',
+        updatedAt: '2026-10-03T08:00:00.000Z',
+        match: {
+          id: 7,
+          date: '2026-10-04T14:30:00.000Z',
+          time: '14:30',
+          home: true,
+          opponent: 'SV Capelle, JO11',
+          teamName: 'JO11-1',
+          durationMinutes: 90,
+          updatedAt: '2026-10-03T10:00:00.000Z',
+        },
+      },
+    ],
+    tournaments: [
+      {
+        id: 2,
+        name: 'Jeugdtoernooi',
+        date: '2026-11-21',
+        startTime: '09:00',
+        endTime: '16:00',
+        teamNames: ['JO11-1 Lekkerkerk'],
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+      {
+        id: 3,
+        name: 'Niet voor ons',
+        date: '2026-11-22',
+        startTime: '09:00',
+        endTime: '12:00',
+        teamNames: ['JO11-2 Lekkerkerk'],
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ],
+  });
+  const ics = renderIcs({ name: 'VVL-agenda', events, now });
+  const again = personalEvents({
+    now,
+    appUrl,
+    teamNames: ['JO11-1'],
+    refereesEnabled: false,
+    tournamentsEnabled: false,
+    matches: events.length ? [{
+      id: 7,
+      date: '2026-10-04T14:30:00.000Z',
+      time: '15:00',
+      home: true,
+      opponent: 'SV Capelle, JO11',
+      teamName: 'JO11-1',
+      durationMinutes: 90,
+      updatedAt: '2026-10-05T08:00:00.000Z',
+    }] : [],
+    referees: [{ id: 9, status: 'bevestigd', match: { id: 1, date: '2026-10-04T14:30:00.000Z', time: '14:30', teamName: 'JO11-1' } }],
+    tournaments: [{ id: 2, name: 'Jeugdtoernooi', date: '2026-11-21', teamNames: ['JO11-1 Lekkerkerk'] }],
+  });
+  const moved = renderIcs({
+    name: 'VVL-agenda',
+    now,
+    events: personalEvents({
+      now,
+      appUrl,
+      matches: [{
+        id: 7,
+        date: '2026-10-04T14:30:00.000Z',
+        time: '15:00',
+        home: true,
+        opponent: 'SV Capelle, JO11',
+        teamName: 'JO11-1',
+        updatedAt: '2026-10-05T08:00:00.000Z',
+      }],
+    }),
+  });
+  const teamIcs = renderIcs({
+    name: 'VVL JO11-1',
+    now,
+    events: teamEvents({
+      now,
+      appUrl,
+      teamId: 4,
+      teamName: 'JO11-1',
+      tournamentsEnabled: true,
+      matches: [{
+        id: 7,
+        date: '2026-10-04T14:30:00.000Z',
+        time: '14:30',
+        home: true,
+        opponent: 'SV Capelle, JO11',
+        volunteerName: 'Sanne de Geheim',
+      }],
+      teamDuties: [{
+        serviceId: 3,
+        type: 'BAR',
+        date: '2026-10-04T12:00:00.000Z',
+        time: '09:00 - 13:00',
+        location: 'Bar',
+        personName: 'Nora Ouder',
+      }],
+      tournaments: [{
+        id: 2,
+        name: 'Jeugdtoernooi',
+        date: '2026-11-21',
+        startTime: '09:00',
+        endTime: '16:00',
+        teamNames: ['JO11-1 Lekkerkerk'],
+      }],
+    }),
+  });
+  const unfolded = unfoldIcs(ics);
+  const summary = unfolded.split('\r\n').find((line) => line.startsWith('SUMMARY:VVL JO11-1'));
+  assert('agenda uit is geblokkeerd', calendarBlocked(false) === true && calendarBlocked(true) === false);
+  assert('ics is geldig en gebruikt Amsterdam', validateIcs(ics).length === 0 && validateIcs(teamIcs).length === 0);
+  assert(
+    'aanvang blijft de clubtijd en wordt niet verschoven',
+    unfolded.includes('DTSTART;TZID=Europe/Amsterdam:20261004T143000') &&
+      unfolded.includes('DTEND;TZID=Europe/Amsterdam:20261004T160000') &&
+      !unfolded.includes('T163000'),
+  );
+  assert(
+    'dienst van middernacht-UTC valt op de Amsterdamse dag',
+    unfolded.includes('DTSTART;TZID=Europe/Amsterdam:20261004T090000') &&
+      unfolded.includes('DTEND;TZID=Europe/Amsterdam:20261004T130000'),
+  );
+  assert(
+    'titel, komma en bardienst kloppen',
+    dutyTitle('BAR', 'Bar') === 'Bardienst – Kantine' &&
+      unfolded.includes('Bardienst – Kantine') &&
+      summary &&
+      icsUnescape(summary.slice('SUMMARY:'.length)).includes('VVL JO11-1 – SV Capelle, JO11 (thuis)'),
+  );
+  assert(
+    'oude wedstrijd, no-show en concept staan er niet in',
+    !unfolded.includes('Oud') && !unfolded.includes('22:00') && !unfolded.includes('18:00'),
+  );
+  const night = renderIcs({
+    name: 'VVL-agenda',
+    now,
+    events: personalEvents({
+      now,
+      duties: [{
+        enrollmentId: 11,
+        type: 'KITCHEN',
+        date: '2026-10-04T12:00:00.000Z',
+        time: '22:00 - 01:00',
+        location: 'Keuken',
+      }],
+    }),
+  });
+  assert(
+    'dienst over middernacht eindigt de volgende dag',
+    unfoldIcs(night).includes('DTSTART;TZID=Europe/Amsterdam:20261004T220000') &&
+      unfoldIcs(night).includes('DTEND;TZID=Europe/Amsterdam:20261005T010000'),
+  );
+  assert(
+    'persoonlijke feed noemt geen andere namen',
+    !ics.includes('Sanne') && !ics.includes('Geheim') && !teamIcs.includes('Sanne') && !teamIcs.includes('Nora'),
+  );
+  assert(
+    'scheids en passend toernooi zitten erin, een ander toernooi niet',
+    unfolded.includes('Scheidsrechter – JO11-1 tegen SV Capelle\\, JO11') &&
+      unfolded.includes('Toernooi – Jeugdtoernooi') &&
+      !unfolded.includes('Niet voor ons'),
+  );
+  assert(
+    'uitgezette modules vallen weg, het uid blijft gelijk als de wedstrijd verschuift',
+    !renderIcs({ name: 'x', events: again, now }).includes('Scheidsrechter') &&
+      !renderIcs({ name: 'x', events: again, now }).includes('Toernooi') &&
+      unfoldIcs(moved).includes('UID:match-7@vvl-planning') &&
+      unfoldIcs(moved).includes('T150000') &&
+      unfoldIcs(ics).includes('UID:match-7@vvl-planning'),
+  );
+  const long = foldLine(`SUMMARY:${'é'.repeat(80)}`);
+  assert(
+    'lange regels worden gevouwen op octets',
+    long.includes('\r\n ') &&
+      Buffer.byteLength(long.split('\r\n')[0], 'utf8') <= 75 &&
+      icsUnescape(icsEscapeText('a,b;c\\d\n')).includes('a,b;c\\d'),
+  );
+  const links = feedUrls('https://vvl-planning-demo.onrender.com/', 'abc_DEF-123456789012345678901234');
+  assert(
+    'webcal en google gebruiken dezelfde geheime link',
+    links.webcalUrl.startsWith('webcal://vvl-planning-demo.onrender.com/api/calendar/feed/') &&
+      links.googleUrl.startsWith('https://calendar.google.com/calendar/r?cid=') &&
+      decodeURIComponent(links.googleUrl.split('cid=')[1]) === links.httpsUrl,
+  );
+  const headers = calendarResponseHeaders('BEGIN:VCALENDAR');
+  assert(
+    'cache-kop is privé met etag',
+    headers['Cache-Control'] === 'private, max-age=300' &&
+      headers['Content-Type'].includes('text/calendar') &&
+      etagMatches(headers.ETag, headers.ETag) &&
+      !etagMatches('zwak', headers.ETag),
+  );
+  assert(
+    'teamfeed is openbaar en zonder bardienst van een persoon',
+    teamIcs.includes('CLASS:PUBLIC') &&
+      teamIcs.includes('Teamdienst – Kantine') &&
+      teamIcs.includes('geen namen') &&
+      !teamIcs.includes('Bardienst'),
+  );
+  assert(
+    'relevante teams zijn eigen team, kind en coördinatie',
+    collectTeamIds({
+      person: { teamId: 1 },
+      memberships: [{ teamId: 2, active: true }, { teamId: 9, active: false }],
+      children: [{ teamId: 3, teamMemberships: [{ teamId: 4, active: true }] }],
+      coordinatedIds: [5],
+    }).sort().join(',') === '1,2,3,4,5',
+  );
+  assert(
+    'toernooinaam koppelt JO11-1 wel en JO11-2 niet',
+    namesOverlap('JO11-1', 'JO11-1 Lekkerkerk') &&
+      !namesOverlap('JO11-1', 'JO11-2 Lekkerkerk') &&
+      !namesOverlap('JO11', 'JO11-1 Lekkerkerk'),
+  );
+  assert('agenda-limiet is een kwartier en zestig keer', CALENDAR_RATE_MAX === 60 && CALENDAR_RATE_WINDOW_MS === 15 * 60 * 1000);
+  const migration = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/prisma/migrations/20261004120000_calendar/migration.sql'),
+    'utf8',
+  );
+  const instellingenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'),
+    'utf8',
+  );
+  const ikSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Ik.jsx'),
+    'utf8',
+  );
+  const serverSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/server.js'),
+    'utf8',
+  );
+  const schemaSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/prisma/schema.prisma'),
+    'utf8',
+  );
+  const liveDeploySrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/liveDeploy.js'),
+    'utf8',
+  );
+  assert(
+    'agenda-migratie is additief en staat uit',
+    migration.includes('calendarEnabled') &&
+      /DEFAULT false/i.test(migration) &&
+      migration.includes('CalendarFeed') &&
+      !/DROP TABLE/i.test(migration) &&
+      !/DROP COLUMN/i.test(migration) &&
+      !/prisma db push/i.test(migration),
+  );
+  assert(
+    'instellingen en mijn gegevens hebben de agenda-koppeling',
+    instellingenSrc.includes('data-testid="agenda-schakelaar"') &&
+      instellingenSrc.includes('Agenda-koppeling') &&
+      ikSrc.includes('<AgendaKoppeling />'),
+  );
+  assert(
+    'clubsettings heeft agenda uit en de live-start neemt de migratie mee',
+    /calendarEnabled\s+Boolean\s+@default\(false\)/.test(schemaSrc) &&
+      liveDeploySrc.includes('20261004120000_calendar') &&
+      serverSrc.includes("app.use('/api/calendar', calendarRouter)"),
+  );
+}
+
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const refereeApi = spawnSync(process.execPath, ['scripts/referee-api-check.js'], {
   cwd: unitRoot,
@@ -1956,6 +2302,11 @@ const apiCheck = spawnSync(process.execPath, ['scripts/tournament-api-check.js']
   stdio: 'inherit',
 });
 assert('toernooi-api met schakelaar en rollen', apiCheck.status === 0);
+const calendarApi = spawnSync(process.execPath, ['scripts/calendar-api-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+});
+assert('agenda-API: 404 uit, ICS en limiet', calendarApi.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

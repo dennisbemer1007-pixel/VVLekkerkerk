@@ -336,6 +336,9 @@ async function wipeInside(tx, { actorId, backupFilename }) {
       passwordResetExpiresAt: null,
     },
   });
+  await tx.calendarFeed.deleteMany({
+    where: { personId: { notIn: keptList } },
+  });
   await tx.person.deleteMany({ where: { id: { notIn: keptList } } });
 
   await tx.planningRound.updateMany({ data: { active: false } });
