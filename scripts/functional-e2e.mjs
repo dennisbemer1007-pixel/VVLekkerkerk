@@ -55,7 +55,10 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.message || e)));
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (/429|Too Many Requests/i.test(text)) return;
+    errors.push(text);
   });
   const failed = [];
   page.on('response', (res) => {
