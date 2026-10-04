@@ -96,11 +96,11 @@ export function slotCellText(services) {
   if (!services?.length) return 'gesloten';
   const tokens = services.flatMap((s) => openSpotTokens(s));
   if (!tokens.length) return 'nog open';
-  // Unieke namen, open plekken behouden
+  // Unieke persoonsnamen; teamplekken en open plekken blijven elk zichtbaar.
   const seen = new Set();
   const parts = [];
   for (const token of tokens) {
-    if (token.kind === 'name' || token.kind === 'team') {
+    if (token.kind === 'name') {
       if (seen.has(token.text)) continue;
       seen.add(token.text);
     }
