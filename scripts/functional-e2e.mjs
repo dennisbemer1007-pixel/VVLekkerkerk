@@ -111,6 +111,55 @@ async function pageCheck(browser, { email, password, path, expectText = [], forb
   return { body, errors, failed };
 }
 
+async function bellPanelFits(browser, { email, password, width }) {
+  await new Promise((r) => setTimeout(r, 400));
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  await page.setViewport({ width, height: width <= 500 ? 800 : 900, isMobile: width <= 500, hasTouch: width <= 500 });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.evaluate(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+  });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('input[type="email"], input[type="password"]', { timeout: 25000 });
+  const emailSel = (await page.$('input[type="email"]')) ? 'input[type="email"]' : 'form input:not([type="password"]):not([type="hidden"])';
+  await page.click(emailSel, { clickCount: 3 });
+  await page.type(emailSel, email, { delay: 5 });
+  await page.click('input[type="password"]', { clickCount: 3 });
+  await page.type('input[type="password"]', password, { delay: 5 });
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+    page.click('button[type="submit"]'),
+  ]);
+  await new Promise((r) => setTimeout(r, 800));
+  const bell = await page.$('button[title*="Ruilverzoeken"]');
+  ok(`UI ${email} ${width}px belletje`, Boolean(bell));
+  if (bell) {
+    await bell.click();
+    await page.waitForSelector('[data-testid="notification-panel"]', { timeout: 8000 });
+    const geom = await page.$eval('[data-testid="notification-panel"]', (el) => {
+      const r = el.getBoundingClientRect();
+      const text = el.innerText || '';
+      return {
+        left: r.left,
+        right: r.right,
+        top: r.top,
+        vw: window.innerWidth,
+        text,
+      };
+    });
+    ok(`UI ${email} ${width}px paneel links in beeld`, geom.left >= -0.5, `left=${geom.left}`);
+    ok(`UI ${email} ${width}px paneel rechts in beeld`, geom.right <= geom.vw + 0.5, `right=${geom.right} vw=${geom.vw}`);
+    ok(`UI ${email} ${width}px paneel titel volledig`, geom.text.toLowerCase().includes('ruilverzoeken'));
+  }
+  await context.close();
+}
+
 async function main() {
   console.log('Functional E2E base=', base, 'api=', api);
 
@@ -418,6 +467,11 @@ async function main() {
       expectText: ['Instellingen'],
       forbidText: leftover,
     });
+    await bellPanelFits(browser, { email: 'lisa@vvl.demo', password: 'demo123', width: 360 });
+    await bellPanelFits(browser, { email: 'lisa@vvl.demo', password: 'demo123', width: 390 });
+    await bellPanelFits(browser, { email: 'sandra@vvl.demo', password: 'demo123', width: 390 });
+    await bellPanelFits(browser, { email: 'mark@vvl.demo', password: 'demo123', width: 390 });
+    await bellPanelFits(browser, { email: 'admin@vvl.local', password: 'admin123', width: 1280 });
   } catch (e) {
     ok('puppeteer UI suite', false, e.message);
   } finally {

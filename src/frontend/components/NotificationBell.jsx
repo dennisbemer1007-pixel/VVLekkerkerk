@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi.js';
 
@@ -20,6 +21,7 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState('');
   const rootRef = useRef(null);
+  const panelRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -41,10 +43,19 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+      const target = e.target;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   const hasNew = unreadCount > 0;
@@ -95,48 +106,57 @@ export default function NotificationBell() {
         ) : null}
       </button>
 
-      {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-sm border border-vvl-border bg-white text-vvl-primary shadow-lg">
-          <div className="flex items-center justify-between gap-2 border-b border-vvl-border bg-vvl-secondary px-3 py-2">
-            <p className="text-xs font-bold uppercase tracking-wide">Ruilverzoeken</p>
-            {hasNew ? (
-              <button
-                type="button"
-                className="text-[10px] font-bold uppercase text-vvl-accent hover:underline"
-                onClick={markAll}
-              >
-                Alles gelezen
-              </button>
-            ) : null}
-          </div>
-          {error ? <p className="px-3 py-2 text-xs text-red-700">{error}</p> : null}
-          {items.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-gray-600">
-              Nog geen ruilverzoeken. Een voorbeeld: Lisa vraagt of jij haar bardienst van zaterdag wilt overnemen.
-            </p>
-          ) : (
-            <ul className="max-h-80 overflow-y-auto divide-y divide-vvl-border">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    to={item.link || '/ruilen'}
-                    onClick={() => openItem(item)}
-                    className={`block px-3 py-3 text-left transition hover:bg-vvl-muted ${
-                      item.unread ? 'bg-amber-50/70' : ''
-                    }`}
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={panelRef}
+              data-testid="notification-panel"
+              role="dialog"
+              aria-label="Ruilverzoeken"
+              className="fixed left-2 right-2 top-16 z-50 flex max-h-[min(28rem,calc(100dvh-9rem))] w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-sm border border-vvl-border bg-white text-vvl-primary shadow-lg md:left-auto md:right-4 md:w-[22rem] md:max-w-[min(22rem,calc(100vw-2rem))]"
+            >
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-vvl-border bg-vvl-secondary px-3 py-2">
+                <p className="text-xs font-bold uppercase tracking-wide">Ruilverzoeken</p>
+                {hasNew ? (
+                  <button
+                    type="button"
+                    className="text-[10px] font-bold uppercase text-vvl-accent hover:underline"
+                    onClick={markAll}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-bold uppercase text-vvl-accent">{item.title}</p>
-                      <span className="shrink-0 text-[10px] text-gray-500">{timeAgo(item.createdAt)}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-gray-800">{item.body}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+                    Alles gelezen
+                  </button>
+                ) : null}
+              </div>
+              {error ? <p className="shrink-0 px-3 py-2 text-xs text-red-700">{error}</p> : null}
+              {items.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-gray-600">
+                  Nog geen ruilverzoeken. Een voorbeeld: Lisa vraagt of jij haar bardienst van zaterdag wilt overnemen.
+                </p>
+              ) : (
+                <ul className="min-h-0 flex-1 overflow-y-auto divide-y divide-vvl-border">
+                  {items.map((item) => (
+                    <li key={item.id}>
+                      <Link
+                        to={item.link || '/ruilen'}
+                        onClick={() => openItem(item)}
+                        className={`block px-3 py-3 text-left transition hover:bg-vvl-muted ${
+                          item.unread ? 'bg-amber-50/70' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 text-xs font-bold uppercase text-vvl-accent">{item.title}</p>
+                          <span className="shrink-0 text-[10px] text-gray-500">{timeAgo(item.createdAt)}</span>
+                        </div>
+                        <p className="mt-1 break-words text-sm text-gray-800">{item.body}</p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

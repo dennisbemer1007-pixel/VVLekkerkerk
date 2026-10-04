@@ -1380,6 +1380,26 @@ assert(
       layoutSrc.includes('mobileNavForRole') &&
       (layoutSrc.match(/Uitloggen/g) || []).length >= 2,
   );
+  assert(
+    'header heeft alleen het belletje als dropdown',
+    layoutSrc.includes('<NotificationBell />') && !layoutSrc.includes('PageHelp'),
+  );
+}
+{
+  const bellSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/components/NotificationBell.jsx'),
+    'utf8',
+  );
+  assert(
+    'meldingenpaneel valt binnen het scherm op telefoon en desktop',
+    bellSrc.includes('createPortal') &&
+      bellSrc.includes('data-testid="notification-panel"') &&
+      bellSrc.includes('left-2') &&
+      bellSrc.includes('right-2') &&
+      bellSrc.includes('md:right-4') &&
+      bellSrc.includes('overflow-y-auto') &&
+      !/className="absolute right-0/.test(bellSrc),
+  );
 }
 assert(
   'admin-instellingen niet onder Meer',
