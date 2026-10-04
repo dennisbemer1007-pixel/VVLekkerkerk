@@ -5,6 +5,7 @@ import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { TournamentFeatureProvider } from './toernooi/feature.jsx';
 import { RefereeFeatureProvider } from './scheids/feature.jsx';
+import { CalendarFeatureProvider } from './agenda/feature.jsx';
 import './styles.css';
 
 createRoot(document.getElementById('root')).render(
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <TournamentFeatureProvider>
           <RefereeFeatureProvider>
-            <App />
+            <CalendarFeatureProvider>
+              <App />
+            </CalendarFeatureProvider>
           </RefereeFeatureProvider>
         </TournamentFeatureProvider>
       </AuthProvider>

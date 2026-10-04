@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
+import AgendaKoppeling from '../agenda/AgendaKoppeling.jsx';
 
 export default function Ik({ title = 'Ik' }) {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ export default function Ik({ title = 'Ik' }) {
     <div className="space-y-4">
       <h1 className="font-heading text-xl font-black uppercase">{title}</h1>
       <p className="text-sm text-gray-700">{user?.name}</p>
+      <AgendaKoppeling />
       {msg ? <p className="text-sm text-emerald-800">{msg}</p> : null}
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
 

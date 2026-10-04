@@ -54,6 +54,8 @@ const { hashPassword } = await import('../src/backend/lib/auth.js');
 const { default: authRouter } = await import('../src/backend/routes/auth.js');
 const { default: settingsRouter } = await import('../src/backend/routes/settings.js');
 const { default: refereesRouter } = await import('../src/backend/routes/referees.js');
+const { applyLiveMigrations } = await import('../src/backend/lib/liveDeploy.js');
+await applyLiveMigrations(prisma, path.resolve('.'));
 
 const stamp = Date.now();
 const password = 'scheids-test-2026';

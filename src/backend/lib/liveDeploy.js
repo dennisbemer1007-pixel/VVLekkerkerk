@@ -5,8 +5,9 @@ import { unsealSecret } from './secrets.js';
 
 export const TOURNAMENT_MIGRATION = '20261003160000_tournaments';
 export const REFEREE_MIGRATION = '20261003180000_referees';
+export const CALENDAR_MIGRATION = '20261004120000_calendar';
 
-export const LIVE_MIGRATIONS = [TOURNAMENT_MIGRATION, REFEREE_MIGRATION];
+export const LIVE_MIGRATIONS = [TOURNAMENT_MIGRATION, REFEREE_MIGRATION, CALENDAR_MIGRATION];
 
 export function deployStateDir(dbFile) {
   return resolveDataDir() || (dbFile ? path.dirname(dbFile) : process.cwd());
@@ -155,6 +156,19 @@ export async function applyNamedMigrationsOnce(prisma, root, stateDir) {
     stateFile,
     JSON.stringify({ applied: state.applied, at: new Date().toISOString() }, null, 2),
   );
+  return results;
+}
+
+/** Draai de additieve SQL nog een keer. Bestaande kolommen en tabellen blijven staan. */
+export async function applyLiveMigrations(prisma, root) {
+  const results = {};
+  for (const name of LIVE_MIGRATIONS) {
+    const file = migrationSqlPath(root, name);
+    if (!fs.existsSync(file)) {
+      throw new Error(`Migratie ontbreekt: ${file}`);
+    }
+    results[name] = await applySqlFile(prisma, file);
+  }
   return results;
 }
 

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
+import { TeamAgendaRij } from '../agenda/AgendaKoppeling.jsx';
+import { useCalendarFeature } from '../agenda/feature.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { formatMatchDate, SERVICE_TYPE_LABEL } from '../utils/formatDate.js';
@@ -8,6 +10,8 @@ import { includesPerson, withinDates } from '../utils/listFilter.js';
 
 export default function TeamDashboard() {
   const { personId } = useAuth();
+  const { enabled: calendarOn } = useCalendarFeature();
+  const [teamCalendars, setTeamCalendars] = useState([]);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -37,6 +41,23 @@ export default function TeamDashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadCalendars = useCallback(() => {
+    if (!calendarOn) {
+      setTeamCalendars([]);
+      return;
+    }
+    api.getManagedCalendars().then(setTeamCalendars).catch(() => setTeamCalendars([]));
+  }, [calendarOn]);
+
+  useEffect(() => {
+    loadCalendars();
+  }, [loadCalendars]);
+
+  const rotateTeamCalendar = async (teamId) => {
+    const next = await api.rotateTeamCalendar(teamId);
+    setTeamCalendars((rows) => rows.map((row) => (row.id === teamId ? next : row)));
+  };
 
   const addParent = async (teamId) => {
     setError('');
@@ -226,6 +247,12 @@ export default function TeamDashboard() {
                     : ''}
                 </p>
               </div>
+              {calendarOn ? (
+                <TeamAgendaRij
+                  link={teamCalendars.find((row) => row.id === team.id)}
+                  onRotate={rotateTeamCalendar}
+                />
+              ) : null}
 
               <div className={section === 'ouders' ? '' : 'hidden'}>
                 <h3 className="text-xs font-bold uppercase text-vvl-accent">Ouders</h3>

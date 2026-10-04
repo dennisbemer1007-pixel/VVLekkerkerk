@@ -27,6 +27,7 @@ import activitiesRouter from './routes/activities.js';
 import swapsRouter from './routes/swaps.js';
 import notificationsRouter from './routes/notifications.js';
 import refereesRouter from './routes/referees.js';
+import calendarRouter from './routes/calendar.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -202,6 +203,7 @@ app.use('/api/referees', refereesRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/tournaments', tournamentsRouter);
+app.use('/api/calendar', calendarRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Niet gevonden' });

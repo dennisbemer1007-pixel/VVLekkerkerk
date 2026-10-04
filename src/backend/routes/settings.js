@@ -365,17 +365,20 @@ router.patch(
     try {
       const tournaments = req.body?.tournamentsEnabled;
       const referees = req.body?.refereesEnabled;
+      const calendar = req.body?.calendarEnabled;
       const hasTournaments = typeof tournaments === 'boolean';
       const hasReferees = typeof referees === 'boolean';
-      if (!hasTournaments && !hasReferees) {
+      const hasCalendar = typeof calendar === 'boolean';
+      if (!hasTournaments && !hasReferees && !hasCalendar) {
         return res.status(400).json({
-          error: 'tournamentsEnabled of refereesEnabled moet true of false zijn',
+          error: 'tournamentsEnabled, refereesEnabled of calendarEnabled moet true of false zijn',
         });
       }
       await getClubSettings();
       const data = {};
       if (hasTournaments) data.tournamentsEnabled = tournaments;
       if (hasReferees) data.refereesEnabled = referees;
+      if (hasCalendar) data.calendarEnabled = calendar;
       await prisma.clubSettings.update({
         where: { id: 1 },
         data,
@@ -397,6 +400,15 @@ router.patch(
           entity: 'ClubSettings',
           entityId: 1,
           detail: referees ? 'aan' : 'uit',
+        });
+      }
+      if (hasCalendar) {
+        await writeAudit({
+          actorId: req.person.id,
+          action: 'club.calendar',
+          entity: 'ClubSettings',
+          entityId: 1,
+          detail: calendar ? 'aan' : 'uit',
         });
       }
       return res.json(await publicClubSettings());

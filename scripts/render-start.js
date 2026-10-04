@@ -21,6 +21,7 @@ import {
   deployStateDir,
   TOURNAMENT_MIGRATION,
   REFEREE_MIGRATION,
+  CALENDAR_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
 import {
   compareBackupToLive,
@@ -61,7 +62,12 @@ console.log('[render-start] DATABASE_URL=', process.env.DATABASE_URL);
 console.log('[render-start] SEED_DEMO=', process.env.SEED_DEMO);
 console.log('[render-start] APP_URL=', process.env.APP_URL || '(niet gezet)');
 console.log('[render-start] MAIL_SECRET=', process.env.MAIL_SECRET ? 'gezet' : 'ONTBREEKT');
-console.log('[render-start] SQL-migraties (geen db push):', TOURNAMENT_MIGRATION, REFEREE_MIGRATION);
+console.log(
+  '[render-start] SQL-migraties (geen db push):',
+  TOURNAMENT_MIGRATION,
+  REFEREE_MIGRATION,
+  CALENDAR_MIGRATION,
+);
 
 const dbFile = resolveLiveDbFile(root);
 if (process.env.DATA_DIR && (!dbFile || !fs.existsSync(dbFile))) {
@@ -114,12 +120,13 @@ console.log(
   enrollmentsAfter,
 );
 
-let flags = { tournamentsEnabled: false, refereesEnabled: false };
+let flags = { tournamentsEnabled: false, refereesEnabled: false, calendarEnabled: false };
 try {
   const club = await prisma.clubSettings.findUnique({ where: { id: 1 } });
   flags = {
     tournamentsEnabled: Boolean(club?.tournamentsEnabled),
     refereesEnabled: Boolean(club?.refereesEnabled),
+    calendarEnabled: Boolean(club?.calendarEnabled),
   };
 } catch (err) {
   console.warn('[render-start] ClubSettings flags:', err.message);

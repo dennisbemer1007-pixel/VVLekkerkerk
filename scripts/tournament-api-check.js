@@ -9,6 +9,9 @@ import tournamentsRouter from '../src/backend/routes/tournaments.js';
 import { hashPassword } from '../src/backend/lib/auth.js';
 import prisma from '../src/backend/lib/prisma.js';
 import { getClubSettings } from '../src/backend/lib/season.js';
+import { applyLiveMigrations } from '../src/backend/lib/liveDeploy.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 let failed = 0;
 
@@ -22,6 +25,8 @@ function assert(name, cond) {
 }
 
 async function main() {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  await applyLiveMigrations(prisma, root);
   const stamp = Date.now();
   const password = 'toernooi-test-2026';
   const hash = await hashPassword(password);

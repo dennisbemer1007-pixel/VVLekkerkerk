@@ -51,6 +51,7 @@ model Person {
   swapRequests     SwapRequest[] @relation("SwapRequester")
   swapOffers       SwapRequest[] @relation("SwapCounterparty")
   notifications    Notification[]
+  calendarFeed     CalendarFeed?
   /** JSON: pupillen, junioren, senioren. Leeg = niet beschikbaar als scheidsrechter. */
   refereeLevels    String       @default("[]")
   refereeAssignments RefereeAssignment[]
@@ -117,6 +118,7 @@ model Team {
   teamDuties           ServiceTeamDuty[]
   dutyEnrollments      Enrollment[] @relation("EnrollmentForTeam")
   conditionRules       ServiceRule[] @relation("RuleConditionTeam")
+  calendarFeed         CalendarFeed?
 }
 
 model Match {
@@ -133,6 +135,7 @@ model Match {
   team        Team?    @relation(fields: [teamId], references: [id])
   services    Service[]
   refereeAssignment RefereeAssignment?
+  updatedAt   DateTime @updatedAt
 }
 
 model Activity {
@@ -327,7 +330,23 @@ model ClubSettings {
   tournamentsEnabled   Boolean  @default(false)
   /** Scheidsrechters uit tot een admin de schakelaar aanzet. */
   refereesEnabled      Boolean  @default(false)
+  /** Agenda-koppeling uit tot een admin de schakelaar aanzet. */
+  calendarEnabled      Boolean  @default(false)
   updatedAt            DateTime @updatedAt
+}
+
+/** Geheim token voor een iCalendar-feed. Eén per persoon of per team. */
+model CalendarFeed {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  /** person | team */
+  kind      String
+  personId  Int?     @unique
+  person    Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  teamId    Int?     @unique
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Tournament {
