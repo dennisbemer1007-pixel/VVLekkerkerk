@@ -2272,6 +2272,11 @@ assert(
       !/prisma db push/i.test(migration),
   );
   assert(
+    'Match.updatedAt-add heeft een constante default (SQLite)',
+    /ALTER TABLE "Match" ADD COLUMN "updatedAt"/.test(migration) &&
+      !/ALTER TABLE "Match" ADD COLUMN "updatedAt"[^;]*CURRENT_TIMESTAMP/.test(migration),
+  );
+  assert(
     'instellingen en mijn gegevens hebben de agenda-koppeling',
     instellingenSrc.includes('data-testid="agenda-schakelaar"') &&
       instellingenSrc.includes('Agenda-koppeling') &&

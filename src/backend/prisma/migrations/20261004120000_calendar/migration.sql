@@ -5,7 +5,9 @@
 
 -- AlterTable
 ALTER TABLE "ClubSettings" ADD COLUMN "calendarEnabled" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Match" ADD COLUMN "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+-- SQLite weigert CURRENT_TIMESTAMP als default bij ADD COLUMN (niet-constante waarde).
+ALTER TABLE "Match" ADD COLUMN "updatedAt" DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00';
+UPDATE "Match" SET "updatedAt" = CURRENT_TIMESTAMP WHERE "updatedAt" IS NULL OR "updatedAt" <= '1970-01-01 00:00:00';
 
 -- CreateTable
 CREATE TABLE "CalendarFeed" (
