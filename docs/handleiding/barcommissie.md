@@ -28,6 +28,8 @@ Clubbrede planning en mensenbeheer.
 
 6. Planning officieel maken doe je onder **Beheer → Planning**. Daarna kunnen vrijwilligers zich niet meer zelf uitschrijven.
 
+7. **Mijn gegevens** — wachtwoord wijzigen en een kind koppelen, hetzelfde als bij vrijwilligers.
+
 ## Veelgestelde vragen
 
 **Uitnodigingslink kwijt?**  

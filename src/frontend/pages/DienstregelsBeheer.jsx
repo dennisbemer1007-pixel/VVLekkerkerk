@@ -21,6 +21,7 @@ const emptyRule = {
   teamDutyReserved: 2,
   teamDutyAgeFrom: '',
   teamDutyAgeTo: '',
+  teamDutyTeamIds: [],
   active: true,
   sortOrder: 0,
 };
@@ -81,6 +82,7 @@ export default function DienstregelsBeheer() {
         teamDutyReserved: Number(form.teamDutyReserved) || 0,
         teamDutyAgeFrom: form.teamDutyAgeFrom === '' ? null : Number(form.teamDutyAgeFrom),
         teamDutyAgeTo: form.teamDutyAgeTo === '' ? null : Number(form.teamDutyAgeTo),
+        teamDutyTeamIds: form.teamDutyTeamIds || [],
       };
       if (editId) await api.updateServiceRule(editId, payload);
       else await api.createServiceRule(payload);
@@ -339,8 +341,33 @@ export default function DienstregelsBeheer() {
               Speelt er jeugd thuis, dan vult <strong>één team</strong> uit deze groep de
               teamplekken: het team dat dit seizoen het minst heeft gestaan. De overige plekken
               blijven open voor vrijwilligers. Voorbeeld: ochtend O8 t/m O12 met 2 teamplekken,
-              middag O13 t/m O17 met 2, avond O13 t/m O17 met 1.
+              middag O13 t/m O17 met 2, avond O13 t/m O17 met 1. Voor 7x7 of senioren vink je
+              hieronder het team aan.
             </p>
+            <fieldset className="sm:col-span-2 lg:col-span-3 space-y-2">
+              <legend className="vvl-label">Ook deze teams (7x7, senioren, …)</legend>
+              <div className="grid max-h-40 gap-1 overflow-auto rounded-sm border border-vvl-border p-2 sm:grid-cols-2">
+                {teams.map((team) => {
+                  const id = Number(team.id);
+                  const checked = (form.teamDutyTeamIds || []).includes(id);
+                  return (
+                    <label key={team.id} className="flex min-h-11 items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = new Set(form.teamDutyTeamIds || []);
+                          if (e.target.checked) next.add(id);
+                          else next.delete(id);
+                          setForm({ ...form, teamDutyTeamIds: [...next] });
+                        }}
+                      />
+                      {team.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
           </>
         ) : null}
         <label className="flex items-center gap-2 text-sm font-semibold">
@@ -391,6 +418,7 @@ export default function DienstregelsBeheer() {
                     teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
                     teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
                     teamDutyAgeTo: r.teamDutyAgeTo ?? '',
+                    teamDutyTeamIds: Array.isArray(r.teamDutyTeamIds) ? r.teamDutyTeamIds.map(Number) : [],
                     slot: r.slot || '',
                   });
                   scrollToForm(formRef);
@@ -465,6 +493,7 @@ export default function DienstregelsBeheer() {
                           teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
                           teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
                           teamDutyAgeTo: r.teamDutyAgeTo ?? '',
+                          teamDutyTeamIds: Array.isArray(r.teamDutyTeamIds) ? r.teamDutyTeamIds.map(Number) : [],
                           slot: r.slot || '',
                         });
                         scrollToForm(formRef);

@@ -215,7 +215,11 @@ function DienstenBeheer() {
   const [dateFrom, setDateFrom] = useState(todayInputValue());
   const [dateTo, setDateTo] = useState('');
   const [personQuery, setPersonQuery] = useState('');
-  const [occFilter, setOccFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const [occFilter, setOccFilter] = useState(
+    ['full', 'almost', 'open'].includes(statusParam) ? statusParam : '',
+  );
   const [matches, setMatches] = useState([]);
   const [dutyTeams, setDutyTeams] = useState([]);
   const [teamPick, setTeamPick] = useState({});
@@ -238,6 +242,11 @@ function DienstenBeheer() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const next = ['full', 'almost', 'open'].includes(statusParam) ? statusParam : '';
+    setOccFilter(next);
+  }, [statusParam]);
 
   const filteredServices = useMemo(() => {
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
@@ -507,7 +516,13 @@ function DienstenBeheer() {
               key={item.label}
               type="button"
               className={occFilter === item.id ? 'vvl-btn-primary text-xs' : 'vvl-btn-outline text-xs'}
-              onClick={() => setOccFilter(item.id)}
+              onClick={() => {
+                setOccFilter(item.id);
+                const next = new URLSearchParams(searchParams);
+                if (item.id) next.set('status', item.id);
+                else next.delete('status');
+                setSearchParams(next, { replace: true });
+              }}
             >
               {item.label}
             </button>
@@ -854,11 +869,11 @@ function TeamsBeheer() {
       <div className="vvl-card space-y-3" data-testid="team-plekken-overzicht">
         <h2 className="font-heading text-lg font-black uppercase">Teamdiensten (plekken)</h2>
         <p className="text-sm text-gray-700">
-          Aantal teamplekken in de actieve planningsperiode. O9 met 2 plekken telt als 2; middag +
+          Aantal teamplekken dit seizoen. O9 met 2 plekken telt als 2; middag +
           avond op één dag telt op.
         </p>
         {teamOverview.length === 0 ? (
-          <p className="text-sm text-gray-600">Geen teams met teamdienst in deze periode.</p>
+          <p className="text-sm text-gray-600">Geen teams met teamdienst dit seizoen.</p>
         ) : (
           <ul className="divide-y divide-vvl-border rounded-sm border border-vvl-border">
             {[...teamOverview]

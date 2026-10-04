@@ -5,7 +5,7 @@ import { ADMIN_ROLES } from '../lib/roles.js';
 import { writeAudit } from '../lib/audit.js';
 import { generateServicesFromRules } from '../lib/serviceGeneration.js';
 import { CONDITION_TYPE_IDS } from '../lib/defaultServiceRules.js';
-import { parseAgeBound } from '../lib/teamDutyPlanning.js';
+import { parseAgeBound, parseTeamDutyTeamIds, serializeTeamDutyTeamIds } from '../lib/teamDutyPlanning.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -39,6 +39,7 @@ function parseRuleBody(body) {
     teamDutyReserved: Math.max(0, Math.min(20, Number(body.teamDutyReserved) || 0)),
     teamDutyAgeFrom,
     teamDutyAgeTo,
+    teamDutyTeamIds: serializeTeamDutyTeamIds(body.teamDutyTeamIds),
     active: body.active !== false,
     validFrom: body.validFrom ? new Date(body.validFrom) : null,
     validTo: body.validTo ? new Date(body.validTo) : null,
@@ -52,6 +53,10 @@ function validateRule(data) {
   return null;
 }
 
+function presentRule(rule) {
+  return { ...rule, teamDutyTeamIds: parseTeamDutyTeamIds(rule.teamDutyTeamIds) };
+}
+
 router.get(
   '/',
   admin(async (_req, res, next) => {
@@ -60,7 +65,9 @@ router.get(
         include: { conditionTeam: true },
         orderBy: [{ sortOrder: 'asc' }, { weekday: 'asc' }, { startTime: 'asc' }],
       });
-      res.json(rules);
+      res.json(
+        rules.map((rule) => presentRule(rule)),
+      );
     } catch (err) {
       next(err);
     }
@@ -82,7 +89,7 @@ router.post(
         entityId: rule.id,
         detail: rule.name,
       });
-      res.status(201).json(rule);
+      res.status(201).json(presentRule(rule));
     } catch (err) {
       next(err);
     }
@@ -107,7 +114,7 @@ router.put(
         entityId: rule.id,
         detail: `${rule.name} (geldig vanaf ${rule.validFrom || 'nu'})`,
       });
-      res.json(rule);
+      res.json(presentRule(rule));
     } catch (err) {
       next(err);
     }

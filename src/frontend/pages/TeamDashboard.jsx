@@ -243,7 +243,7 @@ export default function TeamDashboard() {
                   {team.members.length} ouders/leden
                   {team.teamDutyUse ? ' · teamdienst bij thuiswedstrijd' : ' · geen teamdienst'}
                   {typeof team.teamShiftSpots === 'number'
-                    ? ` · ${team.teamShiftSpots} teamplek(ken) in periode`
+                    ? ` · ${team.teamShiftSpots} teamplek(ken) dit seizoen`
                     : ''}
                 </p>
               </div>
@@ -261,8 +261,7 @@ export default function TeamDashboard() {
                     <li key={m.id} className="rounded-sm border border-vvl-border p-3 text-sm">
                       <p className="font-semibold">{m.name}</p>
                       <p className="text-xs text-gray-600">
-                        {OBLIGATION_SHORT[m.obligation] || '—'} · 6 wkn {m.stood6w ?? m.barLast6Weeks ?? 0} · jaar{' '}
-                        {m.stoodYear ?? m.barThisYear ?? 0}
+                        {OBLIGATION_SHORT[m.obligation] || '—'} · {m.teamDutyCount || 0}× voor dit team
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button type="button" className="vvl-btn-outline text-xs" onClick={() => setEdit({ id: m.id, name: m.name })}>
@@ -292,9 +291,7 @@ export default function TeamDashboard() {
                         <th className="p-3 text-left">Naam</th>
                         <th className="p-3 text-left">Team</th>
                         <th className="p-3 text-left">Verplichting</th>
-                        <th className="p-3 text-right">6 weken</th>
-                        <th className="p-3 text-right">Dit jaar</th>
-                        <th className="p-3 text-right">Teamdiensten</th>
+                        <th className="p-3 text-right">Dit team</th>
                         <th className="p-3 text-left"> </th>
                       </tr>
                     </thead>
@@ -314,8 +311,6 @@ export default function TeamDashboard() {
                           </td>
                           <td className="p-3">{team.name}</td>
                           <td className="p-3">{OBLIGATION_SHORT[m.obligation] || '—'}</td>
-                          <td className="p-3 text-right">{m.stood6w ?? m.barLast6Weeks ?? 0}</td>
-                          <td className="p-3 text-right">{m.stoodYear ?? m.barThisYear ?? 0}</td>
                           <td className="p-3 text-right">{m.teamDutyCount || 0}</td>
                           <td className="p-3">
                             <div className="flex flex-nowrap gap-2">
@@ -346,8 +341,8 @@ export default function TeamDashboard() {
                   </table>
                 </div>
                 <p className="mt-2 text-xs text-gray-600">
-                  6 weken en dit jaar tellen alle bardiensten, inclusief teamdiensten. Ouders met een account
-                  verwijder je niet hier; dat doet de barcommissie.
+                  Dit team telt hoe vaak de ouder voor dit team heeft gestaan. Andere teams zie je niet
+                  in dit getal. Ouders met een account verwijder je niet hier; dat doet de barcommissie.
                 </p>
               </div>
 
@@ -434,7 +429,7 @@ export default function TeamDashboard() {
                 </form>
               ) : section === 'diensten' ? (
                 <p className="text-sm text-gray-600">
-                  Geen open teamdienst-plekken in deze planningsperiode. Die ontstaan automatisch als
+                  Geen open teamdienst-plekken vanaf vandaag. Die ontstaan automatisch als
                   dit team thuis speelt.
                 </p>
               ) : null}

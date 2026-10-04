@@ -58,20 +58,36 @@ export function namesOnly(service) {
   return names;
 }
 
+function teamSpotTokens(service) {
+  const duties = service?.teamDuties || [];
+  const named = (service?.enrollments || []).filter((row) => row.kind === 'TEAM' && !row.noShow);
+  const tokens = [];
+  for (const duty of duties) {
+    const teamId = Number(duty.teamId ?? duty.team?.id);
+    const teamName = duty.team?.name || 'Team';
+    const reserved = Math.max(1, Number(duty.reserved) || 1);
+    const forTeam = named.filter((row) => Number(row.forTeamId || row.forTeam?.id) === teamId);
+    for (let index = 0; index < reserved; index += 1) {
+      const enrollment = forTeam[index];
+      if (enrollment?.person?.name) tokens.push({ kind: 'name', text: enrollment.person.name });
+      else tokens.push({ kind: 'team', text: teamName });
+    }
+  }
+  return tokens;
+}
+
 function openSpotTokens(service) {
   const required = Math.max(0, Number(service?.required) || 0);
-  const named = namesOnly(service).length;
-  const open = Math.max(0, required - named);
   const tokens = [];
-  for (const name of namesOnly(service)) tokens.push({ kind: 'name', text: name });
-  // Teamnaam tonen als bardienstcoördinator nog geen ouder heeft gezet
-  const teamNames = (service?.teamDuties || [])
-    .map((d) => d.team?.name)
-    .filter(Boolean);
-  if (!named && teamNames.length) {
-    for (const name of [...new Set(teamNames)]) tokens.push({ kind: 'team', text: name });
+  const personal = (service?.enrollments || []).filter(
+    (row) => row.kind !== 'TEAM' && !row.noShow && row.person?.name,
+  );
+  for (const row of personal) tokens.push({ kind: 'name', text: row.person.name });
+  tokens.push(...teamSpotTokens(service));
+  if (!tokens.length) {
+    for (const name of namesOnly(service)) tokens.push({ kind: 'name', text: name });
   }
-  const stillOpen = Math.max(0, open - (tokens.length - named));
+  const stillOpen = Math.max(0, required - tokens.length);
   for (let i = 0; i < stillOpen; i += 1) tokens.push({ kind: 'open', text: 'open plek' });
   return tokens;
 }

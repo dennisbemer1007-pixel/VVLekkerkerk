@@ -15,12 +15,15 @@ export function seniorWeekendSuffix(date) {
   return '';
 }
 
-export function isBareSeniorClubTeam(name) {
-  const n = String(name || '')
+export function stripWeekendSuffix(name) {
+  return String(name || '')
     .replace(/\s*\((za|zo)\)\s*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
-  return SENIOR_BARE_RE.test(n);
+}
+
+export function isBareSeniorClubTeam(name) {
+  return SENIOR_BARE_RE.test(stripWeekendSuffix(name));
 }
 
 /**
@@ -102,6 +105,13 @@ export function findTeamInIndex(index, name) {
   for (const key of teamLookupKeys(name)) {
     const found = index.get(key);
     if (found) return found;
+  }
+  const unsuffixed = stripWeekendSuffix(name);
+  if (unsuffixed && unsuffixed.toLowerCase() !== String(name || '').trim().toLowerCase()) {
+    for (const key of teamLookupKeys(unsuffixed)) {
+      const found = index.get(key);
+      if (found) return found;
+    }
   }
   return null;
 }

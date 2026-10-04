@@ -18,13 +18,6 @@ const VOLUNTEER = [
 ];
 
 const DASHBOARD = { to: '/open', label: 'Dashboard', short: 'Dash', icon: 'dot', match: ['/open', '/aandacht'] };
-const DIENSTEN = {
-  to: '/rooster',
-  label: 'Diensten',
-  short: 'Diensten',
-  icon: 'calendar',
-  match: ['/rooster', '/planning'],
-};
 const MIJN_DIENSTEN = {
   to: '/mijn-diensten',
   label: 'Mijn diensten',
@@ -40,7 +33,14 @@ const PERSONEN = {
   match: ['/mensen', '/uitnodigen'],
 };
 const MIJN_RUILEN = { to: '/mijn-ruilen', label: 'Mijn ruilen', short: 'Ruilen', icon: 'swap', match: ['/mijn-ruilen'] };
-const MEER = { to: '/meer', label: 'Beheer', short: 'Beheer', icon: 'more', match: ['/meer', '/wedstrijden', '/aandacht', '/beheer', '/scheidsrechters'] };
+const MIJN_GEGEVENS = VOLUNTEER[3];
+const MEER = {
+  to: '/meer',
+  label: 'Beheer',
+  short: 'Beheer',
+  icon: 'more',
+  match: ['/meer', '/wedstrijden', '/beheer', '/scheidsrechters'],
+};
 const INSTELLINGEN = { to: '/instellingen', label: 'Instellingen', short: 'Instel.', icon: 'gear', match: ['/instellingen'], desktopOnly: true };
 
 const SETTINGS_TABS = new Set(['regels', 'mail', 'club', 'activiteiten']);
@@ -56,9 +56,12 @@ export function navForRole(role) {
       VOLUNTEER[3],
     ];
   }
-  // Geen aparte “Diensten” in het hoofdmenu: die zit onder Beheer → Rooster.
-  if (r === 'Barcommissie') return [DASHBOARD, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, MEER];
-  if (r === 'Admin') return [DASHBOARD, MIJN_DIENSTEN, PERSONEN, MIJN_RUILEN, INSTELLINGEN, MEER];
+  if (r === 'Barcommissie') {
+    return [DASHBOARD, MIJN_DIENSTEN, MIJN_RUILEN, MIJN_GEGEVENS, PERSONEN, MEER];
+  }
+  if (r === 'Admin') {
+    return [DASHBOARD, MIJN_DIENSTEN, MIJN_RUILEN, MIJN_GEGEVENS, PERSONEN, MEER, INSTELLINGEN];
+  }
   return VOLUNTEER;
 }
 
@@ -78,7 +81,7 @@ export function navItemActive(item, pathname, search, role) {
     return pathname === '/beheer' && SETTINGS_TABS.has(tab);
   }
   if (item.to === '/meer') {
-    if (['/meer', '/wedstrijden', '/aandacht', '/mijn-gegevens', '/scheidsrechters'].includes(pathname)) return true;
+    if (['/meer', '/wedstrijden', '/scheidsrechters'].includes(pathname)) return true;
     if (pathname !== '/beheer') return false;
     if (admin && SETTINGS_TABS.has(tab)) return false;
     return true;

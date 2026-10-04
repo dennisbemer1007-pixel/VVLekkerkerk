@@ -25,7 +25,7 @@ import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie
 import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
 import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
-import { navForRole, navItemActive } from '../src/frontend/navConfig.js';
+import { mobileNavForRole, navForRole, navItemActive } from '../src/frontend/navConfig.js';
 import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
 import {
   customMailTemplates,
@@ -76,14 +76,23 @@ import {
 import {
   eligibleTeamDutyCandidates,
   friendlyEnrollmentReason,
+  displayEnrollmentReason,
   occupiedSlots,
   pickTeamDutyAssignment,
   recordTeamDutyStand,
   requiredForTeamDuties,
   serviceCapacity,
+  shouldAttachTeamDutiesToLocked,
   teamDutyAssignments,
+  teamFitsDutyRule,
 } from '../src/backend/lib/teamDutyPlanning.js';
-import { clubTeamLabel, isBareSeniorClubTeam, seniorWeekendSuffix } from '../src/backend/lib/knvbTeams.js';
+import {
+  buildTeamIndex,
+  clubTeamLabel,
+  findTeamInIndex,
+  isBareSeniorClubTeam,
+  seniorWeekendSuffix,
+} from '../src/backend/lib/knvbTeams.js';
 import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
 import {
   clampServiceDateFilter,
@@ -358,7 +367,16 @@ assert(
         enrollments: [],
         teamDuties: [{ team: { name: 'MO17-1' } }],
       },
-    ]) === 'MO17-1, open plek',
+    ]) === 'MO17-1, open plek' &&
+    slotCellText([
+      {
+        type: 'BAR',
+        slot: 'MORNING',
+        required: 3,
+        enrollments: [{ kind: 'PERSONAL', person: { name: 'Denise de Groot' } }],
+        teamDuties: [{ teamId: 8, reserved: 2, team: { name: 'O8-1JM' } }],
+      },
+    ]) === 'Denise de Groot, O8-1JM, O8-1JM',
 );
 assert(
   'pdf gebruikt echte diensttijd in label',
@@ -372,6 +390,26 @@ assert(
     isBareSeniorClubTeam('Lekkerkerk 2') === true &&
     seniorWeekendSuffix('2026-10-10') === ' (za)',
 );
+{
+  const index = buildTeamIndex([
+    { id: 1, name: 'Lekkerkerk 1' },
+    { id: 2, name: 'O16-1' },
+  ]);
+  assert(
+    'import za-naam koppelt aan bestaand Lekkerkerk 1',
+    findTeamInIndex(index, 'Lekkerkerk 1 (za)')?.id === 1 &&
+      findTeamInIndex(index, 'Lekkerkerk 1')?.id === 1,
+  );
+  const split = buildTeamIndex([
+    { id: 3, name: 'Lekkerkerk 1 (za)' },
+    { id: 4, name: 'Lekkerkerk 1 (zo)' },
+  ]);
+  assert(
+    'bestaande za/zo-split blijft de juiste ploeg',
+    findTeamInIndex(split, 'Lekkerkerk 1 (za)')?.id === 3 &&
+      findTeamInIndex(split, 'Lekkerkerk 1 (zo)')?.id === 4,
+  );
+}
 {
   const rule = { required: 2, teamDutyReserved: 2 };
   const recent = { team: { id: 1, name: 'MO17-1' }, match: { id: 10 } };
@@ -662,7 +700,32 @@ assert(
   'teamplek twee regels: naam en team',
   spotLines.length === 2 && spotLines[0].label === 'Eva Meijer' && spotLines[0].team === false && spotLines[1].label === 'O10-1' && spotLines[1].team === true,
 );
-assert('bezetting is gevuld/nodig', occupancyFraction({ enrolled: 1, required: 2 }) === '1/2');
+assert(
+  'bezetting is gevuld/nodig',
+  occupancyFraction({ enrolled: 1, required: 2 }) === '1/2',
+);
+assert(
+  'excel-reden open wordt automatisch ingepland',
+  displayEnrollmentReason('open') === 'Automatisch ingepland' &&
+    displayEnrollmentReason('Automatisch ingepland') === 'Automatisch ingepland',
+);
+assert(
+  'officiële lege dienst mag teamplekken krijgen',
+  shouldAttachTeamDutiesToLocked({ origin: 'AUTO', locked: true, teamDuties: [] }, [{ team: { id: 1 } }]) === true &&
+    shouldAttachTeamDutiesToLocked({ origin: 'MANUAL', teamDuties: [] }, [{ team: { id: 1 } }]) === false &&
+    shouldAttachTeamDutiesToLocked({ origin: 'AUTO', teamDuties: [{ id: 1 }] }, [{ team: { id: 1 } }]) === false,
+);
+assert(
+  '7x7 mag op teamdienst via gekozen team-id',
+  teamFitsDutyRule(
+    { id: 88, name: '7x7 mannen', teamDutyUse: false },
+    { teamDutySlotRole: 'LAST', teamDutyTeamIds: [88] },
+  ) === true &&
+    teamFitsDutyRule(
+      { id: 88, name: '7x7 mannen', teamDutyUse: false },
+      { teamDutySlotRole: 'LAST', teamDutyAgeFrom: 8, teamDutyAgeTo: 12 },
+    ) === false,
+);
 
 const xlsxBuf = workbookToXlsx([
   {
@@ -1282,10 +1345,42 @@ assert(
 }
 
 const labels = (role) => navForRole(role).map((item) => item.label).join('|');
+const mobileLabels = (role) => mobileNavForRole(role).map((item) => item.label).join('|');
 assert('menu vrijwilliger', labels('Vrijwilliger') === 'Diensten|Mijn diensten|Ruilen|Mijn gegevens');
 assert('menu teamcoördinator', labels('Teamcoördinator') === 'Diensten|Mijn diensten|Team|Ruilen|Mijn gegevens');
-assert('menu barcommissie', labels('Barcommissie') === 'Dashboard|Mijn diensten|Personen|Mijn ruilen|Beheer');
-assert('menu admin', labels('Admin') === 'Dashboard|Mijn diensten|Personen|Mijn ruilen|Instellingen|Beheer');
+assert('menu barcommissie', labels('Barcommissie') === 'Dashboard|Mijn diensten|Mijn ruilen|Mijn gegevens|Personen|Beheer');
+assert('menu admin', labels('Admin') === 'Dashboard|Mijn diensten|Mijn ruilen|Mijn gegevens|Personen|Beheer|Instellingen');
+assert(
+  'menu barcommissie mobiel zelfde volgorde',
+  mobileLabels('Barcommissie') === 'Dashboard|Mijn diensten|Mijn ruilen|Mijn gegevens|Personen|Beheer',
+);
+assert(
+  'menu admin mobiel zonder instellingen',
+  mobileLabels('Admin') === 'Dashboard|Mijn diensten|Mijn ruilen|Mijn gegevens|Personen|Beheer',
+);
+assert(
+  'mijn gegevens zelfde pad voor alle rollen',
+  ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'].every((role) =>
+    navForRole(role).some((item) => item.to === '/mijn-gegevens' && item.label === 'Mijn gegevens'),
+  ),
+);
+assert(
+  'personen blijft top-level, niet onder beheer',
+  navForRole('Barcommissie').some((item) => item.to === '/mensen' && item.label === 'Personen') &&
+    !navForRole('Barcommissie').find((item) => item.to === '/meer').match.includes('/mensen'),
+);
+{
+  const layoutSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/components/Layout.jsx'),
+    'utf8',
+  );
+  assert(
+    'desktop en mobiel menu uit dezelfde config, uitloggen op beide',
+    layoutSrc.includes('navForRole') &&
+      layoutSrc.includes('mobileNavForRole') &&
+      (layoutSrc.match(/Uitloggen/g) || []).length >= 2,
+  );
+}
 assert(
   'admin-instellingen niet onder Meer',
   navItemActive({ to: '/instellingen' }, '/beheer', '?tab=regels', 'Admin') &&
@@ -1364,28 +1459,45 @@ assert(
     'utf8',
   );
   assert(
-    'dashboard-tegels linken naar rooster en aandacht',
-    dashSrc.includes('/rooster?status=') &&
+    'dashboard-tegels linken naar beheer-diensten en aandacht',
+    dashSrc.includes('/meer?tab=diensten&status=') &&
       dashSrc.includes('/aandacht#niet-ingepland') &&
       dashSrc.includes('/aandacht#no-show') &&
       dashSrc.includes('download-pdf') === false &&
       dashSrc.includes('DownloadPlanningButtons') &&
-      dashSrc.includes('dash-inschrijven'),
+      !dashSrc.includes('dash-inschrijven') &&
+      !dashSrc.includes('/rooster?status='),
   );
   const appSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/App.jsx'),
     'utf8',
   );
   assert('dashboard-route is /open', appSrc.includes('<Dashboard />') && appSrc.includes('path="/open"'));
+  assert(
+    'mijn gegevens en kinderen zonder rolbeperking',
+    /path="\/mijn-gegevens" element=\{<Protected><Ik/.test(appSrc) &&
+      /path="\/kinderen" element=\{<Protected><Kinderen/.test(appSrc),
+  );
+  const personsRouteSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/persons.js'),
+    'utf8',
+  );
+  assert(
+    'kind via mijn gegevens krijgt geen team van de ouder',
+    personsRouteSrc.includes("'/me/children'") &&
+      /teamId:\s*null/.test(personsRouteSrc) &&
+      !/teamId:\s*guardian\.teamId/.test(personsRouteSrc),
+  );
   const personenSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/PersonenBeheer.jsx'),
     'utf8',
   );
   assert(
-    'personen heeft actief-toggle en geen kind-koppeling in beheer',
+    'personen heeft actief-toggle en compacte kind-koppeling in beheer',
     personenSrc.includes('Activeren') &&
       personenSrc.includes('Deactiveren') &&
       personenSrc.includes('filterActive') &&
+      personenSrc.includes('beheer-kinderen') &&
       !personenSrc.includes('Kind van / gekoppeld aan ouder') &&
       !personenSrc.includes('GuardianPicker'),
   );
@@ -1603,8 +1715,10 @@ assert(
     'live-start back-upt en past alleen SQL toe, geen db push',
     liveDeploySrc.includes('20261003160000_tournaments') &&
       liveDeploySrc.includes('20261003180000_referees') &&
+      liveDeploySrc.includes('20261004150000_chantal_tester') &&
       renderStartSrc.includes('backupSqlite') &&
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
+      renderStartSrc.includes('repairAccidentalWeekendTeams') &&
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
   );

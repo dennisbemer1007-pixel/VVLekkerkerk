@@ -360,8 +360,15 @@ async function main() {
       password: 'demo123',
       path: '/open',
       width: 375,
-      expectText: ['Open'],
+      expectText: ['Open', 'Dash', 'Gegevens', 'Personen', 'Beheer', 'Uitloggen'],
       forbidText: ['Eerst het overzicht', 'Dit zijn vrijwilligers'],
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/open',
+      width: 1280,
+      expectText: ['Dashboard', 'Mijn diensten', 'Mijn ruilen', 'Mijn gegevens', 'Personen', 'Beheer', 'Uitloggen'],
     });
     await pageCheck(browser, {
       email: 'mark@vvl.demo',
@@ -377,7 +384,31 @@ async function main() {
       path: '/meer',
       width: 375,
       expectText: ['Aandacht', 'Club'],
-      forbidText: ['Mijn gegevens', 'Personen beheren'],
+      forbidText: ['Personen beheren'],
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/mijn-gegevens',
+      width: 375,
+      expectText: ['Wachtwoord wijzigen', 'Mijn kinderen'],
+      forbidText: ['excel downloaden', 'privacy', 'Geen toegang'],
+    });
+    await pageCheck(browser, {
+      email: 'admin@vvl.local',
+      password: 'admin123',
+      path: '/mijn-gegevens',
+      width: 1280,
+      expectText: [
+        'Wachtwoord wijzigen',
+        'Mijn kinderen',
+        'Mijn gegevens',
+        'Personen',
+        'Beheer',
+        'Instellingen',
+        'Uitloggen',
+      ],
+      forbidText: ['excel downloaden', 'Geen toegang'],
     });
     await pageCheck(browser, {
       email: 'admin@vvl.local',

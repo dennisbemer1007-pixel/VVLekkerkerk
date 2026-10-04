@@ -29,6 +29,7 @@ import {
 } from '../lib/planningRounds.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { personShiftRows } from '../lib/planningExport.js';
+import { displayEnrollmentReason } from '../lib/teamDutyPlanning.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
@@ -629,7 +630,7 @@ router.get(
             e.source,
             e.makeup ? 'ja' : 'nee',
             e.noShow ? 'ja' : 'nee',
-            e.reason || '',
+            displayEnrollmentReason(e.reason) || e.reason || '',
           );
           return row;
         }),
