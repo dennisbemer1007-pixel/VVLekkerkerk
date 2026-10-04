@@ -45,6 +45,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
         teamDuties: {
           include: { team: true },
         },
+        activity: { select: { id: true, name: true, type: true } },
       },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
     });

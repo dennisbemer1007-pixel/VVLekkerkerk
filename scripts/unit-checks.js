@@ -1780,6 +1780,18 @@ assert(
       renderStartLiveSrc.includes('deactivateOrphanAutoServices') &&
       renderStartLiveSrc.includes('orphanAutoServices'),
   );
+  const pdfRouteSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/pdf.js'),
+    'utf8',
+  );
+  assert(
+    'pdf-rooster laadt jaarplanning-activiteit',
+    pdfRouteSrc.includes('activity: { select: { id: true, name: true, type: true } }'),
+  );
+  assert(
+    'excel-export laadt jaarplanning-activiteit',
+    planningExportSrc.includes("activity: { select: { id: true, name: true, type: true } }"),
+  );
 }
 {
   const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');

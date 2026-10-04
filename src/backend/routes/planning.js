@@ -594,6 +594,7 @@ router.get(
         include: {
           enrollments: { include: { person: true }, orderBy: { createdAt: 'asc' } },
           assignedTeam: true,
+          activity: { select: { id: true, name: true, type: true } },
         },
         orderBy: [{ date: 'asc' }, { time: 'asc' }],
       });
