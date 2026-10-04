@@ -192,6 +192,7 @@ export default function Inschrijven({ mode = 'open' }) {
                     service={s}
                     selected={selectedId === s.id}
                     onSelect={() => selectService(s.id)}
+                    householdIds={choices.map((choice) => choice.id)}
                   />
                 </li>
               ))}
