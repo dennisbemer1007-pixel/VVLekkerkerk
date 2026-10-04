@@ -1348,7 +1348,8 @@ assert(
       dashSrc.includes('/aandacht#niet-ingepland') &&
       dashSrc.includes('/aandacht#no-show') &&
       dashSrc.includes('download-pdf') === false &&
-      dashSrc.includes('DownloadPlanningButtons'),
+      dashSrc.includes('DownloadPlanningButtons') &&
+      dashSrc.includes('dash-inschrijven'),
   );
   const appSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/App.jsx'),
@@ -1361,7 +1362,8 @@ assert(
   );
   assert(
     'personen heeft actief-toggle en geen kind-koppeling in beheer',
-    personenSrc.includes('actief maken') &&
+    personenSrc.includes('Activeren') &&
+      personenSrc.includes('Deactiveren') &&
       personenSrc.includes('filterActive') &&
       !personenSrc.includes('Kind van / gekoppeld aan ouder') &&
       !personenSrc.includes('GuardianPicker'),
@@ -1371,6 +1373,19 @@ assert(
     'utf8',
   );
   assert('planning-excel heeft blad Per persoon', planningExportSrc.includes("name: 'Per persoon'"));
+  const downloadSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/components/DownloadPlanningButtons.jsx'),
+    'utf8',
+  );
+  assert('excel- en pdf-knoppen heten Excel-lijst en PDF rooster', downloadSrc.includes('Excel-lijst') && downloadSrc.includes('PDF rooster'));
+  const planningUiSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Planning.jsx'),
+    'utf8',
+  );
+  assert(
+    'barcommissie kan teamplek vullen vanuit toewijzen',
+    planningUiSrc.includes('assignTeamSpot: teamOnlyLeft') && !planningUiSrc.includes('disabled={teamOnlyLeft}'),
+  );
   const authSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/auth.js'),
     'utf8',

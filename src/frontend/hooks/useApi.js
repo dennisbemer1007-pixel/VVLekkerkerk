@@ -94,8 +94,8 @@ async function json(path, options = {}, attempt = 0) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    if ((res.status === 502 || res.status === 503) && attempt < 2) {
-      await sleep(350 * (attempt + 1));
+    if ((res.status === 502 || res.status === 503 || res.status === 429) && attempt < 2) {
+      await sleep(res.status === 429 ? 700 * (attempt + 1) : 350 * (attempt + 1));
       return json(path, options, attempt + 1);
     }
     if (res.status === 502 || res.status === 503) {

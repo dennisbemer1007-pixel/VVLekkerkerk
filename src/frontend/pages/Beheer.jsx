@@ -595,7 +595,8 @@ function DienstenBeheer() {
                 <div className="vvl-card space-y-2 py-3 text-sm">
                   <p className="font-bold">Teamplekken</p>
                   <p className="text-xs text-gray-600">
-                    Alleen de bardienstcoördinator vult teamplekken via Team. Hier kun je het team wijzigen of bewust iemand op die plek zetten.
+                    Teamplekken vult de bardienstcoördinator via Team. Als barcommissie kun je hier het team wijzigen of
+                    bewust iemand op die plek zetten.
                   </p>
                   {(s.teamDuties || []).map((duty) => (
                     <div key={duty.id} className="flex flex-wrap items-end gap-2">

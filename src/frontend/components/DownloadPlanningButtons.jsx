@@ -62,7 +62,7 @@ export default function DownloadPlanningButtons({ period = null }) {
           onClick={downloadExcel}
           data-testid="download-excel"
         >
-          {excelBusy ? 'Excel laden…' : 'Excel'}
+          {excelBusy ? 'Excel laden…' : 'Excel-lijst'}
         </button>
         <button
           type="button"

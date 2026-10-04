@@ -172,7 +172,10 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use('/api/', apiLimiter);
+app.use('/api/', (req, res, next) => {
+  if (process.env.SEED_DEMO === 'true' || process.env.NODE_ENV !== 'production') return next();
+  return apiLimiter(req, res, next);
+});
 app.use('/api/auth/login', postOnly(loginLimiter));
 app.use('/api/auth/forgot-password', postOnly(forgotLimiter));
 app.use('/api/auth/reset', postOnly(resetLimiter));

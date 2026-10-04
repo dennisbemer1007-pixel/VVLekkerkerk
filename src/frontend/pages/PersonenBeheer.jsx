@@ -528,6 +528,7 @@ export default function PersonenBeheer() {
   };
 
   const setActive = async (p, active) => {
+    if (!active && !window.confirm(`${p.name} deactiveren?`)) return;
     setError('');
     try {
       await api.updatePerson(p.id, { active });
@@ -825,7 +826,7 @@ export default function PersonenBeheer() {
               <th className="hidden w-24 p-2 font-bold lg:table-cell">Team</th>
               <th className="hidden w-20 p-2 font-bold md:table-cell">Vrijgest.</th>
               <th className="w-14 p-2 font-bold sm:w-16">Acc.</th>
-              <th className="w-[6.5rem] p-2 font-bold"> </th>
+              <th className="w-28 p-2 font-bold"> </th>
             </tr>
           </thead>
           <tbody>
@@ -862,15 +863,14 @@ export default function PersonenBeheer() {
                 <td className="p-1 sm:p-2">
                   <div className="flex flex-wrap justify-end gap-1">
                     <IconButton size="sm" title={`${p.name} bewerken`} onClick={() => openEdit(p)}>✏️</IconButton>
-                    {p.active === false ? (
-                      <IconButton
-                        size="sm"
-                        title={`${p.name} actief maken`}
-                        onClick={() => setActive(p, true)}
-                      >
-                        ✓
-                      </IconButton>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="vvl-btn-outline px-2 text-xs min-h-8"
+                      title={p.active === false ? `${p.name} activeren` : `${p.name} deactiveren`}
+                      onClick={() => setActive(p, p.active === false)}
+                    >
+                      {p.active === false ? 'Activeren' : 'Deactiveren'}
+                    </button>
                     {!p.hasAccount && p.email ? (
                       <IconButton size="sm" title={`Uitnodiging sturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
                     ) : null}

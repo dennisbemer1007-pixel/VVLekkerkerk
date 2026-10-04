@@ -131,7 +131,14 @@ export default function Dashboard({ focus = 'week' }) {
 
       {can('beheer') ? <PlanningRoundSwitcher onActivated={loadPlanningPeriod} /> : null}
 
-      <DownloadPlanningButtons period={period} />
+      <div className="flex flex-wrap items-center gap-2">
+        <DownloadPlanningButtons period={period} />
+        {can('inschrijven') ? (
+          <Link to="/diensten" className="vvl-btn-primary min-h-[44px]" data-testid="dash-inschrijven">
+            Inschrijven
+          </Link>
+        ) : null}
+      </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[

@@ -136,7 +136,7 @@ export default function Planning({ variant = 'rooster' }) {
     }
   };
 
-  const enrollAs = async (serviceId, targetId) => {
+  const enrollAs = async (serviceId, targetId, { assignTeamSpot = false } = {}) => {
     setError('');
     setMsg('');
     try {
@@ -144,6 +144,7 @@ export default function Planning({ variant = 'rooster' }) {
         serviceId,
         personId: targetId,
         ignoreMatchBlock: isCommittee,
+        assignTeamSpot: Boolean(assignTeamSpot && isCommittee),
       });
       const who = children.find((c) => c.id === targetId);
       setMsg(who ? `${who.name} staat ingeschreven.` : `${user?.name || 'Je'} staat ingeschreven.`);
@@ -156,6 +157,7 @@ export default function Planning({ variant = 'rooster' }) {
               serviceId,
               personId: targetId,
               ignoreMatchBlock: true,
+              assignTeamSpot: Boolean(assignTeamSpot && isCommittee),
             });
             setMsg(`${user?.name || 'Je'} staat ingeschreven.`);
             await load();
@@ -430,7 +432,7 @@ export default function Planning({ variant = 'rooster' }) {
                 query={assignQuery}
                 onQuery={setAssignQuery}
                 busy={false}
-                onAssign={(personId) => enrollAs(s.id, personId)}
+                onAssign={(personId, opts) => enrollAs(s.id, personId, opts)}
                 onRemove={handleUitschrijven}
               />
             ) : (
@@ -532,7 +534,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
       {teamOnlyLeft ? (
         <p className="text-sm text-amber-900">
           De open plekken zijn teamplekken. De bardienstcoördinator vult ouders via Team. Als barcommissie kun je hier
-          toch iemand op zetten.
+          iemand op die teamplek zetten.
         </p>
       ) : null}
       <label className="block">
@@ -543,7 +545,6 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Typ minstens 2 letters"
           autoFocus
-          disabled={teamOnlyLeft}
         />
       </label>
       {q.length >= 2 ? (
@@ -557,8 +558,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
               <button
                 type="button"
                 className="vvl-btn-primary shrink-0 px-3 text-xs"
-                disabled={teamOnlyLeft}
-                onClick={() => onAssign(p.id)}
+                onClick={() => onAssign(p.id, { assignTeamSpot: teamOnlyLeft })}
               >
                 Zet
               </button>
