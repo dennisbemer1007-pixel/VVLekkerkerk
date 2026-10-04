@@ -439,6 +439,7 @@ router.get(
         at: status.at,
         backupExists: Boolean(status.backupExists),
         backupBytes: status.backupBytes ?? null,
+        backupFile: status.backupFile || null,
         counts: status.counts || null,
         flags: status.flags || null,
         mail: status.mail

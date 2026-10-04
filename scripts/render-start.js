@@ -93,14 +93,26 @@ if (dbFile && fs.existsSync(dbFile)) {
 
 const personsBefore = await prisma.person.count();
 const servicesBefore = await prisma.service.count();
-console.log('[render-start] Voor migratie: %s diensten, %s personen', servicesBefore, personsBefore);
+const enrollmentsBefore = await prisma.enrollment.count();
+console.log(
+  '[render-start] Voor migratie: %s diensten, %s personen, %s inschrijvingen',
+  servicesBefore,
+  personsBefore,
+  enrollmentsBefore,
+);
 
 const migrations = await applyNamedMigrationsOnce(prisma, root, stateDir);
 console.log('[render-start] Migraties:', JSON.stringify(migrations));
 
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
-console.log('[render-start] Na migratie: %s diensten, %s personen', servicesAfter, personsAfter);
+const enrollmentsAfter = await prisma.enrollment.count();
+console.log(
+  '[render-start] Na migratie: %s diensten, %s personen, %s inschrijvingen',
+  servicesAfter,
+  personsAfter,
+  enrollmentsAfter,
+);
 
 let flags = { tournamentsEnabled: false, refereesEnabled: false };
 try {
@@ -158,13 +170,17 @@ const statusFile = writeDeployStatus(stateDir, {
   at: new Date().toISOString(),
   backupExists: Boolean(backup?.exists),
   backupBytes: backup?.bytes ?? null,
+  backupFile: backup?.path ? path.basename(backup.path) : null,
   counts: {
     personsBefore,
     servicesBefore,
+    enrollmentsBefore,
     personsAfter,
     servicesAfter,
+    enrollmentsAfter,
     personsNow: await prisma.person.count(),
     servicesNow: await prisma.service.count(),
+    enrollmentsNow: await prisma.enrollment.count(),
   },
   migrations,
   flags,
@@ -187,7 +203,12 @@ if (process.env.SEED_DEMO === 'true' && (servicesAfter === 0 || personsAfter <= 
     env: process.env,
   });
 } else {
-  console.log('[render-start] Bestaande data behouden (%s diensten, %s personen)', servicesAfter, personsAfter);
+  console.log(
+    '[render-start] Bestaande data behouden (%s diensten, %s personen, %s inschrijvingen)',
+    servicesAfter,
+    personsAfter,
+    enrollmentsAfter,
+  );
 }
 
 console.log('[render-start] Server starten…');
