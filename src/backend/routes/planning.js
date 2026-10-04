@@ -104,6 +104,7 @@ router.get(
         count6w: last6,
         count12w: last12,
         countYear: thisYear,
+        countPeriod: thisSeason,
       });
       return {
         id: p.id,
@@ -601,6 +602,7 @@ router.get(
         toIsoDate(s.date),
         s.time,
         s.type === 'KITCHEN' ? 'Keuken' : 'Bar',
+        s.activity?.name || '',
         s.kind,
         s.required,
         s.enrollments.length,
@@ -639,7 +641,7 @@ router.get(
       const sheets = [
         {
           name: 'Diensten',
-          headers: ['Datum', 'Tijd', 'Type', 'Soort', 'Nodig', 'Ingeschreven', 'Team', 'Officieel', 'Namen'],
+          headers: ['Datum', 'Tijd', 'Type', 'Activiteit', 'Soort', 'Nodig', 'Ingeschreven', 'Team', 'Officieel', 'Namen'],
           rows: dienstRows,
         },
         {

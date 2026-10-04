@@ -27,6 +27,8 @@ import {
 import {
   repairAccidentalWeekendTeams,
   unlinkGuardianCopiedTeam,
+  deactivateDuplicateServices,
+  deactivateOrphanAutoServices,
 } from '../src/backend/lib/liveRepairs.js';
 import {
   compareBackupToLive,
@@ -118,6 +120,8 @@ console.log('[render-start] Migraties:', JSON.stringify(migrations));
 
 let weekendRepair = { merged: 0, teams: [] };
 let childRepair = { unlinked: 0, people: [] };
+let duplicateRepair = { deactivated: 0, items: [] };
+let orphanRepair = { deactivated: 0, items: [] };
 try {
   weekendRepair = await repairAccidentalWeekendTeams(prisma);
   console.log('[render-start] Weekend-teams hersteld:', JSON.stringify(weekendRepair));
@@ -129,6 +133,18 @@ try {
   console.log('[render-start] Kinderen los van coordinator-team:', JSON.stringify(childRepair));
 } catch (err) {
   console.warn('[render-start] Kinderen-herstel:', err.message);
+}
+try {
+  duplicateRepair = await deactivateDuplicateServices(prisma);
+  console.log('[render-start] Dubbele diensten inactief:', JSON.stringify(duplicateRepair));
+} catch (err) {
+  console.warn('[render-start] Dubbele-diensten herstel:', err.message);
+}
+try {
+  orphanRepair = await deactivateOrphanAutoServices(prisma);
+  console.log('[render-start] Wees-auto-diensten inactief:', JSON.stringify(orphanRepair));
+} catch (err) {
+  console.warn('[render-start] Wees-auto-diensten herstel:', err.message);
 }
 
 const personsAfter = await prisma.person.count();
@@ -214,6 +230,8 @@ const statusFile = writeDeployStatus(stateDir, {
   repairs: {
     weekendTeams: weekendRepair,
     guardianChildren: childRepair,
+    duplicateServices: duplicateRepair,
+    orphanAutoServices: orphanRepair,
   },
   flags,
   mail: {

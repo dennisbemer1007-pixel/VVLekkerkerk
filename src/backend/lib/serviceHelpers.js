@@ -40,6 +40,11 @@ export function mapService(service) {
       : service.assignedTeam === null
         ? null
         : undefined,
+    activity: service.activity
+      ? { id: service.activity.id, name: service.activity.name, type: service.activity.type }
+      : service.activity === null
+        ? null
+        : undefined,
   };
 }
 
@@ -50,4 +55,5 @@ export const serviceInclude = {
   },
   assignedTeam: true,
   teamDuties: { include: { team: true }, orderBy: { id: 'asc' } },
+  activity: { select: { id: true, name: true, type: true } },
 };

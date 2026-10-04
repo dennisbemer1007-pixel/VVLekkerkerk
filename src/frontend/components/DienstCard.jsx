@@ -115,6 +115,7 @@ export default function DienstCard({
             month: 'short',
           })}{' '}
           · {dienst.time} · {dienst.location || type}
+          {dienst.activity?.name ? ` · ${dienst.activity.name}` : ''}
           {teamNames ? ` · ${teamNames}` : ''}
           {` · ${occupancyFraction(dienst)}`}
           {myEnrollment ? ' · jij staat hier' : ''}
@@ -162,6 +163,7 @@ export default function DienstCard({
           <p className="text-xs font-bold uppercase tracking-wide text-vvl-accent">
             {type}
             {slot ? ` · ${slot}` : ''}
+            {dienst.activity?.name ? ` · ${dienst.activity.name}` : ''}
           </p>
           <button
             type="button"

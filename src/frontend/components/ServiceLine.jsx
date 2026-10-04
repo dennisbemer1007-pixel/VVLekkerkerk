@@ -56,6 +56,7 @@ export default function ServiceLine({
         </span>
         <span className="mt-0.5 block text-xs text-gray-600">
           {type} · {occupancyFraction(service)}
+          {service.activity?.name ? ` · ${service.activity.name}` : ''}
           {extra ? ` · ${extra}` : ''}
         </span>
       </button>

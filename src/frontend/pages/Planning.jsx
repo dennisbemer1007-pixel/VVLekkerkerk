@@ -200,7 +200,13 @@ export default function Planning({ variant = 'rooster' }) {
   const groups = useMemo(() => tileGroups(services), [services]);
 
   const shown = useMemo(() => {
-    return services.filter((s) => {
+    const startMinutes = (time) => {
+      const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+    };
+    return services
+      .filter((s) => {
+      if (s.active === false) return false;
       if (variant === 'open') {
         if (statusFilter) return serviceStatus(s) === statusFilter;
         return true;
@@ -209,7 +215,12 @@ export default function Planning({ variant = 'rooster' }) {
       if (statusFilter && serviceStatus(s) !== statusFilter) return false;
       if (onlyNoShow && !(s.enrollments || []).some((e) => e.noShow)) return false;
       return true;
-    });
+    })
+      .sort((a, b) => {
+        const da = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (da) return da;
+        return startMinutes(a.time) - startMinutes(b.time);
+      });
   }, [services, statusFilter, onlyNoShow, variant, mineOnly, personId]);
 
   const counts = {

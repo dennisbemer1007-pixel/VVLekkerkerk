@@ -7,7 +7,7 @@ export const OBLIGATIONS = {
 
 export const OBLIGATION_LABELS = {
   NONE: 'Geen (vrijwilliger)',
-  FULL: 'Verplicht (min. 1× / 6 weken)',
+  FULL: 'Verplicht (min. 1× per planningperiode)',
   VR18: 'VR18+ (min. 1× / 12 weken)',
 };
 
@@ -120,7 +120,8 @@ export function isExemptedOn(person, date = new Date()) {
 }
 
 /**
- * Quota: FULL ≥1 in 6 weken; VR18 ≥1 in 12 weken.
+ * Quota (dashboard/overzicht): FULL ≥1 in 6 weken; VR18 ≥1 in 12 weken.
+ * Auto-invullen (stap 3) gebruikt fillExecutedCount: FULL = deze planningperiode.
  */
 export function underQuota(person, count6w, countYear, count12w = count6w) {
   if (isExemptedOn(person)) return false;
@@ -137,7 +138,19 @@ export function underQuota(person, count6w, countYear, count12w = count6w) {
 
 export function executedCountForObligation(person, counts) {
   const obligation = normalizeObligation(person.obligation);
-  if (obligation === OBLIGATIONS.FULL) return counts.count6w ?? 0;
+  if (obligation === OBLIGATIONS.FULL) return counts.countPeriod ?? counts.count6w ?? 0;
+  if (obligation === OBLIGATIONS.VR18) return counts.count12w ?? 0;
+  return 0;
+}
+
+/**
+ * Stap 3 (auto-invullen):
+ * - Verplicht: minstens 1 persoonlijke dienst in déze planningsperiode
+ * - VR18+: minstens 1 persoonlijke dienst in de afgelopen 12 weken
+ */
+export function fillExecutedCount(person, counts) {
+  const obligation = normalizeObligation(person.obligation);
+  if (obligation === OBLIGATIONS.FULL) return counts.countPeriod ?? counts.count6w ?? 0;
   if (obligation === OBLIGATIONS.VR18) return counts.count12w ?? 0;
   return 0;
 }

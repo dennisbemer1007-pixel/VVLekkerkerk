@@ -254,7 +254,7 @@ router.get('/invite/:token', async (req, res, next) => {
 /** Account aanmaken via deeplink */
 router.post('/invite/:token/accept', async (req, res, next) => {
   try {
-    const { password, name } = req.body;
+    const { password } = req.body;
     if (!password || password.length < 8) {
       return res.status(400).json({ error: 'Kies een wachtwoord van minstens 8 tekens' });
     }
@@ -281,7 +281,6 @@ router.post('/invite/:token/accept', async (req, res, next) => {
         inviteToken: null,
         inviteExpiresAt: null,
         accountCreatedAt: new Date(),
-        ...(name?.trim() && { name: name.trim() }),
       },
       include: { team: true },
     });

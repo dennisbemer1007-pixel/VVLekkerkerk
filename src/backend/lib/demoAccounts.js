@@ -30,7 +30,7 @@ export const DEMO_PEOPLE = [
     phone: '06-10101010',
     team: 'JO15-1',
     obligation: 'FULL',
-    note: 'Verplicht (1× / 6 weken)',
+    note: 'Verplicht (1× per planningperiode)',
   },
   {
     email: 'tom@vvl.demo',
