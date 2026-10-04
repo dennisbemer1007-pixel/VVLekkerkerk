@@ -251,8 +251,14 @@ function DienstenBeheer() {
   const filteredServices = useMemo(() => {
     const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
-    return services.filter((s) => {
+    const startMinutes = (time) => {
+      const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+    };
+    return services
+      .filter((s) => {
       const d = new Date(s.date);
+      if (s.active === false) return false;
       if (from && d < from) return false;
       if (to && d > to) return false;
       // Standaard: alleen toekomstig (vanaf vandaag) als geen tot-filter en from = vandaag
@@ -260,11 +266,17 @@ function DienstenBeheer() {
       if (personQuery.trim()) {
         const q = personQuery.trim().toLowerCase();
         const names = (s.enrollments || []).map((e) => e.person?.name || '').join(' ').toLowerCase();
-        if (!names.includes(q) && !String(s.note || '').toLowerCase().includes(q)) return false;
+        const hay = `${names} ${s.note || ''} ${s.activity?.name || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
       if (occFilter && (s.status || '') !== occFilter) return false;
       return true;
-    });
+    })
+      .sort((a, b) => {
+        const da = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (da) return da;
+        return startMinutes(a.time) - startMinutes(b.time);
+      });
   }, [services, dateFrom, dateTo, personQuery, occFilter]);
 
   const reset = () => {
@@ -1561,7 +1573,8 @@ function PlanningBeheer() {
       >
         <p className="text-sm text-gray-700">
           Klik hieronder om open <strong>vrijwilligersplekken</strong> te vullen met leden
-          die verplicht zijn (1× / 6 weken), VR18+ of een inhaaldienst hebben. Teamplekken
+          die verplicht zijn (minstens 1× in <strong>deze planningsperiode</strong>), VR18+
+          (1× / 12 weken) of een inhaaldienst hebben. Teamplekken
           (O8–O17 thuis) blijven staan voor de bardienstcoördinator, die de namen van ouders invult.
         </p>
         <p className="text-xs text-gray-600">

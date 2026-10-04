@@ -59,6 +59,7 @@ import {
   prefersSlot,
   normalizeObligation,
   remainingObligation,
+  fillExecutedCount,
 } from '../src/backend/lib/obligation.js';
 import { isCanonicalPersonNumber } from '../src/backend/lib/personNumber.js';
 import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
@@ -104,6 +105,10 @@ import {
   SLOT_ROWS,
   WEEKDAY_SLOT_ROWS,
   inferSlot,
+  isExtraRosterService,
+  additionalRosterServices,
+  extraServicesForDay,
+  extraCellText,
   rosterDaySections,
   rowLabelTime,
   servicesForSlotRow,
@@ -127,6 +132,7 @@ import {
 import { isAbsentOn, normalizeAbsenceRange } from '../src/backend/lib/absences.js';
 import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
 import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
+import { isOrphanAutoService } from '../src/backend/lib/serviceDedup.js';
 import { resolveEnrollmentKind } from '../src/backend/lib/teamDutyPlanning.js';
 import { occupancyFraction, teamSpotLines } from '../src/frontend/utils/teamLines.js';
 import { matchTemplateSheets, MATCH_TEMPLATE_HEADERS } from '../src/backend/lib/matchesXlsx.js';
@@ -295,6 +301,177 @@ assert(
 );
 assert('infer 19:00 as evening', inferSlot({ time: '19:00 - 22:00', slot: 'EXTRA' }) === 'EVENING');
 assert('infer 09:00 as morning', inferSlot({ time: '09:00 - 12:00' }) === 'MORNING');
+assert(
+  'pubquiz extra hoort niet in de vaste avondrij',
+  isExtraRosterService({ slot: 'EXTRA', time: '19:30 - 00:00', activity: { name: 'Pubquiz' } }) === true &&
+    servicesForSlotRow(
+      [
+        {
+          id: 1,
+          type: 'BAR',
+          slot: 'EVENING',
+          time: '16:30 - 19:30',
+          required: 2,
+          enrollments: [{ kind: 'PERSONAL', person: { name: 'Zoe Jonker' } }],
+        },
+        {
+          id: 2,
+          type: 'BAR',
+          slot: 'EXTRA',
+          time: '19:30 - 00:00',
+          activity: { name: 'Pubquiz' },
+          required: 2,
+          enrollments: [{ kind: 'PERSONAL', person: { name: 'Bram Hendriks' } }],
+        },
+      ],
+      SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'EVENING'),
+    ).map((s) => s.id).join(',') === '1',
+);
+assert(
+  'dubbele ochtenddienst telt één keer in de pdf-cel',
+  slotCellText(
+    servicesForSlotRow(
+      [
+        {
+          id: 10,
+          type: 'BAR',
+          slot: 'MORNING',
+          date: '2026-11-07',
+          time: '07:30 - 12:00',
+          required: 3,
+          enrollments: [],
+          teamDuties: [{ teamId: 1, reserved: 2, team: { name: 'O12-2' } }],
+        },
+        {
+          id: 11,
+          type: 'BAR',
+          slot: 'MORNING',
+          date: '2026-11-07',
+          time: '07:30 - 12:00',
+          required: 3,
+          enrollments: [],
+          teamDuties: [{ teamId: 1, reserved: 2, team: { name: 'O12-2' } }],
+        },
+      ],
+      SLOT_ROWS[0],
+    ),
+  ) === 'O12-2, O12-2, open plek',
+);
+{
+  const extras = additionalRosterServices(
+    [
+      {
+        id: 1,
+        type: 'BAR',
+        slot: 'EVENING',
+        time: '16:30 - 19:30',
+        required: 2,
+        enrollments: [{ kind: 'PERSONAL', person: { name: 'Zoe' } }],
+      },
+      {
+        id: 2,
+        type: 'BAR',
+        slot: 'EXTRA',
+        time: '19:30 - 00:00',
+        activity: { name: 'Pubquiz' },
+        required: 2,
+        enrollments: [{ kind: 'PERSONAL', person: { name: 'Bram' } }],
+      },
+    ],
+    SLOT_ROWS.filter((r) => r.type === 'BAR'),
+  );
+  assert('extra pubquiz-rij op starttijd', extras.length === 1 && extras[0].id === 2);
+  assert(
+    'extra cel toont evenementnaam',
+    extraCellText(extras[0]).includes('Pubquiz') && extraCellText(extras[0]).includes('Bram'),
+  );
+  assert('extraServicesForDay vindt pubquiz', extraServicesForDay([{ slot: 'EXTRA', activity: { name: 'Pubquiz' }, active: true }]).length === 1);
+}
+{
+  const leftoverEvening = additionalRosterServices(
+    [
+      {
+        id: 1,
+        type: 'BAR',
+        slot: 'EVENING',
+        time: '16:30 - 19:30',
+        required: 2,
+        enrollments: [{ kind: 'PERSONAL', person: { name: 'Zoe' } }],
+      },
+      {
+        id: 9,
+        type: 'BAR',
+        slot: 'EVENING',
+        origin: 'AUTO',
+        locked: true,
+        time: '18:30 - 22:00',
+        required: 2,
+        enrollments: [],
+      },
+      {
+        id: 2,
+        type: 'BAR',
+        slot: 'EXTRA',
+        time: '19:30 - 00:00',
+        activity: { name: 'Pubquiz' },
+        required: 2,
+        enrollments: [{ kind: 'PERSONAL', person: { name: 'Bram' } }],
+      },
+    ],
+    SLOT_ROWS.filter((r) => r.type === 'BAR'),
+  );
+  assert(
+    'rest-avond 18:30 en pubquiz staan als extra rijen op starttijd',
+    leftoverEvening.map((s) => s.id).join(',') === '9,2',
+  );
+  const saturdayRules = defaultServiceRuleSeed();
+  assert(
+    'lege zaterdag 18:30 is wees-auto (geen dienstregel)',
+    isOrphanAutoService(
+      {
+        origin: 'AUTO',
+        date: '2026-10-24',
+        type: 'BAR',
+        time: '18:30 - 22:00',
+        enrollments: [],
+      },
+      saturdayRules,
+    ) === true,
+  );
+  assert(
+    'woensdag 18:30 is geen wees',
+    isOrphanAutoService(
+      {
+        origin: 'AUTO',
+        date: '2026-10-21',
+        type: 'BAR',
+        time: '18:30 - 22:00',
+        enrollments: [],
+      },
+      saturdayRules,
+    ) === false,
+  );
+  assert(
+    'jaarplanning-extra is geen wees-auto',
+    isOrphanAutoService(
+      {
+        origin: 'MANUAL',
+        slot: 'EXTRA',
+        activityId: 4,
+        date: '2026-10-24',
+        type: 'BAR',
+        time: '19:30 - 00:00',
+        enrollments: [],
+      },
+      saturdayRules,
+    ) === false,
+  );
+}
+assert(
+  'verplicht telt in de planningsperiode, VR18 over 12 weken',
+  fillExecutedCount({ obligation: 'FULL' }, { countPeriod: 0, count6w: 1, count12w: 1 }) === 0 &&
+    fillExecutedCount({ obligation: 'VR18' }, { countPeriod: 0, count6w: 0, count12w: 1 }) === 1,
+);
 assert(
   'empty slot cell is gesloten',
   slotCellText(servicesForSlotRow([], SLOT_ROWS[0])) === 'gesloten',
@@ -1526,6 +1703,10 @@ assert(
     'utf8',
   );
   assert('planning-excel heeft blad Per persoon', planningExportSrc.includes("name: 'Per persoon'"));
+  assert(
+    'excel diensten-blad heeft kolom Activiteit',
+    planningExportSrc.includes("'Activiteit'") && planningExportSrc.includes('s.activity?.name'),
+  );
   const downloadSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/components/DownloadPlanningButtons.jsx'),
     'utf8',
@@ -1539,11 +1720,78 @@ assert(
     'barcommissie kan teamplek vullen vanuit toewijzen',
     planningUiSrc.includes('assignTeamSpot: teamOnlyLeft') && !planningUiSrc.includes('disabled={teamOnlyLeft}'),
   );
+  assert(
+    'diensten-lijst sorteert op datum en begintijd',
+    planningUiSrc.includes('startMinutes(a.time) - startMinutes(b.time)'),
+  );
+  const beheerDienstenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),
+    'utf8',
+  );
+  assert(
+    'beheer-diensten sorteert op datum en begintijd',
+    beheerDienstenSrc.includes('startMinutes(a.time) - startMinutes(b.time)') &&
+      beheerDienstenSrc.includes('s.active === false'),
+  );
   const authSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/auth.js'),
     'utf8',
   );
   assert('ingelogd wachtwoord wijzigen zonder mail', authSrc.includes("'/password'") && authSrc.includes('currentPassword'));
+  const acceptStart = authSrc.indexOf("'/invite/:token/accept'");
+  const acceptNext = authSrc.indexOf('router.post(', acceptStart + 10);
+  const inviteAcceptSrc = authSrc.slice(acceptStart, acceptNext > acceptStart ? acceptNext : acceptStart + 900);
+  assert(
+    'eerste login wijzigt de naam niet via de API',
+    inviteAcceptSrc.includes('passwordHash') &&
+      inviteAcceptSrc.includes("const { password }") &&
+      !inviteAcceptSrc.includes('name.trim()') &&
+      !inviteAcceptSrc.includes('name: name'),
+  );
+  const uitnodigingSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Uitnodiging.jsx'),
+    'utf8',
+  );
+  assert(
+    'uitnodiging toont naam alleen-lezen',
+    uitnodigingSrc.includes('value={invite.name}') &&
+      uitnodigingSrc.includes('disabled') &&
+      uitnodigingSrc.includes('readOnly') &&
+      !uitnodigingSrc.includes('setName') &&
+      uitnodigingSrc.includes('acceptInvite(token, { password })'),
+  );
+  const teamDashSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/TeamDashboard.jsx'),
+    'utf8',
+  );
+  assert(
+    'team-ouders heeft geen kolom Verplichting',
+    !teamDashSrc.includes('Verplichting') &&
+      !teamDashSrc.includes('obligationLabel') &&
+      teamDashSrc.includes('Ouder toevoegen (alleen naam)'),
+  );
+  const renderStartLiveSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/render-start.js'),
+    'utf8',
+  );
+  assert(
+    'live-start herstelt dubbele en wees-auto-diensten',
+    renderStartLiveSrc.includes('deactivateDuplicateServices') &&
+      renderStartLiveSrc.includes('deactivateOrphanAutoServices') &&
+      renderStartLiveSrc.includes('orphanAutoServices'),
+  );
+  const pdfRouteSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/pdf.js'),
+    'utf8',
+  );
+  assert(
+    'pdf-rooster laadt jaarplanning-activiteit',
+    pdfRouteSrc.includes('activity: { select: { id: true, name: true, type: true } }'),
+  );
+  assert(
+    'excel-export laadt jaarplanning-activiteit',
+    planningExportSrc.includes("activity: { select: { id: true, name: true, type: true } }"),
+  );
 }
 {
   const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');

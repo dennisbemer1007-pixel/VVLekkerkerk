@@ -1,7 +1,7 @@
 import prisma from './prisma.js';
 import { addWeeks, startOfDay } from './dates.js';
 import {
-  executedCountForObligation,
+  fillExecutedCount,
   isExemptedOn,
   isUnavailableOn,
   OBLIGATIONS,
@@ -23,6 +23,7 @@ function countsForPerson(person, windows) {
     count6w: personalEnrollmentCount(person.enrollments, windows.sixWeeksAgo, windows.to),
     count12w: personalEnrollmentCount(person.enrollments, windows.twelveWeeksAgo, windows.to),
     countYear: personalEnrollmentCount(person.enrollments, windows.yearStart, windows.to),
+    countPeriod: personalEnrollmentCount(person.enrollments, windows.from, windows.to),
   };
 }
 
@@ -37,10 +38,10 @@ export function skipReasonForPerson(
     return 'Afwezig in de betreffende periode.';
   }
   if (!hadEligible && hadOverlap) {
-    return 'Geen geschikt moment beschikbaar vanwege wedstrijdblokkades.';
+    return 'Geen geschikt moment: wedstrijd (plus buffer) botst met de open plekken.';
   }
   if (!hadEligible) {
-    return 'Geen beschikbare dienst gevonden binnen de betreffende periode.';
+    return 'Geen vrije vrijwilligersplek in deze periode (teamplekken vult de coördinator).';
   }
   return 'Geen geschikt moment beschikbaar.';
 }
@@ -96,11 +97,11 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
 
   const state = mandatory.map((person) => {
     const counts = countsForPerson(person, windows);
-    const executed = executedCountForObligation(person, counts);
-    return {
-      person,
-      counts,
-      remaining: remainingObligation(person, executed),
+      const executed = fillExecutedCount(person, counts);
+      return {
+        person,
+        counts,
+        remaining: remainingObligation(person, executed),
       blocks: blocksForPerson(person, matches),
       lastPersonalAt: lastPersonalAt(person.enrollments),
       hadOverlap: false,
@@ -171,8 +172,9 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       row.counts.count6w += 1;
       row.counts.count12w += 1;
       row.counts.countYear += 1;
+      row.counts.countPeriod += 1;
       row.lastPersonalAt = new Date(service.date);
-      const executed = executedCountForObligation(row.person, row.counts);
+      const executed = fillExecutedCount(row.person, row.counts);
       row.remaining = remainingObligation(row.person, executed);
       enrolledToday.add(`${row.person.id}:${dayIso}`);
       already.add(row.person.id);
@@ -190,9 +192,9 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
   }
 
   const unfilled = state
-    .filter((row) => remainingObligation(row.person, executedCountForObligation(row.person, row.counts)) > 0)
+    .filter((row) => remainingObligation(row.person, fillExecutedCount(row.person, row.counts)) > 0)
     .map((row) => {
-      const executed = executedCountForObligation(row.person, row.counts);
+      const executed = fillExecutedCount(row.person, row.counts);
       const stillNeeded = remainingObligation(row.person, executed);
       return {
         id: row.person.id,

@@ -10,7 +10,7 @@ import { toDateInputValue } from '../utils/formatDate.js';
 const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
 const OBLIGATIONS = [
   { value: 'NONE', label: 'Geen (vrijwilliger)' },
-  { value: 'FULL', label: 'Verplicht (min. 1× / 6 weken)' },
+  { value: 'FULL', label: 'Verplicht (min. 1× per planningperiode)' },
   { value: 'VR18', label: 'VR18+ (min. 1× / 12 weken)' },
 ];
 const ACCOUNT_FILTERS = [

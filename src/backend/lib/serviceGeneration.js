@@ -21,6 +21,7 @@ import {
   shouldAttachTeamDutiesToLocked,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
+import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
 function buildNote(rule, evaluation, assignments) {
@@ -85,6 +86,8 @@ async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceId
 
 export async function generateServicesFromRules({ from, to, weeks } = {}) {
   await ensureClubDefaults();
+  await deactivateDuplicateServices(prisma);
+  await deactivateOrphanAutoServices(prisma);
 
   const period = from || to || weeks
     ? resolvePlanningPeriod({ from, to, weeks })
@@ -287,11 +290,19 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
 
   let removed = 0;
   for (const service of existing) {
-    if (service.origin === 'MANUAL' || service.locked) continue;
+    if (service.origin === 'MANUAL') continue;
+    if (service.activityId) continue;
     if (service.enrollments?.length) continue;
     const key = serviceKey(service.date, service.type, startTimeFromService(service));
     if (needed.has(key)) continue;
     if (service.origin !== 'AUTO') continue;
+    if (service.locked || service.active === false) {
+      if (service.active !== false) {
+        await prisma.service.update({ where: { id: service.id }, data: { active: false } });
+        removed += 1;
+      }
+      continue;
+    }
     await prisma.service.delete({ where: { id: service.id } });
     removed += 1;
   }

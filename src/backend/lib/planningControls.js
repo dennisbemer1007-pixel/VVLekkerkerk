@@ -77,6 +77,7 @@ export async function buildPlanningControls(now = new Date()) {
       count6w: personalEnrollmentCount(person.enrollments, w.sixWeeksAgo, w.to),
       count12w: personalEnrollmentCount(person.enrollments, w.twelveWeeksAgo, w.to),
       countYear: personalEnrollmentCount(person.enrollments, w.yearStart, w.to),
+      countPeriod: personalEnrollmentCount(person.enrollments, w.from, w.to),
     };
     const executed = executedCountForObligation(person, counts);
     const stillNeeded = remainingObligation(person, executed);

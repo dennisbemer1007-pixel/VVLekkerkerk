@@ -12,7 +12,6 @@ export default function Uitnodiging() {
   const [invite, setInvite] = useState(null);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -22,7 +21,6 @@ export default function Uitnodiging() {
       .getInvite(token)
       .then((data) => {
         setInvite(data);
-        setName(data.name || '');
       })
       .catch((e) => setError(e.message));
   }, [token]);
@@ -40,7 +38,7 @@ export default function Uitnodiging() {
     }
     setLoading(true);
     try {
-      const person = await acceptInvite(token, { password, name });
+      const person = await acceptInvite(token, { password });
       setDone(true);
       setTimeout(() => navigate(homePathForUser(person), { replace: true }), 1500);
       return person;
@@ -89,7 +87,8 @@ export default function Uitnodiging() {
           Account aanmaken
         </PageTitle>
         <p className="mt-2 text-sm text-gray-700">
-          Hoi <strong>{invite.name}</strong> — maak je wachtwoord aan voor de VVL Planning App.
+          Hoi <strong>{invite.name}</strong> — kies een wachtwoord voor de VVL Planning App.
+          Je naam is al ingesteld door de barcommissie.
         </p>
       </header>
 
@@ -113,12 +112,7 @@ export default function Uitnodiging() {
         </div>
         <div>
           <label className="vvl-label">Naam</label>
-          <input
-            className="vvl-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
+          <input className="vvl-input bg-gray-100" value={invite.name} disabled readOnly />
         </div>
         <div>
           <label className="vvl-label">Wachtwoord (min. 8 tekens)</label>

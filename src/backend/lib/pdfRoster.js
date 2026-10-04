@@ -1,4 +1,6 @@
 import { startOfDay, startOfWeek, toIsoDate } from './dates.js';
+import { chooseCanonicalService, serviceDedupeKey } from './serviceDedup.js';
+import { parseTimeStartMinutes } from './time.js';
 import { SLOT_TIMES } from './youthTeams.js';
 
 export const DAY_LABELS = [
@@ -39,10 +41,93 @@ export function inferSlot(service) {
   return 'EVENING';
 }
 
+/** Jaarplanning / handmatige extra dienst: niet in de vaste ochtend/middag/avond-rij. */
+export function isExtraRosterService(service) {
+  if (!service) return false;
+  if (service.slot === 'EXTRA') return true;
+  if (service.activityId || service.activity?.id) return true;
+  return false;
+}
+
+export function serviceEventLabel(service) {
+  return String(service?.activity?.name || '').trim() || null;
+}
+
+function minutesClosest(service, rowTime) {
+  const a = parseTimeStartMinutes(service?.time);
+  const b = parseTimeStartMinutes(rowTime);
+  if (a == null || b == null) return 9999;
+  return Math.abs(a - b);
+}
+
+/**
+ * Eén dienst per vaste roosterrij. Dubbele records (zelfde tijd) worden samengevoegd;
+ * extra jaarplanning-diensten horen hier niet.
+ */
 export function servicesForSlotRow(services, row) {
-  return (services || []).filter(
-    (s) => s.type === row.type && inferSlot(s) === row.slot,
+  const matching = (services || []).filter(
+    (s) => s.type === row.type && !isExtraRosterService(s) && inferSlot(s) === row.slot,
   );
+  if (!matching.length) return [];
+  const byKey = new Map();
+  for (const service of matching) {
+    const key = serviceDedupeKey(service);
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? chooseCanonicalService([prev, service]) : service);
+  }
+  const unique = [...byKey.values()];
+  if (unique.length === 1) return unique;
+  unique.sort((a, b) => minutesClosest(a, row.time) - minutesClosest(b, row.time));
+  return [unique[0]];
+}
+
+/** Extra diensten (jaarplanning e.d.) voor een dag, op begintijd. */
+export function extraServicesForDay(services) {
+  const extras = (services || []).filter((s) => s && s.active !== false && !s.draft && isExtraRosterService(s));
+  const byKey = new Map();
+  for (const service of extras) {
+    const key = serviceDedupeKey(service);
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? chooseCanonicalService([prev, service]) : service);
+  }
+  return [...byKey.values()].sort((a, b) => {
+    const da = parseTimeStartMinutes(a.time) ?? 0;
+    const db = parseTimeStartMinutes(b.time) ?? 0;
+    return da - db;
+  });
+}
+
+export function extraCellText(service) {
+  if (!service) return 'gesloten';
+  const names = slotCellText([service]);
+  const event = serviceEventLabel(service);
+  if (event && names && names !== 'gesloten') return `${event}: ${names}`;
+  if (event) return event;
+  return names;
+}
+
+/** Jaarplanning-extra's plus diensten die niet in een vaste ochtend/middag/avond-rij pasten. */
+export function additionalRosterServices(dayServices, dayRows) {
+  const extras = extraServicesForDay(dayServices);
+  const used = new Set();
+  for (const row of dayRows || []) {
+    for (const service of servicesForSlotRow(dayServices, row)) used.add(service.id);
+  }
+  for (const service of extras) used.add(service.id);
+  const leftovers = [];
+  const byKey = new Map();
+  for (const service of dayServices || []) {
+    if (!service || service.active === false || service.draft || used.has(service.id)) continue;
+    const key = serviceDedupeKey(service);
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? chooseCanonicalService([prev, service]) : service);
+  }
+  leftovers.push(...byKey.values());
+  return [...extras, ...leftovers].sort((a, b) => {
+    const da = parseTimeStartMinutes(a.time) ?? 0;
+    const db = parseTimeStartMinutes(b.time) ?? 0;
+    return da - db;
+  });
 }
 
 /** Actieve niet-concept diensten (ook zonder namen — voor open plekken / teamnamen). */
@@ -345,6 +430,37 @@ export function renderPlanningRoster(doc, {
           drawCell(doc, x, y, colW, rowH, text, {
             size: 6,
             align: text === 'gesloten' || text === 'nog open' ? 'center' : 'left',
+            stroke: '#cccccc',
+            fill: hasOpen ? '#fff3cd' : null,
+            color: hasOpen && /open plek/i.test(text) ? '#7a4e00' : '#000000',
+          });
+        });
+        y += rowH;
+      }
+
+      const extrasPerWeek = weekStarts.map((ws) =>
+        additionalRosterServices(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], section.rows),
+      );
+      const extraCount = extrasPerWeek.reduce((max, list) => Math.max(max, list.length), 0);
+      for (let extraIndex = 0; extraIndex < extraCount; extraIndex += 1) {
+        ensureSpace(rowH);
+        const sample = extrasPerWeek.map((list) => list[extraIndex]).find(Boolean);
+        const extraLabel = serviceEventLabel(sample) || 'Extra';
+        const extraTime = String(sample?.time || '').trim();
+        drawCell(doc, left, y, labelW, rowH, `${extraLabel}\n${extraTime}`, {
+          bold: true,
+          size: 5.5,
+          fill: '#f7f7f7',
+          stroke: '#aaaaaa',
+        });
+        weekStarts.forEach((_ws, i) => {
+          const x = left + labelW + i * colW;
+          const extra = extrasPerWeek[i][extraIndex];
+          const text = extraCellText(extra);
+          const hasOpen = extra ? slotCellHasOpen([extra]) : false;
+          drawCell(doc, x, y, colW, rowH, text, {
+            size: 6,
+            align: text === 'gesloten' ? 'center' : 'left',
             stroke: '#cccccc',
             fill: hasOpen ? '#fff3cd' : null,
             color: hasOpen && /open plek/i.test(text) ? '#7a4e00' : '#000000',

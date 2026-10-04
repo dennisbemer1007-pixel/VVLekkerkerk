@@ -134,3 +134,6 @@ export async function unlinkGuardianCopiedTeam(prisma) {
   }
   return { unlinked: changed.length, people: changed };
 }
+
+export { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
+

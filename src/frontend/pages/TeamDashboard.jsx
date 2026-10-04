@@ -22,14 +22,7 @@ export default function TeamDashboard() {
   const [section, setSection] = useState('diensten');
   const [teamId, setTeamId] = useState('');
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
-  const [obligation, setObligation] = useState('');
   const [venue, setVenue] = useState('');
-
-  const OBLIGATION_SHORT = {
-    NONE: '—',
-    FULL: 'verplicht',
-    VR18: 'VR18+',
-  };
 
   const load = useCallback(() => {
     return api
@@ -181,17 +174,6 @@ export default function TeamDashboard() {
           ))}
         </div>
         <ListFilters {...filters} onChange={setFilters} personLabel={section === 'wedstrijden' ? 'Tegenstander' : 'Persoon'}>
-          {section === 'ouders' ? (
-            <label className="block min-w-0">
-              <span className="vvl-label">Verplichting</span>
-              <select className="vvl-input" value={obligation} onChange={(e) => setObligation(e.target.value)} aria-label="Verplichting">
-                <option value="">Alle</option>
-                <option value="FULL">Verplicht</option>
-                <option value="VR18">VR18+</option>
-                <option value="NONE">Vrijwillig</option>
-              </select>
-            </label>
-          ) : null}
           {section === 'wedstrijden' ? (
             <label className="block min-w-0">
               <span className="vvl-label">Thuis/uit</span>
@@ -220,7 +202,7 @@ export default function TeamDashboard() {
         (data.teams || []).filter((team) => !teamId || String(team.id) === String(teamId)).map((team) => {
           const form = assign[team.id] || { serviceId: '', personId: '' };
           const members = (team.members || []).filter(
-            (m) => includesPerson(m.name, filters.person) && (!obligation || m.obligation === obligation),
+            (m) => includesPerson(m.name, filters.person),
           );
           const teamServices = (team.teamServices || []).filter((s) => {
             if (!withinDates(s.date, filters.from, filters.to)) return false;
@@ -260,9 +242,7 @@ export default function TeamDashboard() {
                   {members.map((m) => (
                     <li key={m.id} className="rounded-sm border border-vvl-border p-3 text-sm">
                       <p className="font-semibold">{m.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {OBLIGATION_SHORT[m.obligation] || '—'} · {m.teamDutyCount || 0}× voor dit team
-                      </p>
+                      <p className="text-xs text-gray-600">{m.teamDutyCount || 0}× voor dit team</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button type="button" className="vvl-btn-outline text-xs" onClick={() => setEdit({ id: m.id, name: m.name })}>
                           Wijzigen
@@ -290,7 +270,6 @@ export default function TeamDashboard() {
                       <tr>
                         <th className="p-3 text-left">Naam</th>
                         <th className="p-3 text-left">Team</th>
-                        <th className="p-3 text-left">Verplichting</th>
                         <th className="p-3 text-right">Dit team</th>
                         <th className="p-3 text-left"> </th>
                       </tr>
@@ -310,7 +289,6 @@ export default function TeamDashboard() {
                             )}
                           </td>
                           <td className="p-3">{team.name}</td>
-                          <td className="p-3">{OBLIGATION_SHORT[m.obligation] || '—'}</td>
                           <td className="p-3 text-right">{m.teamDutyCount || 0}</td>
                           <td className="p-3">
                             <div className="flex flex-nowrap gap-2">
