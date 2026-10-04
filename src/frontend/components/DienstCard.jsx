@@ -302,7 +302,7 @@ export default function DienstCard({
               {teamOnlyLeft ? (
                 <p className="text-sm text-gray-700">
                   {canOverride
-                    ? 'De resterende plekken zijn teamplekken. Vul ze in via Beheer → Diensten (teamplek) of laat de bardienstcoördinator de ouders invullen.'
+                    ? 'De resterende plekken zijn teamplekken. De bardienstcoördinator vult ouders via Team; de barcommissie kan dat ook via Beheer → Diensten.'
                     : 'De open plekken zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.'}
                 </p>
               ) : hasOpenTeamLine ? (

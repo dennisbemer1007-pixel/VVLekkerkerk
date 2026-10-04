@@ -121,6 +121,7 @@ export function publicPersonBrief(person) {
     name: person.name,
     role: canonicalAccessRole(person.role),
     teamId: person.teamId ?? null,
+    guardianId: person.guardianId ?? null,
     obligation,
     mandatoryBar: isMandatoryObligation(obligation),
     exempted: person.exempted === true,

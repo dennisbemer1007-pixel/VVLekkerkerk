@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DienstCard from '../components/DienstCard.jsx';
 import ListFilters from '../components/ListFilters.jsx';
 import MasterDetail from '../components/MasterDetail.jsx';
@@ -20,7 +21,7 @@ function formatEnrollConfirm(service) {
 }
 
 export default function Inschrijven({ mode = 'open' }) {
-  const { personId, user } = useAuth();
+  const { personId, user, can } = useAuth();
   const [filters, setFilters] = useState({ person: '', from: '', to: '' });
   const [typeFilter, setTypeFilter] = useState('');
   const [services, setServices] = useState([]);
@@ -135,6 +136,14 @@ export default function Inschrijven({ mode = 'open' }) {
 
   return (
     <div className="space-y-4" ref={listTopRef} data-testid="inschrijven-page">
+      {mode === 'mine' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/diensten" className="vvl-btn-primary min-h-11" data-testid="link-inschrijven">
+            Inschrijven
+          </Link>
+          <p className="text-sm text-gray-700">Ook de diensten van je kinderen.</p>
+        </div>
+      ) : null}
       {mode === 'mine' ? <ScheidsMijn /> : <ScheidsOpen />}
       {mode === 'open' ? (
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
@@ -199,6 +208,7 @@ export default function Inschrijven({ mode = 'open' }) {
                   myPersonId={personId}
                   householdIds={choices.map((choice) => choice.id)}
                   showActions
+                  committeeOverride={can('beheer')}
                   onInschrijven={handleInschrijven}
                   onUitschrijven={handleUitschrijven}
                 />

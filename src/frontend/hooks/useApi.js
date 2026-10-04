@@ -262,6 +262,8 @@ export const api = {
   getPasswordReset: (token) => json(`/auth/reset/${token}`),
   completePasswordReset: (token, password) =>
     json(`/auth/reset/${token}`, { method: 'POST', body: JSON.stringify({ password }) }),
+  changePassword: (data) =>
+    json('/auth/password', { method: 'PUT', body: JSON.stringify(data) }),
   setPersonPassword: (id, password) =>
     json(`/persons/${id}/password`, { method: 'PUT', body: JSON.stringify({ password }) }),
   downloadPlanningPdf: async (params = {}) => {

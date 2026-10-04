@@ -41,6 +41,45 @@ router.get(
   }),
 );
 
+router.put(
+  '/password',
+  requireAuth(async (req, res, next) => {
+    try {
+      const currentPassword = String(req.body?.currentPassword || '');
+      const newPassword = String(req.body?.newPassword || '');
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Vul je huidige wachtwoord in' });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: 'Nieuw wachtwoord moet minstens 8 tekens zijn' });
+      }
+      const person = await prisma.person.findUnique({ where: { id: req.person.id } });
+      if (!(await passwordMatches(currentPassword, person))) {
+        return res.status(400).json({ error: 'Huidig wachtwoord klopt niet' });
+      }
+      await prisma.person.update({
+        where: { id: person.id },
+        data: {
+          passwordHash: await hashPassword(newPassword),
+          passwordResetToken: null,
+          passwordResetExpiresAt: null,
+        },
+      });
+      const header = req.headers.authorization || '';
+      const currentToken = header.startsWith('Bearer ') ? header.slice(7) : null;
+      await prisma.session.deleteMany({
+        where: {
+          personId: person.id,
+          ...(currentToken ? { token: { not: currentToken } } : {}),
+        },
+      });
+      res.json({ message: 'Wachtwoord gewijzigd' });
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
 /**
  * Demo one-click logins — alleen als SEED_DEMO=true (of lokaal development).
  * Runtime-endpoint: Vite-build env is niet nodig.

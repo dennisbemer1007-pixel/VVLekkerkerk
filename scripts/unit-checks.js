@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
 import { splitSqlStatements, isIgnorableMigrationError } from '../src/backend/lib/liveDeploy.js';
 import { classifyServiceGap, sqlIntList, toId } from '../src/backend/lib/serviceDiff.js';
+import { inHousehold } from '../src/backend/lib/household.js';
+import { personShiftRows } from '../src/backend/lib/planningExport.js';
 import { clientErrorPayload } from '../src/backend/lib/clientError.js';
 import { isUnsafeUploadPath } from '../src/backend/lib/uploads.js';
 import { sealSecret, unsealSecret } from '../src/backend/lib/secrets.js';
@@ -1281,8 +1283,12 @@ assert(
     'utf8',
   );
   assert(
-    'ik-pagina heeft mijn diensten en kinderen',
-    ikSrc.includes('/mijn-diensten') && ikSrc.includes('/kinderen') && ikSrc.includes('Mijn kinderen'),
+    'ik-pagina heeft kinderen en wachtwoord wijzigen',
+    !ikSrc.includes('Mijn diensten') &&
+      ikSrc.includes('/kinderen') &&
+      ikSrc.includes('Mijn kinderen') &&
+      ikSrc.includes('Wachtwoord wijzigen') &&
+      !ikSrc.includes('Wachtwoord via e-mail'),
   );
   const inschrijfSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Inschrijven.jsx'),
@@ -1294,8 +1300,82 @@ assert(
       inschrijfSrc.includes('inschrijf-bevestiging') &&
       inschrijfSrc.includes('listScrollRef') &&
       inschrijfSrc.includes("useState(null)") &&
-      /onlyOpen.*mode === 'open'|mode === 'open'.*onlyOpen/.test(inschrijfSrc.replace(/\n/g, ' ')),
+      /onlyOpen.*mode === 'open'|mode === 'open'.*onlyOpen/.test(inschrijfSrc.replace(/\n/g, ' ')) &&
+      inschrijfSrc.includes('link-inschrijven') &&
+      inschrijfSrc.includes('Ook de diensten van je kinderen'),
   );
+}
+{
+  assert('huishouden herkent ouder en kind', inHousehold([10, 22], 22) && !inHousehold([10, 22], 3));
+  const rows = personShiftRows(
+    [
+      {
+        date: '2026-10-10',
+        enrollments: [
+          { personId: 1, person: { name: 'Lisa' }, noShow: false },
+          { personId: 1, person: { name: 'Lisa' }, noShow: true },
+        ],
+      },
+      {
+        date: '2026-11-01',
+        enrollments: [{ personId: 2, person: { name: 'Bo' }, noShow: false }],
+      },
+    ],
+    [
+      { id: 1, name: 'Lisa' },
+      { id: 2, name: 'Bo' },
+      { id: 3, name: 'Cheryl' },
+    ],
+  );
+  assert(
+    'excel per persoon telt diensten, no-shows en laatste datum',
+    rows[0][0] === 'Bo' &&
+      rows[0][1] === 1 &&
+      rows[1][0] === 'Cheryl' &&
+      rows[1][1] === 0 &&
+      rows[2][0] === 'Lisa' &&
+      rows[2][1] === 2 &&
+      rows[2][2] === 1 &&
+      rows[2][3] === '2026-10-10',
+  );
+  const dashSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Dashboard.jsx'),
+    'utf8',
+  );
+  assert(
+    'dashboard-tegels linken naar rooster en aandacht',
+    dashSrc.includes('/rooster?status=') &&
+      dashSrc.includes('/aandacht#niet-ingepland') &&
+      dashSrc.includes('/aandacht#no-show') &&
+      dashSrc.includes('download-pdf') === false &&
+      dashSrc.includes('DownloadPlanningButtons'),
+  );
+  const appSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/App.jsx'),
+    'utf8',
+  );
+  assert('dashboard-route is /open', appSrc.includes('<Dashboard />') && appSrc.includes('path="/open"'));
+  const personenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/PersonenBeheer.jsx'),
+    'utf8',
+  );
+  assert(
+    'personen heeft actief-toggle en geen kind-koppeling in beheer',
+    personenSrc.includes('actief maken') &&
+      personenSrc.includes('filterActive') &&
+      !personenSrc.includes('Kind van / gekoppeld aan ouder') &&
+      !personenSrc.includes('GuardianPicker'),
+  );
+  const planningExportSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/planning.js'),
+    'utf8',
+  );
+  assert('planning-excel heeft blad Per persoon', planningExportSrc.includes("name: 'Per persoon'"));
+  const authSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/auth.js'),
+    'utf8',
+  );
+  assert('ingelogd wachtwoord wijzigen zonder mail', authSrc.includes("'/password'") && authSrc.includes('currentPassword'));
 }
 {
   const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');
