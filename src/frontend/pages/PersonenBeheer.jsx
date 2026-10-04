@@ -161,6 +161,80 @@ function PersonAbsencesEditor({ personId, personName }) {
   );
 }
 
+function PersonChildrenEditor({ personId, personName, children = [], onChanged }) {
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const add = async (e) => {
+    e.preventDefault();
+    setError('');
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setError('Vul de naam van het kind in.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.addPersonChild(personId, { name: trimmed });
+      setName('');
+      await onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unlink = async (child) => {
+    setError('');
+    try {
+      await api.unlinkPersonChild(personId, child.id);
+      await onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <section className="vvl-card space-y-3" data-testid="beheer-kinderen">
+      <h3 className="font-heading text-sm font-black uppercase">Kinderen van {personName || 'deze persoon'}</h3>
+      <p className="text-xs text-gray-600">
+        Alleen een naam. Het kind krijgt geen team van de ouder; inschrijven kan via Mijn gegevens.
+      </p>
+      {children.length === 0 ? (
+        <p className="text-sm text-gray-600">Nog geen kind gekoppeld.</p>
+      ) : (
+        <ul className="space-y-2">
+          {children.map((child) => (
+            <li key={child.id} className="flex min-h-[44px] items-center justify-between gap-2 text-sm">
+              <span className="font-semibold">{child.name}</span>
+              <button type="button" className="vvl-btn-outline text-xs" onClick={() => unlink(child)}>
+                Loskoppelen
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+        <label className="min-w-0 flex-1">
+          <span className="vvl-label">Kind toevoegen (alleen naam)</span>
+          <input
+            className="vvl-input min-h-[44px]"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Voor- en achternaam"
+          />
+        </label>
+        <button type="submit" className="vvl-btn-primary min-h-[44px]" disabled={busy}>
+          Toevoegen
+        </button>
+      </form>
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+    </section>
+  );
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1077,6 +1151,14 @@ export default function PersonenBeheer() {
                 </button>
               </div>
             </form>
+            {editId ? (
+              <PersonChildrenEditor
+                personId={editId}
+                personName={persons.find((p) => p.id === editId)?.name || ''}
+                children={persons.filter((p) => Number(p.guardianId) === Number(editId))}
+                onChanged={load}
+              />
+            ) : null}
             {editId ? (
               <PersonAbsencesEditor
                 personId={editId}

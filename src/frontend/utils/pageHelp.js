@@ -5,7 +5,7 @@ export const PAGE_HELP = {
     purpose:
       'Dit is je startscherm. Voor de barcommissie staan hier controles op open diensten en openstaande verplichtingen.',
     actions: [
-      'Klik op Vol, Nog 1 of Open om het gefilterde rooster te zien',
+      'Klik op Vol, Nog 1 of Open om de gefilterde diensten in Beheer te zien',
       'Niet ingepland en No-show gehad gaan naar Aandacht',
       'Download Excel of het rooster-PDF',
       'Ruilverzoeken volg je via het notificatiebelletje rechtsboven',
@@ -155,7 +155,7 @@ export const PAGE_HELP = {
       'Jouw team(s): leden/ouders, hoe vaak ze al hebben gestaan, komende wedstrijden en teamdiensten. Vul ouders in op naam (geen e-mail nodig).',
     actions: [
       'Voeg een ouder toe met alleen de naam',
-      'Zie in de tabel hoe vaak iemand heeft gestaan',
+      'Zie hoeveel een ouder voor dit team heeft gestaan',
       'Wijzig of verwijder een ouder zonder account',
       'Zet een ouder op een open teamdienst-plek, of wissel een ingevulde ouder',
     ],

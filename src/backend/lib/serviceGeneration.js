@@ -18,6 +18,7 @@ import {
   pickTeamDutyAssignment,
   recordTeamDutyStand,
   requiredForTeamDuties,
+  shouldAttachTeamDutiesToLocked,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
@@ -239,8 +240,26 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     };
 
     if (target) {
-      if (target.locked || target.origin === 'MANUAL') {
+      if (target.origin === 'MANUAL') {
         skipped += 1;
+        continue;
+      }
+      if (target.locked) {
+        if (shouldAttachTeamDutiesToLocked(target, spec.assignments)) {
+          await prisma.service.update({
+            where: { id: target.id },
+            data: {
+              kind: spec.kind,
+              assignedTeamId: spec.assignedTeamId,
+              matchId: spec.matchId,
+              note: spec.note,
+            },
+          });
+          await syncTeamDuties(target.id, spec.assignments);
+          updated += 1;
+        } else {
+          skipped += 1;
+        }
         continue;
       }
       await prisma.service.update({
@@ -316,7 +335,9 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     });
   }
 
-  const teamDuties = [...needed.values()].filter((s) => s.kind === 'TEAM' || s.kind === 'MIXED').length;
+  const teamDuties = [...needed.values()].filter(
+    (s) => (s.kind === 'TEAM' || s.kind === 'MIXED') && (s.assignments || []).length,
+  ).length;
 
   return {
     created,

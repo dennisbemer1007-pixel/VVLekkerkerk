@@ -22,7 +22,12 @@ import {
   TOURNAMENT_MIGRATION,
   REFEREE_MIGRATION,
   CALENDAR_MIGRATION,
+  CHANTAL_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
+import {
+  repairAccidentalWeekendTeams,
+  unlinkGuardianCopiedTeam,
+} from '../src/backend/lib/liveRepairs.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -67,6 +72,7 @@ console.log(
   TOURNAMENT_MIGRATION,
   REFEREE_MIGRATION,
   CALENDAR_MIGRATION,
+  CHANTAL_MIGRATION,
 );
 
 const dbFile = resolveLiveDbFile(root);
@@ -109,6 +115,21 @@ console.log(
 
 const migrations = await applyNamedMigrationsOnce(prisma, root, stateDir);
 console.log('[render-start] Migraties:', JSON.stringify(migrations));
+
+let weekendRepair = { merged: 0, teams: [] };
+let childRepair = { unlinked: 0, people: [] };
+try {
+  weekendRepair = await repairAccidentalWeekendTeams(prisma);
+  console.log('[render-start] Weekend-teams hersteld:', JSON.stringify(weekendRepair));
+} catch (err) {
+  console.warn('[render-start] Weekend-teams herstel:', err.message);
+}
+try {
+  childRepair = await unlinkGuardianCopiedTeam(prisma);
+  console.log('[render-start] Kinderen los van coordinator-team:', JSON.stringify(childRepair));
+} catch (err) {
+  console.warn('[render-start] Kinderen-herstel:', err.message);
+}
 
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
@@ -190,6 +211,10 @@ const statusFile = writeDeployStatus(stateDir, {
     enrollmentsNow: await prisma.enrollment.count(),
   },
   migrations,
+  repairs: {
+    weekendTeams: weekendRepair,
+    guardianChildren: childRepair,
+  },
   flags,
   mail: {
     secretSet: mail.secretSet,

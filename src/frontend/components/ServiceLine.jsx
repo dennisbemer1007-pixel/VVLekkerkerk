@@ -1,5 +1,5 @@
 import { occupancyStatus } from '../utils/formatDate.js';
-import { occupancyFraction } from '../utils/teamLines.js';
+import { occupancyFraction, rosterSpotSummary } from '../utils/teamLines.js';
 
 export function openSpots(service) {
   const enrolled = service.enrolled ?? service.enrollments?.length ?? 0;
@@ -38,6 +38,8 @@ export default function ServiceLine({
     .filter((row) => ids.has(Number(row.personId)))
     .map((row) => row.person?.name)
     .filter(Boolean);
+  const spots = rosterSpotSummary(service);
+  const extra = (householdNames.length ? householdNames : spots).join(', ');
 
   return (
     <div
@@ -54,7 +56,7 @@ export default function ServiceLine({
         </span>
         <span className="mt-0.5 block text-xs text-gray-600">
           {type} · {occupancyFraction(service)}
-          {householdNames.length ? ` · ${householdNames.join(', ')}` : ''}
+          {extra ? ` · ${extra}` : ''}
         </span>
       </button>
       {actionLabel ? (

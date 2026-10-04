@@ -16,7 +16,7 @@ import { canManagePersonAsTeamCoordinator, teamIdsForActor } from '../lib/authz.
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { writeAudit } from '../lib/audit.js';
 import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, normalizeImportedTeamName, personRowsFromObjects } from '../lib/csvPersons.js';
-import { isNamelessRosterPerson } from '../lib/personMatch.js';
+import { isNamelessRosterPerson, normalizePersonName } from '../lib/personMatch.js';
 import { trySendInviteEmail } from '../lib/mail.js';
 import { exportPersonData, wipePersonContact, personExportSheets } from '../lib/privacy.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
@@ -361,7 +361,6 @@ router.post(
     try {
       const name = String(req.body?.name || '').trim();
       if (name.length < 2) return res.status(400).json({ error: 'Vul de naam van het kind in.' });
-      const guardian = await prisma.person.findUnique({ where: { id: req.person.id } });
       const child = await prisma.person.create({
         data: {
           name,
@@ -369,12 +368,11 @@ router.post(
           email: null,
           role: 'Vrijwilliger',
           obligation: 'NONE',
-          teamId: guardian?.teamId ?? null,
+          teamId: null,
           guardianId: req.person.id,
           active: true,
         },
       });
-      if (child.teamId) await syncPrimaryTeamMembership(child.id, child.teamId);
       await writeAudit({
         actorId: req.person.id,
         action: 'person.create_child',
@@ -622,6 +620,97 @@ router.post(
         include: { team: true, guardian: true },
       });
       res.status(201).json(publicPerson(withGuardian, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/children',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const guardianId = Number(req.params.id);
+      const guardian = await prisma.person.findUnique({ where: { id: guardianId } });
+      if (!guardian) return res.status(404).json({ error: 'Persoon niet gevonden' });
+      const name = String(req.body?.name || '').trim();
+      if (name.length < 2) return res.status(400).json({ error: 'Vul de naam van het kind in.' });
+      const wanted = normalizePersonName(name);
+      const existingPeople = await prisma.person.findMany({
+        where: { active: true },
+        select: { id: true, name: true, guardianId: true },
+      });
+      const matches = existingPeople.filter(
+        (p) => p.id !== guardianId && normalizePersonName(p.name) === wanted,
+      );
+      if (matches.length > 1) {
+        return res.status(409).json({
+          error: 'Er zijn meerdere personen met deze naam. Kies de bestaande persoon in de lijst.',
+        });
+      }
+      if (matches.length === 1) {
+        const existing = matches[0];
+        const updated = await prisma.person.update({
+          where: { id: existing.id },
+          data: { guardianId },
+        });
+        await writeAudit({
+          actorId: req.person.id,
+          action: 'person.link_child',
+          entity: 'Person',
+          entityId: existing.id,
+          detail: `${updated.name} kind van ${guardian.name}`,
+        });
+        return res.json({
+          ...publicPerson(updated, { viewerRole: req.person.role }),
+          linked: true,
+        });
+      }
+      const child = await prisma.person.create({
+        data: {
+          name,
+          personNumber: await nextPersonNumber(),
+          email: null,
+          role: 'Vrijwilliger',
+          obligation: 'NONE',
+          teamId: null,
+          guardianId,
+          active: true,
+        },
+      });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.create_child',
+        entity: 'Person',
+        entityId: child.id,
+        detail: `${child.name} kind van ${guardian.name}`,
+      });
+      res.status(201).json(publicPerson(child, { viewerRole: req.person.role }));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.delete(
+  '/:id/children/:childId',
+  requireRole(...ADMIN_ROLES)(async (req, res, next) => {
+    try {
+      const guardianId = Number(req.params.id);
+      const childId = Number(req.params.childId);
+      const child = await prisma.person.findUnique({ where: { id: childId } });
+      if (!child || child.guardianId !== guardianId) {
+        return res.status(404).json({ error: 'Kind niet gevonden bij deze persoon' });
+      }
+      await prisma.person.update({ where: { id: childId }, data: { guardianId: null } });
+      await writeAudit({
+        actorId: req.person.id,
+        action: 'person.unlink_child',
+        entity: 'Person',
+        entityId: childId,
+        detail: child.name,
+      });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

@@ -46,6 +46,23 @@ export function personalMinimumForRole(role) {
   return TEAM_DUTY_PERSONAL_MIN[role] ?? 0;
 }
 
+export function parseTeamDutyTeamIds(raw) {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  }
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  } catch {
+    return [];
+  }
+}
+
+export function serializeTeamDutyTeamIds(ids) {
+  return JSON.stringify(parseTeamDutyTeamIds(ids));
+}
+
 export function parseAgeBound(value) {
   if (value === '' || value == null) return null;
   const n = Number(value);
@@ -99,11 +116,14 @@ export function teamFitsDutyRole(team, role) {
 }
 
 /**
- * Team hoort bij deze dienstregel: teamdienst aan, en leeftijdsgroep uit de regel
- * (anders de standaard ochtend=O8–O12 / middag+avond=O13–O17 plus team-shift).
+ * Team hoort bij deze dienstregel: expliciet aangevinkt (7x7/senioren), of
+ * teamdienst aan plus leeftijdsgroep / standaard jeugdshift.
  */
 export function teamFitsDutyRule(team, rule) {
-  if (!team?.teamDutyUse) return false;
+  if (!team) return false;
+  const listed = parseTeamDutyTeamIds(rule?.teamDutyTeamIds);
+  if (listed.includes(Number(team.id))) return true;
+  if (!team.teamDutyUse) return false;
   const role = rule?.teamDutySlotRole;
   const age = parseJoAge(team.name)?.age ?? null;
   const hasAgeFilter = rule?.teamDutyAgeFrom != null || rule?.teamDutyAgeTo != null;
@@ -329,4 +349,24 @@ export function friendlyEnrollmentReason(source, { makeup = false, obligation } 
     return 'Automatisch ingepland';
   }
   return null;
+}
+
+/** Excel en scherm: oude "open"-reden wordt Automatisch ingepland. */
+export function displayEnrollmentReason(reason) {
+  if (!reason) return '';
+  let cleaned = String(reason).replace(/\s*stond nog open\.?/gi, '').trim();
+  if (!cleaned) return '';
+  if (/^open$/i.test(cleaned) || /^auto$/i.test(cleaned)) return 'Automatisch ingepland';
+  if (/Automatisch ingepland:.*(verplichte bardienst|VR18)/i.test(cleaned)) {
+    return 'Automatisch ingepland';
+  }
+  return cleaned;
+}
+
+/** Officiële lege auto-dienst mag alsnog teamplekken krijgen als er nu thuisjeugd is. */
+export function shouldAttachTeamDutiesToLocked(service, assignments) {
+  if (!assignments?.length) return false;
+  if (service?.origin === 'MANUAL') return false;
+  if ((service?.teamDuties || []).length) return false;
+  return true;
 }

@@ -133,11 +133,6 @@ export default function Dashboard({ focus = 'week' }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <DownloadPlanningButtons period={period} />
-        {can('inschrijven') ? (
-          <Link to="/diensten" className="vvl-btn-primary min-h-[44px]" data-testid="dash-inschrijven">
-            Inschrijven
-          </Link>
-        ) : null}
       </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -148,7 +143,7 @@ export default function Dashboard({ focus = 'week' }) {
         ].map((tile) => (
           <Link
             key={tile.key}
-            to={`/rooster?status=${tile.key}`}
+            to={`/meer?tab=diensten&status=${tile.key}`}
             data-testid={`tegel-${tile.key}`}
             className={`vvl-card flex min-h-[44px] items-center justify-between border-l-4 ${tile.border} text-left transition hover:shadow-md`}
           >

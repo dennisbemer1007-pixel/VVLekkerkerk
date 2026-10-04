@@ -167,6 +167,10 @@ export const api = {
   getMyChildren: () => json('/persons/me/children'),
   addMyChild: (data) => json('/persons/me/children', { method: 'POST', body: JSON.stringify(data) }),
   deleteMyChild: (id) => json(`/persons/me/children/${id}`, { method: 'DELETE' }),
+  addPersonChild: (personId, data) =>
+    json(`/persons/${personId}/children`, { method: 'POST', body: JSON.stringify(data) }),
+  unlinkPersonChild: (personId, childId) =>
+    json(`/persons/${personId}/children/${childId}`, { method: 'DELETE' }),
   createPerson: (data) => json('/persons', { method: 'POST', body: JSON.stringify(data) }),
   updatePerson: (id, data) =>
     json(`/persons/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

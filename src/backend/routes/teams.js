@@ -7,7 +7,7 @@ import { teamIdsForActor } from '../lib/authz.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
 import { executedCountForObligation, remainingObligation, personalEnrollmentCount } from '../lib/obligation.js';
 import { mapService, serviceInclude } from '../lib/serviceHelpers.js';
-import { getClubSettings } from '../lib/season.js';
+import { getClubSettings, seasonRangeFromLabel } from '../lib/season.js';
 import { periodFromRound } from '../lib/planningPeriod.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { normalizePersonName } from '../lib/personMatch.js';
@@ -70,23 +70,35 @@ router.get(
       const from = roundPeriod.from;
       const to = roundPeriod.to;
       const yearStart = new Date(from.getFullYear(), 0, 1);
+      const today = startOfDay(new Date());
+      const season = seasonRangeFromLabel(settings.seasonLabel, settings.seasonStartMonth);
 
       const teams = await prisma.team.findMany({
         where: allowed ? { id: { in: allowed } } : { active: true },
         include: {
           coordinator: true,
           members: { where: { active: true }, orderBy: { name: 'asc' } },
+          memberships: {
+            where: { active: true },
+            include: { person: true },
+          },
           matches: {
-            where: { date: { gte: from, lte: to } },
+            where: { date: { gte: today } },
             orderBy: { date: 'asc' },
           },
           assignedServices: {
-            where: { active: true, draft: false, date: { gte: from, lte: to } },
+            where: { active: true, draft: false, date: { gte: today } },
             include: serviceInclude,
             orderBy: [{ date: 'asc' }, { time: 'asc' }],
           },
           teamDuties: {
-            where: { service: { active: true, draft: false, date: { gte: from, lte: to } } },
+            where: {
+              service: {
+                active: true,
+                draft: false,
+                date: { gte: season.from, lte: season.to },
+              },
+            },
             include: { service: { include: serviceInclude } },
           },
         },
@@ -109,8 +121,21 @@ router.get(
 
       const payload = [];
       for (const team of teams) {
+        const byId = new Map();
+        for (const member of team.members || []) {
+          if (member.active === false) continue;
+          byId.set(member.id, member);
+        }
+        for (const row of team.memberships || []) {
+          const person = row.person;
+          if (!person || person.active === false) continue;
+          byId.set(person.id, person);
+        }
+        const parents = [...byId.values()]
+          .filter((person) => !person.guardianId)
+          .sort((a, b) => String(a.name).localeCompare(String(b.name), 'nl'));
         const members = [];
-        for (const member of team.members) {
+        for (const member of parents) {
           const enrollments = await prisma.enrollment.findMany({
             where: { personId: member.id },
             include: { service: true },
@@ -124,29 +149,13 @@ router.get(
           const teamStands = enrollments.filter(
             (e) => e.kind === 'TEAM' && e.forTeamId === team.id && !e.noShow,
           );
-          const stoodBetween = (fromDate, toDate, list = enrollments) =>
-            list.filter((e) => {
-              if (e.noShow) return false;
-              const d = new Date(e.service?.date);
-              if (Number.isNaN(d.getTime())) return false;
-              if (fromDate && d < fromDate) return false;
-              if (toDate && d > toDate) return false;
-              return true;
-            }).length;
-          const sixWeeksAgo = startOfDay(addWeeks(new Date(), -6));
-          const yearStartNow = new Date(new Date().getFullYear(), 0, 1);
-          const nowEnd = endOfDay(new Date());
           members.push({
             ...publicPersonBrief(member),
             stillNeeded: remainingObligation(member, executed),
             makeupDue: member.makeupDue ?? 0,
             barLast6Weeks: counts.count6w,
             barThisYear: counts.countYear,
-            stood6w: stoodBetween(sixWeeksAgo, nowEnd),
-            stoodYear: stoodBetween(yearStartNow, nowEnd),
             teamDutyCount: teamStands.length,
-            teamDuty6w: stoodBetween(sixWeeksAgo, nowEnd, teamStands),
-            teamDutyYear: stoodBetween(yearStartNow, nowEnd, teamStands),
             hasAccount: Boolean(member.passwordHash),
             email: Boolean(member.email),
           });
@@ -154,9 +163,10 @@ router.get(
         const dutyById = new Map();
         for (const s of team.assignedServices) dutyById.set(s.id, s);
         for (const duty of team.teamDuties || []) {
-          if (duty.service) dutyById.set(duty.service.id, duty.service);
+          if (duty.service && new Date(duty.service.date) >= today) dutyById.set(duty.service.id, duty.service);
         }
         const teamServices = [...dutyById.values()]
+          .filter((s) => new Date(s.date) >= today)
           .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.time).localeCompare(String(b.time)))
           .map((s) => {
             const mapped = mapService(s);
@@ -165,9 +175,8 @@ router.get(
               teamOpen: teamDutyOpenForTeam(mapped, team.id),
             };
           });
-        // Plekken tellen: O9 met 2 reserved = 2; middag+avond = som van reserved
         const teamShiftSpots = (team.teamDuties || []).reduce(
-          (sum, duty) => sum + Math.max(0, Number(duty.reserved) || 0),
+          (sum, duty) => sum + Math.max(1, Number(duty.reserved) || 1),
           0,
         );
         payload.push({
@@ -373,9 +382,9 @@ router.post(
         return res.status(200).json({
           ...publicPerson(full, { viewerRole: req.person.role }),
           linked: true,
-          message: existing.email
-            ? `${full.name} heeft al een account en is aan dit team gekoppeld. Er is geen tweede persoon gemaakt.`
-            : `${full.name} stond al op naam en is aan dit team gekoppeld.`,
+          message: existing.teamId && existing.teamId !== teamId
+            ? `${full.name} is nu ook gekoppeld aan ${team.name}. Een ouder mag bij meerdere teams staan.`
+            : `${full.name} is gekoppeld aan ${team.name}.`,
         });
       }
       const person = await prisma.person.create({
@@ -473,13 +482,27 @@ router.delete(
       if (coordinates) {
         return res.status(400).json({ error: 'Een coördinator kun je hier niet verwijderen' });
       }
-      await prisma.person.delete({ where: { id: person.id } });
+      await prisma.personTeam.deleteMany({ where: { personId: person.id, teamId } });
+      const other = await prisma.personTeam.findFirst({
+        where: { personId: person.id, active: true, teamId: { not: teamId } },
+      });
+      if (person.teamId === teamId) {
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { teamId: other?.teamId ?? null },
+        });
+      }
+      const remaining = await prisma.personTeam.count({ where: { personId: person.id } });
+      const enrollments = await prisma.enrollment.count({ where: { personId: person.id } });
+      if (!other && remaining === 0 && enrollments === 0 && !person.guardianId) {
+        await prisma.person.delete({ where: { id: person.id } });
+      }
       await writeAudit({
         actorId: req.person.id,
-        action: 'person.delete_parent',
+        action: 'person.unlink_parent',
         entity: 'Person',
         entityId: person.id,
-        detail: person.name,
+        detail: `${person.name} los van team ${teamId}`,
       });
       res.json({ ok: true });
     } catch (err) {

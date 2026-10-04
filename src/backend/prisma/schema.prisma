@@ -180,6 +180,8 @@ model ServiceRule {
   /** Leeftijdsgroep voor teamdienst, bijv. 8 t/m 12 of 13 t/m 17. */
   teamDutyAgeFrom       Int?
   teamDutyAgeTo         Int?
+  /** JSON-lijst team-id’s die naast de leeftijdsgroep ook teamdienst mogen doen (7x7, senioren). */
+  teamDutyTeamIds       String   @default("[]")
   active                Boolean      @default(true)
   validFrom             DateTime?
   validTo               DateTime?

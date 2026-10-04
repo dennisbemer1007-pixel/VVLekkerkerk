@@ -464,6 +464,7 @@ router.get(
             }
           : null,
         serviceDiff: status.serviceDiff || null,
+        repairs: status.repairs || null,
       });
     } catch (err) {
       next(err);
