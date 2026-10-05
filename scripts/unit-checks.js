@@ -37,6 +37,7 @@ import {
 } from '../src/backend/lib/mailTemplates.js';
 import {
   ctaLabelForTemplateKey,
+  exampleMailVars,
   logoAttachment,
   wrapBrandedEmail,
 } from '../src/backend/lib/mailLayout.js';
@@ -1993,6 +1994,37 @@ assert(
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
   );
+  const renderYamlSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../render.yaml'),
+    'utf8',
+  );
+  assert(
+    'render.yaml zet APP_URL op het clubdomein',
+    /key:\s*APP_URL/.test(renderYamlSrc) &&
+      renderYamlSrc.includes('https://planning.vvlekkerkerk.nl') &&
+      !renderYamlSrc.includes('https://planning.vvlekkerkerk.nl/'),
+  );
+  assert(
+    'live-start gebruikt het clubdomein als APP_URL',
+    renderStartSrc.includes("https://planning.vvlekkerkerk.nl") &&
+      renderStartSrc.includes('CANONICAL_APP_URL'),
+  );
+  assert(
+    'mailvoorbeeld niet hardcoded op onrender',
+    !fs
+      .readFileSync(
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/mailLayout.js'),
+        'utf8',
+      )
+      .includes('vvl-planning-demo.onrender.com'),
+  );
+  {
+    const prevApp = process.env.APP_URL;
+    process.env.APP_URL = 'https://planning.vvlekkerkerk.nl';
+    assert('mailvoorbeeld volgt APP_URL', exampleMailVars().link === 'https://planning.vvlekkerkerk.nl');
+    if (prevApp === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = prevApp;
+  }
   const liveRepairsSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/liveRepairs.js'),
     'utf8',

@@ -33,6 +33,7 @@ services:
       # Bestaande waarde in het dashboard blijft staan. Zet daar een eigen wachtwoord.
       - key: ADMIN_PASSWORD
         sync: false
-      # APP_URL wordt in het startscript gezet via RENDER_EXTERNAL_URL
+      - key: APP_URL
+        value: https://planning.vvlekkerkerk.nl
       - key: MAIL_SECRET
         generateValue: true
