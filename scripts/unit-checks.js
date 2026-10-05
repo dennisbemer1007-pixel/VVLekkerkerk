@@ -1761,6 +1761,17 @@ assert(
       !uitnodigingSrc.includes('setName') &&
       uitnodigingSrc.includes('acceptInvite(token, { password })'),
   );
+  const loginSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Login.jsx'),
+    'utf8',
+  );
+  assert(
+    'inlogpagina zonder i-icoon of page-help',
+    loginSrc.includes('<h1 className="page-title">Inloggen</h1>') &&
+      !loginSrc.includes('PageTitle') &&
+      !loginSrc.includes('PageHelp') &&
+      !loginSrc.includes('PAGE_HELP'),
+  );
   const teamDashSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/TeamDashboard.jsx'),
     'utf8',

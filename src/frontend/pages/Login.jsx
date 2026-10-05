@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageTitle } from '../components/PageHelp.jsx';
 import { homePathForUser, useAuth } from '../context/AuthContext.jsx';
 import { api, consumeAuthNotice } from '../hooks/useApi.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Login() {
   const { login, isLoggedIn, loading: authLoading, homePath } = useAuth();
@@ -81,9 +79,7 @@ export default function Login() {
       <div className="mx-auto max-w-md space-y-6">
         <header className="text-center">
           <img src="/logo.png" alt="V.V. Lekkerkerk" className="vvl-logo mx-auto mb-4 h-28 w-28 object-contain" />
-          <PageTitle className="justify-center" {...PAGE_HELP.login}>
-            Inloggen
-          </PageTitle>
+          <h1 className="page-title">Inloggen</h1>
           <p className="mt-2 text-sm text-gray-700">
             Planning bar- en keukendiensten — gebruik je e-mail en wachtwoord.
           </p>

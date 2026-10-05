@@ -186,15 +186,6 @@ export const PAGE_HELP = {
       'Openstaande uitnodigingen opnieuw versturen',
     ],
   },
-  login: {
-    purpose:
-      'Log in met je e-mailadres en wachtwoord om je in te schrijven voor diensten of (als beheerder) het rooster te beheren.',
-    actions: [
-      'Inloggen met je clubaccount',
-      'Wachtwoord vergeten? Vraag een resetlink aan',
-      'Nog geen account? Gebruik de uitnodigingslink uit je e-mail',
-    ],
-  },
   wachtwoordVergeten: {
     purpose:
       'Vraag een veilige link aan om je wachtwoord opnieuw in te stellen. Om privacyredenen zie je altijd hetzelfde bevestigingsbericht.',
