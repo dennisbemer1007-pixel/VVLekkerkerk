@@ -53,7 +53,7 @@ export function exampleMailVars(overrides = {}) {
   try {
     link = resolvePublicAppUrl();
   } catch {
-    link = 'https://vvl-planning-demo.onrender.com';
+    link = '';
   }
   return {
     naam: 'Jan de Vries',

@@ -52,9 +52,12 @@ if (process.env.DATA_DIR) {
   process.env.DATABASE_URL = 'file:./demo.db';
 }
 
-// Publieke URL: Render zet RENDER_EXTERNAL_URL automatisch
-if (!process.env.APP_URL && process.env.RENDER_EXTERNAL_URL) {
-  process.env.APP_URL = process.env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+// Publieke URL voor mails/agenda (geen trailing slash).
+const CANONICAL_APP_URL = 'https://planning.vvlekkerkerk.nl';
+if (process.env.APP_URL) {
+  process.env.APP_URL = process.env.APP_URL.replace(/\/$/, '');
+} else {
+  process.env.APP_URL = CANONICAL_APP_URL;
 }
 
 if (!process.env.CORS_ORIGIN && process.env.APP_URL) {
