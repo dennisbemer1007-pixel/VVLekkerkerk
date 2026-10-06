@@ -210,6 +210,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
     personenWeg,
     personenBlijven,
     teams,
+    teamKoppelingen,
     dienstregels,
     activiteiten,
     mail,
@@ -232,6 +233,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
     db.person.count({ where: { NOT: keptWhere } }),
     db.person.count({ where: keptWhere }),
     db.team.count(),
+    db.personTeam.count(),
     db.serviceRule.count(),
     db.activity.count(),
     db.mailSettings.findUnique({ where: { id: 1 } }),
@@ -255,12 +257,21 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
       { key: 'links', label: 'Uitnodigings- en resetlinks', count: links },
       { key: 'maillog', label: 'Maillog', count: maillog },
       { key: 'personen', label: 'Personen zonder rol Barcommissie of Admin', count: personenWeg },
+      {
+        key: 'teams',
+        label: 'Teams (incl. speeltijden en teamkoppelingen)',
+        count: teams,
+      },
+      { key: 'teamKoppelingen', label: 'Persoon–teamkoppelingen', count: teamKoppelingen },
       { key: 'toernooien', label: 'Toernooien', count: toernooien },
     ],
     blijft: [
       { key: 'accounts', label: 'Barcommissie- en admin-accounts', count: personenBlijven },
-      { key: 'teams', label: 'Teams (incl. speeltijden)', count: teams },
-      { key: 'dienstregels', label: 'Dienstregels', count: dienstregels },
+      {
+        key: 'dienstregels',
+        label: 'Dienstregels (teamvoorwaarden worden losgekoppeld)',
+        count: dienstregels,
+      },
       { key: 'jaarplanning', label: 'Jaarplanning', count: activiteiten },
       { key: 'mailteksten', label: 'Mailteksten', count: mail ? 1 : 0 },
       { key: 'club', label: 'Clubgegevens en overige instellingen', count: club ? 1 : 0 },
@@ -289,6 +300,8 @@ async function wipeInside(tx, { actorId, backupFilename }) {
       where: { OR: [{ inviteToken: { not: null } }, { passwordResetToken: { not: null } }] },
     }),
     personen: await tx.person.count({ where: { id: { notIn: keptList } } }),
+    teams: await tx.team.count(),
+    teamKoppelingen: await tx.personTeam.count(),
   };
 
   await tx.refereeSwap.deleteMany();
@@ -313,13 +326,6 @@ async function wipeInside(tx, { actorId, backupFilename }) {
     },
     data: { guardianId: null },
   });
-  await tx.team.updateMany({
-    where: {
-      coordinatorId: { not: null },
-      NOT: { coordinatorId: { in: keptList } },
-    },
-    data: { coordinatorId: null },
-  });
   await tx.auditLog.updateMany({
     where: {
       actorId: { not: null },
@@ -340,6 +346,16 @@ async function wipeInside(tx, { actorId, backupFilename }) {
     where: { personId: { notIn: keptList } },
   });
   await tx.person.deleteMany({ where: { id: { notIn: keptList } } });
+
+  // Teams volledig weg: eerst FK's van blijvende accounts en dienstregels losmaken.
+  await tx.person.updateMany({ data: { teamId: null } });
+  await tx.personTeam.deleteMany();
+  await tx.team.updateMany({ data: { coordinatorId: null } });
+  await tx.serviceRule.updateMany({
+    data: { conditionTeamId: null, teamDutyTeamIds: '[]' },
+  });
+  await tx.calendarFeed.deleteMany({ where: { teamId: { not: null } } });
+  await tx.team.deleteMany();
 
   await tx.planningRound.updateMany({ data: { active: false } });
   await tx.planningRound.deleteMany({ where: { id: { not: 1 } } });
@@ -415,13 +431,14 @@ export async function runEnvironmentReset(db, options = {}) {
   gewist.maillog = maillog;
 
   const blijftPersonen = await db.person.count({ where: { role: { in: KEPT_ROLES } } });
-  const message = `Omgeving opgeschoond. Gewist: ${gewist.diensten} diensten, ${gewist.inschrijvingen} inschrijvingen, ${gewist.ruilverzoeken} ruilverzoeken, ${gewist.meldingen} meldingen, ${gewist.afwezigheden} afwezigheden, ${gewist.wedstrijden} wedstrijden en ${gewist.personen} personen. Back-up: ${backup.filename}.${mailWarning}`;
+  const blijftTeams = await db.team.count();
+  const message = `Omgeving opgeschoond. Gewist: ${gewist.diensten} diensten, ${gewist.inschrijvingen} inschrijvingen, ${gewist.ruilverzoeken} ruilverzoeken, ${gewist.meldingen} meldingen, ${gewist.afwezigheden} afwezigheden, ${gewist.wedstrijden} wedstrijden, ${gewist.personen} personen en ${gewist.teams} teams. Back-up: ${backup.filename}.${mailWarning}`;
 
   return {
     message,
     backup: backup.filename,
     backupPath: backup.path,
     gewist,
-    blijft: { personen: blijftPersonen },
+    blijft: { personen: blijftPersonen, teams: blijftTeams },
   };
 }

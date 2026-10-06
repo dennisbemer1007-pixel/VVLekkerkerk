@@ -102,6 +102,7 @@ async function seed(db) {
       name: 'Wipe Vrijwilliger',
       email: 'wipe-vrij@test.local',
       role: 'Vrijwilliger',
+      teamId: team.id,
       inviteToken: 'wipe-invite-vrij',
       inviteExpiresAt: new Date('2026-12-01T00:00:00Z'),
     },
@@ -111,6 +112,7 @@ async function seed(db) {
       name: 'Wipe Teamcoördinator',
       email: 'wipe-tc@test.local',
       role: 'Teamcoördinator',
+      teamId: team.id,
     },
   });
   await db.person.create({
@@ -126,6 +128,7 @@ async function seed(db) {
       name: 'Wipe Admin',
       email: 'wipe-admin@test.local',
       role: 'Admin',
+      teamId: team.id,
       guardianId: volunteer.id,
       inviteToken: 'wipe-invite-admin',
       inviteExpiresAt: new Date('2026-12-01T00:00:00Z'),
@@ -133,8 +136,13 @@ async function seed(db) {
       passwordResetExpiresAt: new Date('2026-12-01T00:00:00Z'),
     },
   });
-  await db.person.create({
-    data: { name: 'Wipe Bar', email: 'wipe-bar@test.local', role: 'Barcommissie' },
+  const bar = await db.person.create({
+    data: {
+      name: 'Wipe Bar',
+      email: 'wipe-bar@test.local',
+      role: 'Barcommissie',
+      teamId: team.id,
+    },
   });
   await db.person.create({
     data: { name: 'Wipe Bestuur', email: 'wipe-bestuur@test.local', role: 'Bestuur' },
@@ -146,6 +154,24 @@ async function seed(db) {
   await db.team.update({
     where: { id: team.id },
     data: { coordinatorId: coordinator.id },
+  });
+  await db.personTeam.create({
+    data: { personId: admin.id, teamId: team.id, season: '2026-2027', active: true },
+  });
+  await db.personTeam.create({
+    data: { personId: bar.id, teamId: team.id, season: '2026-2027', active: true },
+  });
+  await db.serviceRule.create({
+    data: {
+      name: 'Wipe teamvoorwaarde',
+      startTime: '09:00',
+      endTime: '12:00',
+      type: 'BAR',
+      conditionType: 'HOME_MATCH_TEAM',
+      conditionTeamId: team.id,
+      conditionTeamName: team.name,
+      teamDutyTeamIds: JSON.stringify([team.id]),
+    },
   });
 
   const match = await db.match.create({
@@ -212,7 +238,7 @@ async function seed(db) {
     },
   });
 
-  return { adminId: admin.id, teamId: team.id };
+  return { adminId: admin.id, teamId: team.id, teamName: team.name };
 }
 
 async function fingerprint(db) {
@@ -421,7 +447,9 @@ async function main() {
     assert(
       'voorbeeld toont wissen en blijven',
       preview.wissen.some((row) => row.key === 'diensten' && row.count === baseline.services) &&
-        preview.blijft.some((row) => row.key === 'teams' && row.count === baseline.teams.length) &&
+        preview.wissen.some((row) => row.key === 'teams' && row.count === baseline.teams.length) &&
+        preview.wissen.some((row) => row.key === 'teamKoppelingen' && row.count >= 2) &&
+        !preview.blijft.some((row) => row.key === 'teams') &&
         preview.blijft.some((row) => row.key === 'dienstregels' && row.count === baseline.rules.length),
     );
 
@@ -479,15 +507,30 @@ async function main() {
     const rulesAfter = await db.serviceRule.findMany({ orderBy: { id: 'asc' } });
     const mailAfter = await db.mailSettings.findUnique({ where: { id: 1 } });
     const clubAfter = await db.clubSettings.findUnique({ where: { id: 1 } });
-    const teamBefore = baseline.teams.map(({ coordinatorId, ...rest }) => rest);
-    const teamAfter = teamsAfter.map(({ coordinatorId, ...rest }) => rest);
-    assert('teams en speeltijden blijven', JSON.stringify(teamBefore) === JSON.stringify(teamAfter));
-    const wipedTeam = teamsAfter.find((team) => team.id === seededIds.teamId);
-    assert('coördinator-koppeling van een gewiste persoon is los', wipedTeam && wipedTeam.coordinatorId === null);
-    assert('dienstregels blijven', JSON.stringify(baseline.rules) === JSON.stringify(rulesAfter));
+    assert('teams en speeltijden zijn weg', teamsAfter.length === 0 && result.gewist.teams === baseline.teams.length);
+    assert('persoon-teamkoppelingen zijn weg', (await db.personTeam.count()) === 0);
+    assert(
+      'blijvende accounts hebben geen team meer',
+      remaining.every((person) => person.teamId == null),
+    );
+    assert(
+      'dienstregels blijven, teamvoorwaarden losgekoppeld',
+      rulesAfter.length === baseline.rules.length &&
+        rulesAfter.every(
+          (rule) =>
+            rule.conditionTeamId == null &&
+            (rule.teamDutyTeamIds === '[]' || rule.teamDutyTeamIds === ''),
+        ),
+    );
+    const namedRule = rulesAfter.find((rule) => rule.name === 'Wipe teamvoorwaarde');
+    assert(
+      'dienstregel-naam blijft na loskoppelen team',
+      namedRule && namedRule.conditionTeamName === seededIds.teamName,
+    );
     assert('mailteksten blijven', JSON.stringify(baseline.mail) === JSON.stringify(mailAfter));
     assert('clubgegevens blijven', JSON.stringify(baseline.club) === JSON.stringify(clubAfter));
     assert('jaarplanning blijft', (await db.activity.count()) === baseline.activities);
+    assert('resultaat meldt nul teams die blijven', result.blijft.teams === 0);
 
     const audit = await db.auditLog.findFirst({
       where: { action: 'environment.reset' },
