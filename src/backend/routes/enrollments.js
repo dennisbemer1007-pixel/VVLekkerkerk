@@ -17,6 +17,8 @@ import {
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
+import { getActiveRound } from '../lib/planningRounds.js';
+import { enrollableServiceRange, isWithinPlanningPeriod } from '../lib/planningPeriod.js';
 
 const router = Router();
 
@@ -156,6 +158,12 @@ router.post(
         if (startOfDay(servicePreview.date) < startOfDay(new Date())) {
           return res.status(400).json({
             error: 'Inschrijven in het verleden kan niet.',
+          });
+        }
+        const enrollable = await enrollableServiceRange(prisma);
+        if (!isWithinPlanningPeriod(servicePreview.date, enrollable)) {
+          return res.status(403).json({
+            error: 'Deze dienst valt buiten de planningperiode.',
           });
         }
         if (servicePreview.activity && servicePreview.activity.openForEnrollment === false) {
