@@ -56,19 +56,30 @@ function IconButton({ title, onClick, children, tone = 'default', size = 'md' })
   );
 }
 
+function PersonStatusIcon({ banned }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="8" r="3" />
+      <path d="M5 19c1.5-3 4-4.5 7-4.5S17.5 16 19 19" />
+      {banned ? <path d="M4 4l16 16" /> : null}
+    </svg>
+  );
+}
+
 function PersonRowActions({ person, onEdit, onToggleActive, onInvite, onDelete }) {
   const canInvite = !person.hasAccount && Boolean(person.email);
+  const inactive = person.active === false;
   return (
     <div className="flex flex-nowrap items-center justify-end gap-1" data-testid="person-row-actions">
       <IconButton size="sm" title={`${person.name} bewerken`} onClick={() => onEdit(person)}>✏️</IconButton>
-      <button
-        type="button"
-        className="inline-flex h-8 min-w-[5.5rem] shrink-0 items-center justify-center rounded-sm border border-vvl-border bg-white px-2 text-xs font-bold uppercase tracking-wide text-vvl-primary hover:bg-vvl-secondary sm:min-w-[6.75rem]"
-        title={person.active === false ? `${person.name} activeren` : `${person.name} deactiveren`}
-        onClick={() => onToggleActive(person, person.active === false)}
+      <IconButton
+        size="sm"
+        title={inactive ? 'Activeren' : 'Deactiveren'}
+        tone={inactive ? 'default' : 'warn'}
+        onClick={() => onToggleActive(person, inactive)}
       >
-        {person.active === false ? 'Activeren' : 'Deactiveren'}
-      </button>
+        <PersonStatusIcon banned={!inactive} />
+      </IconButton>
       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
         {canInvite ? (
           <IconButton size="sm" title={`Uitnodiging sturen naar ${person.name}`} onClick={() => onInvite(person)}>✉️</IconButton>
@@ -631,7 +642,8 @@ export default function PersonenBeheer() {
   };
 
   const setActive = async (p, active) => {
-    if (!active && !window.confirm(`${p.name} deactiveren?`)) return;
+    const verb = active ? 'activeren' : 'deactiveren';
+    if (!window.confirm(`${p.name} ${verb}?`)) return;
     setError('');
     try {
       await api.updatePerson(p.id, { active });
@@ -933,7 +945,7 @@ export default function PersonenBeheer() {
               {isAdminViewer ? (
                 <th className="hidden w-28 p-2 font-bold lg:table-cell">Laatst ingelogd</th>
               ) : null}
-              <th className="w-[12.25rem] p-2 font-bold sm:w-[13.5rem]"> </th>
+              <th className="w-36 p-2 font-bold"> </th>
             </tr>
           </thead>
           <tbody>

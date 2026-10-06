@@ -1723,8 +1723,15 @@ assert(
     'personen-rijacties staan op één regel, zelfde hoogte',
     personenSrc.includes('flex-nowrap') &&
       personenSrc.includes('data-testid="person-row-actions"') &&
-      personenSrc.includes('min-w-[5.5rem]') &&
-      !personenSrc.includes('flex flex-wrap justify-end gap-1'),
+      personenSrc.includes("title={inactive ? 'Activeren' : 'Deactiveren'}") &&
+      personenSrc.includes('PersonStatusIcon') &&
+      !personenSrc.includes('flex flex-wrap justify-end gap-1') &&
+      !personenSrc.includes('min-w-[5.5rem]'),
+  );
+  assert(
+    'deactiveren en activeren vragen bevestiging',
+    personenSrc.includes("const verb = active ? 'activeren' : 'deactiveren'") &&
+      personenSrc.includes('window.confirm(`${p.name} ${verb}?`)'),
   );
   assert(
     'laatst-ingelogd kolom alleen voor admin in personen',
