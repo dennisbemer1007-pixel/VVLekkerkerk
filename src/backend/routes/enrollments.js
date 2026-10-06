@@ -208,13 +208,15 @@ router.post(
         });
         const blocks = blocksForPerson(person, matches);
         const overlap = overlappingMatchBlocks(servicePreview, blocks);
-        if (overlap.length && !(ignoreMatchBlock && isAdminRole(req.person.role))) {
+        const selfEnroll = Number(req.person.id) === targetId;
+        const mayOverrideMatch = isAdminRole(req.person.role) || selfEnroll;
+        if (overlap.length && !(ignoreMatchBlock && mayOverrideMatch)) {
           return res.status(409).json({
             error: isAdminRole(req.person.role)
               ? 'Let op: deze persoon heeft een wedstrijd en valt binnen de ingestelde blokkeertijd. Toch inplannen?'
               : 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
             code: 'MATCH_BLOCK',
-            canOverride: isAdminRole(req.person.role),
+            canOverride: mayOverrideMatch,
           });
         }
       }
@@ -344,7 +346,7 @@ router.post(
           });
         });
 
-        if (ignoreMatchBlock && isAdminRole(req.person.role)) {
+        if (ignoreMatchBlock && (isAdminRole(req.person.role) || Number(req.person.id) === targetId)) {
           await writeAudit({
             actorId: req.person.id,
             action: 'enrollment.match_block_override',

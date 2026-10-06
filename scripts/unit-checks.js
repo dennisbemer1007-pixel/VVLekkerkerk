@@ -61,8 +61,8 @@ import {
   normalizeObligation,
   remainingObligation,
   fillExecutedCount,
-  vr18EligibleOn,
-  vr18NeedsSlotInPeriod,
+  vr18NeedsFillInCurrent,
+  vr18PeriodCounts,
 } from '../src/backend/lib/obligation.js';
 import { isCanonicalPersonNumber } from '../src/backend/lib/personNumber.js';
 import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
@@ -101,6 +101,7 @@ import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.j
 import {
   clampServiceDateFilter,
   isWithinPlanningPeriod,
+  pickPreviousRound,
   resolvePlanningPeriod,
 } from '../src/backend/lib/planningPeriod.js';
 import { compareServicesByDateThenTime, toIsoDate } from '../src/backend/lib/dates.js';
@@ -121,7 +122,7 @@ import {
   sixWeekRosterWindow,
   weekStartsInRange,
 } from '../src/backend/lib/pdfRoster.js';
-import { defaultPlanningEndInput } from '../src/frontend/utils/formatDate.js';
+import { defaultPlanningEndInput, toDateInputValue } from '../src/frontend/utils/formatDate.js';
 import {
   assessFit,
   buildShifts,
@@ -471,19 +472,10 @@ assert(
   );
 }
 assert(
-  'verplicht telt in de planningsperiode, VR18 over 12 weken',
+  'verplicht telt in de planningsperiode, VR18 over twee planningen',
   fillExecutedCount({ obligation: 'FULL' }, { countPeriod: 0, count6w: 1, count12w: 1 }) === 0 &&
-    fillExecutedCount({ obligation: 'VR18' }, { countPeriod: 0, count6w: 0, count12w: 1 }) === 1,
-);
-assert(
-  'VR18 mag weer 12 weken na de vorige dienst',
-  vr18EligibleOn(new Date('2026-12-27T12:00:00'), new Date('2026-10-04T12:00:00')) === true &&
-    vr18EligibleOn(new Date('2026-12-26T12:00:00'), new Date('2026-10-04T12:00:00')) === false &&
-    vr18NeedsSlotInPeriod(
-      new Date('2026-10-04T12:00:00'),
-      new Date('2026-11-02T00:00:00'),
-      new Date('2027-01-10T23:59:59'),
-    ) === true,
+    fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 1, countPeriod: 0 }) === 1 &&
+    fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 }) === 0,
 );
 assert(
   'empty slot cell is gesloten',
@@ -641,8 +633,8 @@ assert('FULL met', underQuota({ obligation: 'FULL' }, 1, 5) === false);
 assert('HALF normalizes to FULL', normalizeObligation('HALF') === 'FULL');
 assert('HALF uses FULL 6-week quota', underQuota({ obligation: 'HALF' }, 0, 5) === true);
 assert('HALF met after one 6w duty', underQuota({ obligation: 'HALF' }, 1, 2) === false);
-assert('VR18 under quota 12w', underQuota({ obligation: 'VR18' }, 1, 4, 0) === true);
-assert('VR18 met 12w', underQuota({ obligation: 'VR18' }, 1, 4, 1) === false);
+assert('VR18 under quota zonder vorige en huidige dienst', underQuota({ obligation: 'VR18' }, 1, 4, { previousCount: 0, currentCount: 0 }) === true);
+assert('VR18 met vorige planning voldaan', underQuota({ obligation: 'VR18' }, 1, 4, { previousCount: 1, currentCount: 0 }) === false);
 assert('exempted not under quota', underQuota({ obligation: 'FULL', exempted: true }, 0, 0, 0) === false);
 assert('makeup remaining on top', remainingObligation({ obligation: 'FULL', makeupDue: 2 }, 1) === 2);
 assert('normalize legacy mandatory', normalizeObligation(undefined, true) === 'FULL');
@@ -1179,6 +1171,112 @@ assert(
   'standaard einddatum afronden op zondag',
   defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2027-01-03',
 );
+
+// Dennis ronde 4 (a): VR18+ 1× per 2 planningen
+{
+  const firstEver = vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 0 });
+  assert('VR18 eerste planning ooit: moet ingedeeld', firstEver === true);
+  assert(
+    'VR18 eerste planning: remaining 1',
+    remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 })) === 1,
+  );
+
+  assert(
+    'VR18 stond in vorige planning: overslaan',
+    vr18NeedsFillInCurrent({ previousCount: 1, currentCount: 0 }) === false &&
+      remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 1, countPeriod: 0 })) === 0,
+  );
+
+  assert(
+    'VR18 niet in vorige en niet in huidige: moet ingedeeld',
+    vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 0 }) === true &&
+      remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 })) === 1,
+  );
+
+  assert(
+    'VR18 zelf ingeschreven in huidige: overslaan',
+    vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 1 }) === false &&
+      remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 1 })) === 0,
+  );
+
+  const enrollments = [
+    { kind: 'PERSONAL', noShow: false, service: { date: new Date('2026-10-10T12:00:00.000Z') } },
+  ];
+  const current = { from: new Date('2026-12-07T00:00:00.000Z'), to: new Date('2027-01-17T23:59:59.999Z') };
+  const previous = { from: new Date('2026-10-05T00:00:00.000Z'), to: new Date('2026-11-15T23:59:59.999Z') };
+  assert(
+    'VR18 period counts: vorige dienst telt, huidige leeg',
+    (() => {
+      const c = vr18PeriodCounts(enrollments, current, previous);
+      return c.previousCount === 1 && c.currentCount === 0 && vr18NeedsFillInCurrent(c) === false;
+    })(),
+  );
+  assert(
+    'VR18 eerste planning ooit: geen vorige ronde',
+    pickPreviousRound([], '2026-12-07') === null &&
+      vr18NeedsFillInCurrent(vr18PeriodCounts([], current, null)) === true,
+  );
+  assert(
+    'VR18 pickPreviousRound kiest de ronde die eerder eindigt',
+    pickPreviousRound(
+      [
+        { id: 1, fromDate: '2026-10-05', toDate: '2026-11-15' },
+        { id: 2, fromDate: '2026-08-01', toDate: '2026-09-13' },
+      ],
+      '2026-12-07',
+    )?.id === 1,
+  );
+}
+
+// Dennis ronde 4 (b): start maandag, eind zondag, 6 weken stabiel, jaarwisseling t/m 17/1/2027
+{
+  const six = resolvePlanningPeriod({ from: '2026-12-07', weeks: 6 });
+  assert(
+    '6 weken vanaf maandag 7/12/2026 eindigt zondag 17/1/2027',
+    toIsoDate(six.from) === '2026-12-07' && toIsoDate(six.to) === '2027-01-17',
+  );
+  assert('start altijd maandag', six.from.getUTCDay() === 1);
+  assert('eind altijd zondag', six.to.getUTCDay() === 0);
+
+  const afterSync = resolvePlanningPeriod({
+    from: toDateInputValue(six.from.toISOString()),
+    to: toDateInputValue(six.to.toISOString()),
+  });
+  assert(
+    '6 weken blijft gelijk na Diensten aanmaken/bijwerken',
+    toIsoDate(afterSync.from) === '2026-12-07' && toIsoDate(afterSync.to) === '2027-01-17',
+  );
+  const afterPublish = resolvePlanningPeriod({
+    from: toDateInputValue(afterSync.from.toISOString()),
+    to: toDateInputValue(afterSync.to.toISOString()),
+  });
+  assert(
+    '6 weken blijft gelijk na Concept publiceren',
+    toIsoDate(afterPublish.from) === '2026-12-07' && toIsoDate(afterPublish.to) === '2027-01-17',
+  );
+
+  const jumpedSundayEod = toDateInputValue('2027-01-17T23:59:59.999Z');
+  assert(
+    'zondag 23:59Z blijft t/m 17/1 (geen sprong naar maandag)',
+    jumpedSundayEod === '2027-01-17',
+  );
+  const yearTurnMonday = resolvePlanningPeriod({ from: '2026-12-07', to: '2027-01-18' });
+  assert(
+    'jaarwisseling: maandag 18/1/2027 als t/m wordt zondag 17/1/2027',
+    toIsoDate(yearTurnMonday.from) === '2026-12-07' && toIsoDate(yearTurnMonday.to) === '2027-01-17',
+  );
+
+  const samples = [
+    resolvePlanningPeriod({ from: '2026-10-01', to: '2026-12-31' }),
+    resolvePlanningPeriod({ from: '2026-09-19', to: '2026-10-13' }),
+    resolvePlanningPeriod({ from: '2027-01-18', to: '2027-01-18' }),
+    resolvePlanningPeriod({ from: '2026-12-07', weeks: 6 }),
+  ];
+  assert(
+    'elke periode start op maandag en eindigt op zondag',
+    samples.every((p) => p.from.getUTCDay() === 1 && p.to.getUTCDay() === 0),
+  );
+}
 
 const volunteerBounds = resolvePlanningPeriod({ from: '2026-09-19', to: '2026-10-13' });
 const upcomingWindow = clampServiceDateFilter(

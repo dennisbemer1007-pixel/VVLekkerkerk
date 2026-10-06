@@ -32,6 +32,7 @@ export default function Inschrijven({ mode = 'open' }) {
   const [pendingId, setPendingId] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(mode === 'open');
   const [confirmText, setConfirmText] = useState('');
+  const [matchBlock, setMatchBlock] = useState(null);
   const listScrollRef = useRef(0);
   const listTopRef = useRef(null);
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
@@ -66,26 +67,38 @@ export default function Inschrijven({ mode = 'open' }) {
     load();
   }, [load]);
 
-  const enroll = async (serviceId, targetId) => {
+  const finishEnroll = (serviceId, targetId) => {
+    const service = services.find((s) => s.id === serviceId);
+    const child = children.find((c) => c.id === targetId);
+    if (service && (!child || Number(targetId) === Number(personId))) {
+      setConfirmText(formatEnrollConfirm(service));
+    } else if (child) {
+      setConfirmText(`${child.name} staat ingeschreven.`);
+    } else {
+      setMsg('Je bent ingeschreven.');
+    }
+    setSelectedId(null);
+  };
+
+  const enroll = async (serviceId, targetId, { ignoreMatchBlock = false } = {}) => {
     setMsg('');
     setError('');
     try {
-      await api.createEnrollment({ serviceId, personId: targetId });
-      const service = services.find((s) => s.id === serviceId);
-      const child = children.find((c) => c.id === targetId);
-      if (service && (!child || Number(targetId) === Number(personId))) {
-        setConfirmText(formatEnrollConfirm(service));
-      } else if (child) {
-        setConfirmText(`${child.name} staat ingeschreven.`);
-      } else {
-        setMsg('Je bent ingeschreven.');
-      }
-      setSelectedId(null);
+      await api.createEnrollment({ serviceId, personId: targetId, ignoreMatchBlock });
+      finishEnroll(serviceId, targetId);
       await load();
       requestAnimationFrame(() => {
         window.scrollTo({ top: listScrollRef.current, behavior: 'auto' });
       });
     } catch (e) {
+      if (e.details?.code === 'MATCH_BLOCK' && e.details?.canOverride && !ignoreMatchBlock) {
+        setMatchBlock({
+          serviceId,
+          targetId,
+          message: e.message || 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
+        });
+        return;
+      }
       setError(e.message);
     }
   };
@@ -232,6 +245,43 @@ export default function Inschrijven({ mode = 'open' }) {
           await enroll(id, choice.id);
         }}
       />
+
+      {matchBlock ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="match-block-title"
+          data-testid="match-block-dialog"
+        >
+          <div className="w-full max-w-sm space-y-3 rounded-sm bg-white p-4 shadow-lg">
+            <h2 id="match-block-title" className="font-heading text-lg font-black uppercase">
+              Wedstrijd-overlap
+            </h2>
+            <p className="text-sm text-gray-800">{matchBlock.message}</p>
+            <button
+              type="button"
+              className="vvl-btn-primary w-full"
+              data-testid="match-block-toch-inschrijven"
+              onClick={async () => {
+                const pending = matchBlock;
+                setMatchBlock(null);
+                await enroll(pending.serviceId, pending.targetId, { ignoreMatchBlock: true });
+              }}
+            >
+              Ja, toch inschrijven
+            </button>
+            <button
+              type="button"
+              className="vvl-btn-outline w-full"
+              data-testid="match-block-annuleren"
+              onClick={() => setMatchBlock(null)}
+            >
+              Annuleren
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {confirmText ? (
         <div

@@ -15,11 +15,14 @@ export function formatServiceDate(date) {
 }
 
 export function toDateInputValue(date) {
-  const d = new Date(date);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  if (date == null || date === '') return '';
+  if (typeof date === 'string') {
+    const m = date.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
 }
 
 export function serviceCalendarKey(date) {

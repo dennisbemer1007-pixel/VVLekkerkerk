@@ -1378,7 +1378,8 @@ function PlanningBeheer() {
             Nieuwe periode aanmaken (wordt alleen automatisch actief als dit de eerste is).
           </p>
           <p className="text-sm text-gray-700 sm:col-span-2 lg:col-span-4">
-            Alleen hele weken: maandag t/m zondag. Een andere dag ronden we af.
+            Alleen hele weken: maandag t/m zondag. Een andere dag ronden we af
+            (een maandag als tot-en-met wordt de zondag ervoor).
           </p>
           <div>
             <label className="vvl-label">Label</label>
@@ -1463,7 +1464,7 @@ function PlanningBeheer() {
         <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
           <p className="sm:col-span-2 text-sm text-gray-700">
             Van maandag t/m zondag. Diensten in deze periode (inclusief donderdagavond) horen bij
-            deze planning.
+            deze planning. Een maandag als tot-en-met wordt de zondag ervoor (bijv. 18/1 → 17/1).
           </p>
           <div>
             <label className="vvl-label">Van</label>
@@ -1582,7 +1583,8 @@ function PlanningBeheer() {
         <p className="text-sm text-gray-700">
           Klik hieronder om open <strong>vrijwilligersplekken</strong> te vullen met leden
           die verplicht zijn (minstens 1× in <strong>deze planningsperiode</strong>), VR18+
-          (1× / 12 weken) of een inhaaldienst hebben. Teamplekken
+          (1× per 2 planningen; wie in de vorige niet stond én in deze nog niet, wordt
+          ingedeeld) of een inhaaldienst hebben. Teamplekken
           (O8–O17 thuis) blijven staan voor de bardienstcoördinator, die de namen van ouders invult.
         </p>
         <p className="text-xs text-gray-600">

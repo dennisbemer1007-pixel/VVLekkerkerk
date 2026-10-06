@@ -3,7 +3,7 @@ import { OBLIGATIONS, prefersSlot } from './obligation.js';
 /**
  * Vastgelegde keuze (FO §34 / §89, te herzien):
  * 1. Openstaande inhaaldiensten eerst
- * 2. Verplicht lid (6 weken) vóór VR18+ (12 weken)
+ * 2. Verplicht lid (deze planning) vóór VR18+ (1× per 2 planningen)
  * 3. Wie dit kalenderjaar het minst persoonlijk heeft gestaan
  * 4. Wie het langst geleden (of nog nooit) een persoonlijke dienst had
  * 5. Dagdeelvoorkeur
