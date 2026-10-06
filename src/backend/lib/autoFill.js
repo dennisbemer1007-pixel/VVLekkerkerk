@@ -4,9 +4,12 @@ import {
   fillExecutedCount,
   isExemptedOn,
   isUnavailableOn,
+  lastPersonalDutyDate,
   OBLIGATIONS,
   personalEnrollmentCount,
   remainingObligation,
+  vr18EligibleOn,
+  vr18NeedsSlotInPeriod,
 } from './obligation.js';
 import { isAbsentOn } from './absences.js';
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
@@ -97,13 +100,17 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
 
   const state = mandatory.map((person) => {
     const counts = countsForPerson(person, windows);
-      const executed = fillExecutedCount(person, counts);
-      return {
-        person,
-        counts,
-        remaining: remainingObligation(person, executed),
+    const last = lastPersonalDutyDate(person.enrollments) || lastPersonalAt(person.enrollments);
+    const vr18Needs =
+      person.obligation === OBLIGATIONS.VR18 && vr18NeedsSlotInPeriod(last, from, to);
+    counts.vr18Done = person.obligation === OBLIGATIONS.VR18 ? !vr18Needs : undefined;
+    const executed = fillExecutedCount(person, counts);
+    return {
+      person,
+      counts,
+      remaining: remainingObligation(person, executed),
       blocks: blocksForPerson(person, matches),
-      lastPersonalAt: lastPersonalAt(person.enrollments),
+      lastPersonalAt: last,
       hadOverlap: false,
       hadEligible: false,
       hadAbsence: false,
@@ -126,6 +133,9 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       if (isExemptedOn(person, service.date)) continue;
       if (row.remaining <= 0) continue;
       if (already.has(person.id) || enrolledToday.has(`${person.id}:${dayIso}`)) continue;
+      if (person.obligation === OBLIGATIONS.VR18 && !vr18EligibleOn(service.date, row.lastPersonalAt)) {
+        continue;
+      }
       if (isUnavailableOn(person, service.date)) continue;
       if (isAbsentOn(person.absences, service.date)) {
         row.hadAbsence = true;
@@ -174,6 +184,9 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       row.counts.countYear += 1;
       row.counts.countPeriod += 1;
       row.lastPersonalAt = new Date(service.date);
+      if (row.person.obligation === OBLIGATIONS.VR18) {
+        row.counts.vr18Done = true;
+      }
       const executed = fillExecutedCount(row.person, row.counts);
       row.remaining = remainingObligation(row.person, executed);
       enrolledToday.add(`${row.person.id}:${dayIso}`);

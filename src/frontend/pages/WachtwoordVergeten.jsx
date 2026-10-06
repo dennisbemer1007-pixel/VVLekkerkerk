@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function WachtwoordVergeten() {
   const [email, setEmail] = useState('');
@@ -30,9 +28,7 @@ export default function WachtwoordVergeten() {
       <div className="mx-auto max-w-md space-y-6">
         <header className="text-center">
           <img src="/logo.png" alt="" className="vvl-logo mx-auto mb-4 h-20 w-20 object-contain" />
-          <PageTitle className="justify-center" {...PAGE_HELP.wachtwoordVergeten}>
-            Wachtwoord vergeten
-          </PageTitle>
+          <h1 className="page-title">Wachtwoord vergeten</h1>
           <p className="mt-2 text-sm text-gray-700">
             Vul je e-mail in. Als we een account vinden, sturen we een resetlink (24 uur geldig).
           </p>

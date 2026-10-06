@@ -17,8 +17,6 @@ import {
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
-import { isWithinPlanningPeriod, periodFromRound } from '../lib/planningPeriod.js';
-import { getActiveRound } from '../lib/planningRounds.js';
 
 const router = Router();
 
@@ -155,11 +153,14 @@ router.post(
         include: serviceInclude,
       });
       if (servicePreview && !isAdminRole(req.person.role)) {
-        const period = await periodFromRound(prisma);
-        if (!isWithinPlanningPeriod(servicePreview.date, period)) {
+        if (startOfDay(servicePreview.date) < startOfDay(new Date())) {
+          return res.status(400).json({
+            error: 'Inschrijven in het verleden kan niet.',
+          });
+        }
+        if (servicePreview.activity && servicePreview.activity.openForEnrollment === false) {
           return res.status(403).json({
-            error:
-              'Deze dienst valt buiten de planning. Inschrijven kan alleen tot en met de einddatum van de planning.',
+            error: 'Op deze extra dienst schrijft de barcommissie vooraf in. Zelf inschrijven kan niet.',
           });
         }
       }

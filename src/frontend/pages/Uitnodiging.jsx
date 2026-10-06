@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
 import { homePathForUser, useAuth } from '../context/AuthContext.jsx';
-import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function Uitnodiging() {
   const { token } = useParams();
@@ -52,9 +50,7 @@ export default function Uitnodiging() {
   if (error && !invite) {
     return (
       <div className="mx-auto max-w-md space-y-4 text-center">
-        <PageTitle className="justify-center" {...PAGE_HELP.uitnodiging}>
-          Uitnodiging
-        </PageTitle>
+        <h1 className="page-title">Uitnodiging</h1>
         <p className="vvl-card text-sm text-red-800">{error}</p>
         <Link to="/login" className="vvl-btn-primary inline-flex">
           Naar inloggen
@@ -83,9 +79,7 @@ export default function Uitnodiging() {
       <div className="mx-auto max-w-lg space-y-6">
       <header className="text-center">
         <img src="/logo.png" alt="V.V. Lekkerkerk" className="mx-auto mb-4 h-24 w-24 object-contain" />
-        <PageTitle className="justify-center" {...PAGE_HELP.uitnodiging}>
-          Account aanmaken
-        </PageTitle>
+        <h1 className="page-title">Account aanmaken</h1>
         <p className="mt-2 text-sm text-gray-700">
           Hoi <strong>{invite.name}</strong> — kies een wachtwoord voor de VVL Planning App.
           Je naam is al ingesteld door de barcommissie.

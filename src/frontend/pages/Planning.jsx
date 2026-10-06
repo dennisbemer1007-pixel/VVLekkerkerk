@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
 import { serviceTileStatus, tileGroups } from '../utils/tiles.js';
-import { occupancyFraction } from '../utils/teamLines.js';
+import { compareServicesByDateThenTime } from '../utils/formatDate.js';
 
 function serviceStatus(s) {
   return serviceTileStatus(s);
@@ -200,10 +200,6 @@ export default function Planning({ variant = 'rooster' }) {
   const groups = useMemo(() => tileGroups(services), [services]);
 
   const shown = useMemo(() => {
-    const startMinutes = (time) => {
-      const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
-    };
     return services
       .filter((s) => {
       if (s.active === false) return false;
@@ -216,11 +212,7 @@ export default function Planning({ variant = 'rooster' }) {
       if (onlyNoShow && !(s.enrollments || []).some((e) => e.noShow)) return false;
       return true;
     })
-      .sort((a, b) => {
-        const da = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (da) return da;
-        return startMinutes(a.time) - startMinutes(b.time);
-      });
+      .sort(compareServicesByDateThenTime);
   }, [services, statusFilter, onlyNoShow, variant, mineOnly, personId]);
 
   const counts = {

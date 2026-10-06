@@ -4,7 +4,7 @@ import { endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpers.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
-import { clampServiceDateFilter, periodFromRound } from '../lib/planningPeriod.js';
+import { clampServiceDateFilter, enrollableServiceRange } from '../lib/planningPeriod.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
@@ -57,7 +57,7 @@ router.get(
       // Vrijwilligers en teamcoördinatoren plannen alleen binnen de ronde.
       // "Mijn diensten" blijft ongefilterd zodat bestaande inschrijvingen zichtbaar blijven.
       if (!isAdminRole(req.person.role) && filter !== 'mine') {
-        const period = await periodFromRound(prisma);
+        const period = await enrollableServiceRange(prisma);
         where = { ...where, date: clampServiceDateFilter(where.date, period) };
       }
 
@@ -71,6 +71,9 @@ router.get(
 
       if (filter === 'open') {
         services = services.filter((s) => s.status !== 'full');
+      }
+      if (!isAdminRole(req.person.role) && filter !== 'mine') {
+        services = services.filter((s) => s.activity?.openForEnrollment !== false);
       }
       if (filter === 'mine') {
         const pid = personId || req.person.id;

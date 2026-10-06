@@ -14,6 +14,7 @@ const empty = {
   locked: false,
   note: '',
   barRequired: '',
+  openForEnrollment: false,
 };
 
 export default function ActiviteitenBeheer() {
@@ -112,7 +113,14 @@ export default function ActiviteitenBeheer() {
           <select
             className="vvl-input"
             value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            onChange={(e) => {
+              const type = e.target.value;
+              setForm({
+                ...form,
+                type,
+                openForEnrollment: type === 'klaverjas' ? false : form.openForEnrollment || type !== 'klaverjas',
+              });
+            }}
           >
             {ACTIVITY_TYPE_OPTIONS.map((a) => (
               <option key={a.id} value={a.id}>
@@ -161,6 +169,21 @@ export default function ActiviteitenBeheer() {
             Optioneel. Vooraf ingeplande namen tellen mee. Het rooster toont dan bijvoorbeeld 1/2 tot de dienst vol is.
           </p>
         </div>
+        <label className="flex items-start gap-2 text-sm font-semibold sm:col-span-2">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={form.openForEnrollment}
+            onChange={(e) => setForm({ ...form, openForEnrollment: e.target.checked })}
+          />
+          <span>
+            Open voor inschrijving
+            <span className="block text-xs font-normal text-gray-600">
+              Aan: vrijwilligers mogen zelf inschrijven (pubquiz, feest). Uit: alleen de barcommissie
+              plant vooraf (klaverjas).
+            </span>
+          </span>
+        </label>
         <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
           <input
             type="checkbox"
@@ -246,6 +269,7 @@ export default function ActiviteitenBeheer() {
                   {new Date(a.date).toLocaleDateString('nl-NL')} {a.startTime}–{a.endTime}
                   {a.barRequired ? ` · bardiensten nodig: ${a.barRequired}` : ''}
                   {a.locked ? ' · vastgezet' : ''}
+                  {a.openForEnrollment === false ? ' · alleen barcommissie' : ' · open voor inschrijving'}
                 </p>
                 {names.length ? (
                   <p className="text-xs text-gray-700">Ingepland: {names.join(', ')}</p>
@@ -267,6 +291,7 @@ export default function ActiviteitenBeheer() {
                       locked: Boolean(a.locked),
                       note: a.note || '',
                       barRequired: a.barRequired ?? '',
+                      openForEnrollment: a.openForEnrollment !== false,
                     });
                     const enrolled = [
                       ...new Set(

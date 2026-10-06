@@ -148,6 +148,8 @@ model Activity {
   type      String    @default("overig")
   location  String?
   locked    Boolean   @default(false)
+  /** Extra dienst: vrijwilligers mogen zelf inschrijven (nee = barcommissie plant vooraf, zoals klaverjas). */
+  openForEnrollment Boolean @default(true)
   note      String?
   /** Hoeveel bardiensten deze activiteit nodig heeft. Leeg = alleen de gewone dienstregels. */
   barRequired Int?

@@ -109,9 +109,13 @@ export function friendlySmtpError(raw, host) {
 }
 
 export function isMailReady(settings) {
+  return Boolean(settings?.enabled && isSmtpConfigured(settings));
+}
+
+/** SMTP-gegevens staan, ongeacht het vinkje “E-mail versturen”. */
+export function isSmtpConfigured(settings) {
   return Boolean(
-    settings?.enabled &&
-      settings.host?.trim() &&
+    settings?.host?.trim() &&
       settings.port &&
       settings.fromEmail?.trim() &&
       settings.user?.trim() &&
@@ -211,12 +215,17 @@ export function isSafeMailbox(value) {
   return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(address);
 }
 
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, ignoreEnabled = false }) {
   if (!isSafeMailbox(to)) {
     return { sent: false, reason: 'Ongeldig e-mailadres' };
   }
   const settings = await getMailSettingsForTransport();
-  if (!isMailReady(settings)) {
+  const configured = isSmtpConfigured(settings);
+  if (!ignoreEnabled && !settings.enabled) {
+    console.info('[Mail] overgeslagen (E-mail versturen uit):', subject, to);
+    return { sent: false, reason: 'Mailserver staat uit of is niet volledig ingesteld' };
+  }
+  if (!configured || (!ignoreEnabled && !isMailReady(settings))) {
     return { sent: false, reason: 'Mailserver staat uit of is niet volledig ingesteld' };
   }
   if (!settings.user?.trim() || !settings.password) {
@@ -380,12 +389,12 @@ V.V. Lekkerkerk`;
 
 export async function trySendPasswordResetEmail({ email, name, link }) {
   const settings = await getMailSettings();
-  if (!isMailReady(settings)) {
+  if (!isSmtpConfigured(settings)) {
     return { sent: false, reason: friendlyMailReason('not_configured') };
   }
   try {
     const { subject, text, html } = passwordResetEmailContent({ name, link });
-    const result = await sendMail({ to: email, subject, text, html });
+    const result = await sendMail({ to: email, subject, text, html, ignoreEnabled: true });
     const interpreted = interpretSendMailResult(result);
     if (!interpreted.sent) {
       console.error('[Mail] Wachtwoord-reset niet verstuurd:', interpreted.reason);

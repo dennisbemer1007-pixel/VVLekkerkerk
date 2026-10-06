@@ -6,7 +6,10 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import {
   SERVICE_TYPE_LABEL,
+  compareServicesByDateThenTime,
   defaultPlanningEndInput,
+  defaultPlanningStartInput,
+  serviceCalendarKey,
   todayInputValue,
   toDateInputValue,
 } from '../utils/formatDate.js';
@@ -230,12 +233,15 @@ function DienstenBeheer() {
       api.getPersons(true),
       api.getMatches().catch(() => []),
       api.getTeams().catch(() => []),
+      api.getPlanningRound().catch(() => null),
     ])
-      .then(([s, p, m, t]) => {
+      .then(([s, p, m, t, round]) => {
         setServices(s);
         setPersons(p.filter((x) => x.active !== false));
         setMatches(Array.isArray(m) ? m : []);
         setDutyTeams(Array.isArray(t) ? t : []);
+        if (round?.fromDate) setDateFrom(toDateInputValue(round.fromDate));
+        if (round?.toDate) setDateTo(toDateInputValue(round.toDate));
       })
       .catch((e) => setError(e.message));
 
@@ -249,20 +255,12 @@ function DienstenBeheer() {
   }, [statusParam]);
 
   const filteredServices = useMemo(() => {
-    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
-    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
-    const startMinutes = (time) => {
-      const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
-    };
     return services
       .filter((s) => {
-      const d = new Date(s.date);
+      const key = serviceCalendarKey(s.date);
       if (s.active === false) return false;
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      // Standaard: alleen toekomstig (vanaf vandaag) als geen tot-filter en from = vandaag
-      if (!dateTo && dateFrom === todayInputValue() && d < from) return false;
+      if (dateFrom && key < dateFrom) return false;
+      if (dateTo && key > dateTo) return false;
       if (personQuery.trim()) {
         const q = personQuery.trim().toLowerCase();
         const names = (s.enrollments || []).map((e) => e.person?.name || '').join(' ').toLowerCase();
@@ -272,11 +270,7 @@ function DienstenBeheer() {
       if (occFilter && (s.status || '') !== occFilter) return false;
       return true;
     })
-      .sort((a, b) => {
-        const da = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (da) return da;
-        return startMinutes(a.time) - startMinutes(b.time);
-      });
+      .sort(compareServicesByDateThenTime);
   }, [services, dateFrom, dateTo, personQuery, occFilter]);
 
   const reset = () => {
@@ -487,6 +481,9 @@ function DienstenBeheer() {
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
       <div className="vvl-card grid gap-3 sm:grid-cols-2">
+        <p className="sm:col-span-2 text-sm text-gray-700">
+          Standaard de actieve planning (maandag t/m zondag), gesorteerd op datum en begintijd.
+        </p>
         <div>
           <label className="vvl-label">Van</label>
           <input
@@ -1235,7 +1232,11 @@ function planningRoundDatesLabel(r) {
 function PlanningBeheer() {
   const [round, setRound] = useState(null);
   const [rounds, setRounds] = useState([]);
-  const [newRound, setNewRound] = useState({ label: '', from: todayInputValue(), to: defaultPlanningEndInput() });
+  const [newRound, setNewRound] = useState({
+    label: '',
+    from: defaultPlanningStartInput(),
+    to: defaultPlanningEndInput(),
+  });
   const [drafts, setDrafts] = useState([]);
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
@@ -1297,7 +1298,7 @@ function PlanningBeheer() {
         from: newRound.from,
         to: newRound.to,
       });
-      setNewRound({ label: '', from: todayInputValue(), to: defaultPlanningEndInput() });
+      setNewRound({ label: '', from: defaultPlanningStartInput(), to: defaultPlanningEndInput() });
       await load();
       setMsg('Nieuwe planningperiode aangemaakt.');
     } catch (err) {
@@ -1375,6 +1376,9 @@ function PlanningBeheer() {
         <form onSubmit={createRound} className="grid gap-3 border-t border-vvl-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
           <p className="text-sm font-semibold text-gray-800 sm:col-span-2 lg:col-span-4">
             Nieuwe periode aanmaken (wordt alleen automatisch actief als dit de eerste is).
+          </p>
+          <p className="text-sm text-gray-700 sm:col-span-2 lg:col-span-4">
+            Alleen hele weken: maandag t/m zondag. Een andere dag ronden we af.
           </p>
           <div>
             <label className="vvl-label">Label</label>
@@ -1457,6 +1461,10 @@ function PlanningBeheer() {
           aangemaakt.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
+          <p className="sm:col-span-2 text-sm text-gray-700">
+            Van maandag t/m zondag. Diensten in deze periode (inclusief donderdagavond) horen bij
+            deze planning.
+          </p>
           <div>
             <label className="vvl-label">Van</label>
             <input
@@ -1941,8 +1949,9 @@ function MailBeheer() {
           <span>
             E-mail versturen inschakelen
             <span className="block text-xs font-normal text-amber-950/80">
-              Zonder dit vinkje zegt de app soms “ok”, maar gaat er geen mail weg. Zet dit aan en klik
-              Opslaan.
+              Zet dit uit terwijl je met echte data oefent: dan gaan er geen uitnodigingen,
+              herinneringen of ruilmails weg (wel een logregel). Wachtwoord-reset blijft werken.
+              Klik daarna Opslaan.
             </span>
           </span>
         </label>

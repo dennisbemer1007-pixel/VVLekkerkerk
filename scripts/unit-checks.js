@@ -61,6 +61,8 @@ import {
   normalizeObligation,
   remainingObligation,
   fillExecutedCount,
+  vr18EligibleOn,
+  vr18NeedsSlotInPeriod,
 } from '../src/backend/lib/obligation.js';
 import { isCanonicalPersonNumber } from '../src/backend/lib/personNumber.js';
 import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
@@ -101,7 +103,7 @@ import {
   isWithinPlanningPeriod,
   resolvePlanningPeriod,
 } from '../src/backend/lib/planningPeriod.js';
-import { toIsoDate } from '../src/backend/lib/dates.js';
+import { compareServicesByDateThenTime, toIsoDate } from '../src/backend/lib/dates.js';
 import {
   SLOT_ROWS,
   WEEKDAY_SLOT_ROWS,
@@ -472,6 +474,16 @@ assert(
   'verplicht telt in de planningsperiode, VR18 over 12 weken',
   fillExecutedCount({ obligation: 'FULL' }, { countPeriod: 0, count6w: 1, count12w: 1 }) === 0 &&
     fillExecutedCount({ obligation: 'VR18' }, { countPeriod: 0, count6w: 0, count12w: 1 }) === 1,
+);
+assert(
+  'VR18 mag weer 12 weken na de vorige dienst',
+  vr18EligibleOn(new Date('2026-12-27T12:00:00'), new Date('2026-10-04T12:00:00')) === true &&
+    vr18EligibleOn(new Date('2026-12-26T12:00:00'), new Date('2026-10-04T12:00:00')) === false &&
+    vr18NeedsSlotInPeriod(
+      new Date('2026-10-04T12:00:00'),
+      new Date('2026-11-02T00:00:00'),
+      new Date('2027-01-10T23:59:59'),
+    ) === true,
 );
 assert(
   'empty slot cell is gesloten',
@@ -1160,12 +1172,12 @@ assert(
 
 const period = resolvePlanningPeriod({ from: '2026-10-01', to: '2026-12-31' });
 assert(
-  'planperiode okt–dec',
-  toIsoDate(period.from) === '2026-10-01' && toIsoDate(period.to) === '2026-12-31',
+  'planperiode hele weken ma–zo',
+  toIsoDate(period.from) === '2026-09-28' && toIsoDate(period.to) === '2027-01-03',
 );
 assert(
-  'standaard einddatum tot 31 dec in september',
-  defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2026-12-31',
+  'standaard einddatum afronden op zondag',
+  defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2027-01-03',
 );
 
 const volunteerBounds = resolvePlanningPeriod({ from: '2026-09-19', to: '2026-10-13' });
@@ -1175,7 +1187,7 @@ const upcomingWindow = clampServiceDateFilter(
 );
 assert(
   'vrijwilliger plant niet voorbij de planningsdatum',
-  toIsoDate(upcomingWindow.gte) === '2026-09-22' && toIsoDate(upcomingWindow.lte) === '2026-10-13',
+  toIsoDate(upcomingWindow.gte) === '2026-09-22' && toIsoDate(upcomingWindow.lte) === '2026-10-18',
 );
 const farQuery = clampServiceDateFilter(
   { gte: new Date('2026-09-22T00:00:00'), lte: new Date('2026-12-31T23:59:59') },
@@ -1183,7 +1195,7 @@ const farQuery = clampServiceDateFilter(
 );
 assert(
   'gevraagde einddatum wordt afgekapt op de planning',
-  toIsoDate(farQuery.lte) === '2026-10-13',
+  toIsoDate(farQuery.lte) === '2026-10-18',
 );
 const beforeStart = clampServiceDateFilter(
   { gte: new Date('2026-09-01T00:00:00') },
@@ -1191,15 +1203,22 @@ const beforeStart = clampServiceDateFilter(
 );
 assert(
   'vrijwilliger plant niet voor de start van de planning',
-  toIsoDate(beforeStart.gte) === '2026-09-19',
+  toIsoDate(beforeStart.gte) === '2026-09-14',
 );
 assert(
   'einddag van de planning telt nog mee',
-  isWithinPlanningPeriod(new Date('2026-10-13T12:00:00'), volunteerBounds) === true,
+  isWithinPlanningPeriod(new Date('2026-10-18T12:00:00'), volunteerBounds) === true,
 );
 assert(
   'dag na de planning telt niet mee',
-  isWithinPlanningPeriod(new Date('2026-10-14T00:00:00'), volunteerBounds) === false,
+  isWithinPlanningPeriod(new Date('2026-10-19T00:00:00'), volunteerBounds) === false,
+);
+assert(
+  'diensten op dezelfde Amsterdamse dag op begintijd',
+  compareServicesByDateThenTime(
+    { date: '2026-11-24T23:00:00.000Z', time: '18:30 - 22:00' },
+    { date: '2026-11-25T00:00:00.000Z', time: '15:00 - 18:00' },
+  ) > 0,
 );
 
 const absencePeriod = normalizeAbsenceRange({ fromDate: '2026-10-05', toDate: '2026-10-12' });
@@ -1609,8 +1628,9 @@ assert(
     'utf8',
   );
   assert(
-    'vrijwilliger lijst-default met bar/keuken-filter en bevestiging',
+    'vrijwilliger lijst-default met alle open diensten en bevestiging',
     inschrijfSrc.includes('filter-dienst-type') &&
+      inschrijfSrc.includes('Alle open diensten') &&
       inschrijfSrc.includes('inschrijf-bevestiging') &&
       inschrijfSrc.includes('listScrollRef') &&
       inschrijfSrc.includes("useState(null)") &&
@@ -1723,7 +1743,7 @@ assert(
   );
   assert(
     'diensten-lijst sorteert op datum en begintijd',
-    planningUiSrc.includes('startMinutes(a.time) - startMinutes(b.time)'),
+    planningUiSrc.includes('compareServicesByDateThenTime'),
   );
   const beheerDienstenSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),
@@ -1731,7 +1751,7 @@ assert(
   );
   assert(
     'beheer-diensten sorteert op datum en begintijd',
-    beheerDienstenSrc.includes('startMinutes(a.time) - startMinutes(b.time)') &&
+    beheerDienstenSrc.includes('compareServicesByDateThenTime') &&
       beheerDienstenSrc.includes('s.active === false'),
   );
   const authSrc = fs.readFileSync(
@@ -1771,6 +1791,29 @@ assert(
       !loginSrc.includes('PageTitle') &&
       !loginSrc.includes('PageHelp') &&
       !loginSrc.includes('PAGE_HELP'),
+  );
+  const forgotSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/WachtwoordVergeten.jsx'),
+    'utf8',
+  );
+  const resetSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/WachtwoordReset.jsx'),
+    'utf8',
+  );
+  const privacySrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Privacy.jsx'),
+    'utf8',
+  );
+  const invitePageSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Uitnodiging.jsx'),
+    'utf8',
+  );
+  assert(
+    'publieke pagina’s zonder i-icoon',
+    !forgotSrc.includes('PageTitle') &&
+      !resetSrc.includes('PageTitle') &&
+      !privacySrc.includes('PageTitle') &&
+      !invitePageSrc.includes('PageTitle'),
   );
   const teamDashSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/TeamDashboard.jsx'),
@@ -1996,6 +2039,8 @@ assert(
     liveDeploySrc.includes('20261003160000_tournaments') &&
       liveDeploySrc.includes('20261003180000_referees') &&
       liveDeploySrc.includes('20261004150000_chantal_tester') &&
+      liveDeploySrc.includes('20261006100000_chantal_ronde3') &&
+      renderStartSrc.includes('CHANTAL3_MIGRATION') &&
       renderStartSrc.includes('backupSqlite') &&
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
