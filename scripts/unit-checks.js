@@ -1897,14 +1897,30 @@ assert(
     'utf8',
   );
   assert(
-    'personen heeft actief-toggle en compacte kind-koppeling in beheer',
+    'personen heeft actief-toggle zonder kind-koppeling in beheer',
     personenSrc.includes('Activeren') &&
       personenSrc.includes('Deactiveren') &&
       personenSrc.includes('filterActive') &&
-      personenSrc.includes('beheer-kinderen') &&
+      !personenSrc.includes('beheer-kinderen') &&
+      !personenSrc.includes('PersonChildrenEditor') &&
+      !personenSrc.includes('Kind toevoegen (alleen naam)') &&
+      !personenSrc.includes('Kinderen van') &&
       !personenSrc.includes('Kind van / gekoppeld aan ouder') &&
       !personenSrc.includes('GuardianPicker'),
   );
+  {
+    const kinderenSrc = fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Kinderen.jsx'),
+      'utf8',
+    );
+    assert(
+      'mijn gegevens blijft kinderen koppelen',
+      kinderenSrc.includes('Mijn kinderen') &&
+        kinderenSrc.includes('Kind toevoegen') &&
+        kinderenSrc.includes('addMyChild') &&
+        !personenSrc.includes('addPersonChild'),
+    );
+  }
   assert(
     'personen-rijacties staan op één regel, zelfde hoogte',
     personenSrc.includes('flex-nowrap') &&

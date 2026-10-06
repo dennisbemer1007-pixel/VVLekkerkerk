@@ -160,6 +160,54 @@ async function bellPanelFits(browser, { email, password, width }) {
   await context.close();
 }
 
+async function personenEditZonderKinderen(browser, { email, password, width = 1280 }) {
+  await new Promise((r) => setTimeout(r, 400));
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  await page.setViewport({ width, height: 900, isMobile: width <= 500, hasTouch: width <= 500 });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.evaluate(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+  });
+  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('input[type="email"], input[type="password"]', { timeout: 25000 });
+  const emailSel = (await page.$('input[type="email"]'))
+    ? 'input[type="email"]'
+    : 'form input:not([type="password"]):not([type="hidden"])';
+  await page.click(emailSel, { clickCount: 3 });
+  await page.type(emailSel, email, { delay: 5 });
+  await page.click('input[type="password"]', { clickCount: 3 });
+  await page.type('input[type="password"]', password, { delay: 5 });
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+    page.click('button[type="submit"]'),
+  ]);
+  await page.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('[data-testid="person-row-actions"]', { timeout: 15000 });
+  const editBtn = await page.$('button[title$=" bewerken"], button[aria-label$=" bewerken"]');
+  ok(`UI ${email} Personen heeft bewerkknop`, Boolean(editBtn));
+  if (editBtn) {
+    await editBtn.click();
+    await page.waitForSelector('[aria-label="Persoon bewerken"]', { timeout: 8000 });
+    const body = await page.evaluate(() => document.body?.innerText || '');
+    const lower = body.toLowerCase();
+    ok(`UI ${email} bewerkscherm toont Persoon bewerken`, lower.includes('persoon bewerken'));
+    ok(
+      `UI ${email} bewerkscherm zonder kinderen-blok`,
+      !lower.includes('kinderen van') &&
+        !lower.includes('kind toevoegen') &&
+        !lower.includes('nog geen kind gekoppeld'),
+      body.includes('Kind') ? 'kind-tekst nog aanwezig' : '',
+    );
+  }
+  await context.close();
+}
+
 async function main() {
   console.log('Functional E2E base=', base, 'api=', api);
 
@@ -425,7 +473,17 @@ async function main() {
       path: '/mensen',
       width: 375,
       expectText: ['Persoon toevoegen'],
-      forbidText: ['meer kolommen', 'Personen beheren en een planning'],
+      forbidText: ['meer kolommen', 'Personen beheren en een planning', 'Kind toevoegen (alleen naam)'],
+    });
+    await personenEditZonderKinderen(browser, { email: 'mark@vvl.demo', password: 'demo123', width: 375 });
+    await personenEditZonderKinderen(browser, { email: 'admin@vvl.local', password: 'admin123', width: 1280 });
+    await pageCheck(browser, {
+      email: 'lisa@vvl.demo',
+      password: 'demo123',
+      path: '/kinderen',
+      width: 375,
+      expectText: ['Mijn kinderen', 'Kind toevoegen'],
+      forbidText: ['Geen toegang'],
     });
     await pageCheck(browser, {
       email: 'mark@vvl.demo',
