@@ -8,25 +8,27 @@ import {
   OBLIGATIONS,
   personalEnrollmentCount,
   remainingObligation,
-  vr18EligibleOn,
-  vr18NeedsSlotInPeriod,
+  vr18NeedsFillInCurrent,
+  vr18PeriodCounts,
 } from './obligation.js';
 import { isAbsentOn } from './absences.js';
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
 import { writeAudit } from './audit.js';
 import { trySendScheduledConfirmation } from './mail.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
-import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
+import { periodFromRound, previousPlanningPeriod, resolvePlanningPeriod } from './planningPeriod.js';
 import { getActiveRound } from './planningRounds.js';
 import { friendlyEnrollmentReason, serviceCapacity } from './teamDutyPlanning.js';
 import { serviceInclude } from './serviceHelpers.js';
 
 function countsForPerson(person, windows) {
+  const vr18 = vr18PeriodCounts(person.enrollments, windows, windows.previous);
   return {
     count6w: personalEnrollmentCount(person.enrollments, windows.sixWeeksAgo, windows.to),
     count12w: personalEnrollmentCount(person.enrollments, windows.twelveWeeksAgo, windows.to),
     countYear: personalEnrollmentCount(person.enrollments, windows.yearStart, windows.to),
-    countPeriod: personalEnrollmentCount(person.enrollments, windows.from, windows.to),
+    countPeriod: vr18.currentCount,
+    countPrevious: vr18.previousCount,
   };
 }
 
@@ -62,9 +64,11 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     : await periodFromRound(prisma);
   from = period.from;
   to = period.to;
+  const previous = await previousPlanningPeriod(prisma, from);
   const windows = {
     from,
     to,
+    previous,
     sixWeeksAgo: startOfDay(addWeeks(from, -6)),
     twelveWeeksAgo: startOfDay(addWeeks(from, -12)),
     yearStart: new Date(from.getFullYear(), 0, 1),
@@ -102,7 +106,11 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     const counts = countsForPerson(person, windows);
     const last = lastPersonalDutyDate(person.enrollments) || lastPersonalAt(person.enrollments);
     const vr18Needs =
-      person.obligation === OBLIGATIONS.VR18 && vr18NeedsSlotInPeriod(last, from, to);
+      person.obligation === OBLIGATIONS.VR18 &&
+      vr18NeedsFillInCurrent({
+        previousCount: counts.countPrevious,
+        currentCount: counts.countPeriod,
+      });
     counts.vr18Done = person.obligation === OBLIGATIONS.VR18 ? !vr18Needs : undefined;
     const executed = fillExecutedCount(person, counts);
     return {
@@ -133,9 +141,6 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       if (isExemptedOn(person, service.date)) continue;
       if (row.remaining <= 0) continue;
       if (already.has(person.id) || enrolledToday.has(`${person.id}:${dayIso}`)) continue;
-      if (person.obligation === OBLIGATIONS.VR18 && !vr18EligibleOn(service.date, row.lastPersonalAt)) {
-        continue;
-      }
       if (isUnavailableOn(person, service.date)) continue;
       if (isAbsentOn(person.absences, service.date)) {
         row.hadAbsence = true;

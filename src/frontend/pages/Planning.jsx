@@ -150,8 +150,8 @@ export default function Planning({ variant = 'rooster' }) {
       setMsg(who ? `${who.name} staat ingeschreven.` : `${user?.name || 'Je'} staat ingeschreven.`);
       await load();
     } catch (e) {
-      if (e.code === 'MATCH_BLOCK' && isCommittee) {
-        if (window.confirm(`${e.message} Toch inschrijven?`)) {
+      if (e.details?.code === 'MATCH_BLOCK' && e.details?.canOverride) {
+        if (window.confirm(`${e.message}\n\nJa, toch inschrijven?`)) {
           try {
             await api.createEnrollment({
               serviceId,
@@ -167,6 +167,7 @@ export default function Planning({ variant = 'rooster' }) {
             return;
           }
         }
+        return;
       }
       setError(e.message);
     }

@@ -11,6 +11,8 @@ import {
   personalEnrollmentCount,
   remainingObligation,
   underQuota,
+  vr18NeedsFillInCurrent,
+  vr18PeriodCounts,
 } from '../lib/obligation.js';
 import { resolvePublicAppUrl } from '../lib/appUrl.js';
 import { fillMandatoryPersonal } from '../lib/autoFill.js';
@@ -18,7 +20,7 @@ import { buildPlanningControls } from '../lib/planningControls.js';
 import { writeAudit } from '../lib/audit.js';
 import { markPlanningOfficial, unmarkPlanningOfficial } from '../lib/official.js';
 import { runDutyReminders } from '../lib/reminders.js';
-import { periodFromRound, periodJson, resolvePlanningPeriod } from '../lib/planningPeriod.js';
+import { periodFromRound, periodJson, previousPlanningPeriod, resolvePlanningPeriod } from '../lib/planningPeriod.js';
 import {
   activatePlanningRound,
   createPlanningRound,
@@ -92,19 +94,23 @@ router.get(
     });
 
     const round = await getActiveRound(prisma);
+    const seasonStart = round?.fromDate ? startOfDay(round.fromDate) : yearStart;
+    const seasonEnd = round?.toDate ? endOfDay(round.toDate) : endOfDay(now);
+    const previous = round?.fromDate ? await previousPlanningPeriod(prisma, seasonStart) : null;
+    const currentPeriod = { from: seasonStart, to: seasonEnd };
 
     const dutyStats = people.map((p) => {
       const last6 = personalEnrollmentCount(p.enrollments, sixWeeksAgo, endOfDay(now));
       const last12 = personalEnrollmentCount(p.enrollments, twelveWeeksAgo, endOfDay(now));
       const thisYear = personalEnrollmentCount(p.enrollments, yearStart, endOfDay(now));
-      const seasonStart = round?.fromDate ? startOfDay(round.fromDate) : yearStart;
-      const seasonEnd = round?.toDate ? endOfDay(round.toDate) : endOfDay(now);
-      const thisSeason = personalEnrollmentCount(p.enrollments, seasonStart, seasonEnd);
+      const vr18 = vr18PeriodCounts(p.enrollments, currentPeriod, previous);
       const executed = executedCountForObligation(p, {
         count6w: last6,
         count12w: last12,
         countYear: thisYear,
-        countPeriod: thisSeason,
+        countPeriod: vr18.currentCount,
+        countPrevious: vr18.previousCount,
+        vr18Done: p.obligation === 'VR18' ? !vr18NeedsFillInCurrent(vr18) : undefined,
       });
       return {
         id: p.id,
@@ -118,8 +124,8 @@ router.get(
         barLast6Weeks: last6,
         barLast12Weeks: last12,
         barThisYear: thisYear,
-        barThisSeason: thisSeason,
-        underQuota: underQuota(p, last6, thisYear, last12),
+        barThisSeason: vr18.currentCount,
+        underQuota: underQuota(p, last6, thisYear, vr18),
         stillNeeded: remainingObligation(p, executed),
       };
     });
@@ -145,14 +151,14 @@ router.get(
           })
         : [];
       const enrolledAnyIds = new Set(enrollmentsInPeriod.map((e) => e.personId));
-      // Verplicht, maar nergens op deze planning gezet (niet zelf, niet auto, niet barcommissie).
+      // Verplicht FULL: nergens in deze planning. VR18+: niet vorige én niet huidige.
       notSelfEnrolled = people
-        .filter(
-          (p) =>
-            (p.obligation === 'FULL' || p.obligation === 'VR18') &&
-            !p.exempted &&
-            !enrolledAnyIds.has(p.id),
-        )
+        .filter((p) => {
+          if (p.exempted) return false;
+          if (p.obligation === 'FULL') return !enrolledAnyIds.has(p.id);
+          if (p.obligation === 'VR18') return vr18NeedsFillInCurrent(vr18PeriodCounts(p.enrollments, currentPeriod, previous));
+          return false;
+        })
         .map((p) => ({
           id: p.id,
           name: p.name,

@@ -17,6 +17,8 @@ import {
 import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
+import { getActiveRound } from '../lib/planningRounds.js';
+import { enrollableServiceRange, isWithinPlanningPeriod } from '../lib/planningPeriod.js';
 
 const router = Router();
 
@@ -158,6 +160,12 @@ router.post(
             error: 'Inschrijven in het verleden kan niet.',
           });
         }
+        const enrollable = await enrollableServiceRange(prisma);
+        if (!isWithinPlanningPeriod(servicePreview.date, enrollable)) {
+          return res.status(403).json({
+            error: 'Deze dienst valt buiten de planningperiode.',
+          });
+        }
         if (servicePreview.activity && servicePreview.activity.openForEnrollment === false) {
           return res.status(403).json({
             error: 'Op deze extra dienst schrijft de barcommissie vooraf in. Zelf inschrijven kan niet.',
@@ -208,13 +216,15 @@ router.post(
         });
         const blocks = blocksForPerson(person, matches);
         const overlap = overlappingMatchBlocks(servicePreview, blocks);
-        if (overlap.length && !(ignoreMatchBlock && isAdminRole(req.person.role))) {
+        const selfEnroll = Number(req.person.id) === targetId;
+        const mayOverrideMatch = isAdminRole(req.person.role) || selfEnroll;
+        if (overlap.length && !(ignoreMatchBlock && mayOverrideMatch)) {
           return res.status(409).json({
             error: isAdminRole(req.person.role)
               ? 'Let op: deze persoon heeft een wedstrijd en valt binnen de ingestelde blokkeertijd. Toch inplannen?'
               : 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
             code: 'MATCH_BLOCK',
-            canOverride: isAdminRole(req.person.role),
+            canOverride: mayOverrideMatch,
           });
         }
       }
@@ -344,7 +354,7 @@ router.post(
           });
         });
 
-        if (ignoreMatchBlock && isAdminRole(req.person.role)) {
+        if (ignoreMatchBlock && (isAdminRole(req.person.role) || Number(req.person.id) === targetId)) {
           await writeAudit({
             actorId: req.person.id,
             action: 'enrollment.match_block_override',

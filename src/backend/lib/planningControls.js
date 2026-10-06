@@ -8,19 +8,21 @@ import {
   personalEnrollmentCount,
   remainingObligation,
   isUnavailableOn,
-  lastPersonalDutyDate,
   OBLIGATIONS,
-  vr18NeedsSlotInPeriod,
+  vr18NeedsFillInCurrent,
+  vr18PeriodCounts,
 } from './obligation.js';
 import { skipReasonForPerson } from './autoFill.js';
 import { blocksForPerson, overlappingMatchBlocks } from './matchBlocks.js';
-import { periodFromRound } from './planningPeriod.js';
+import { periodFromRound, previousPlanningPeriod } from './planningPeriod.js';
 
 export async function buildPlanningControls(now = new Date()) {
   const roundPeriod = await periodFromRound(prisma, now);
+  const previous = await previousPlanningPeriod(prisma, roundPeriod.from);
   const w = {
     from: roundPeriod.from,
     to: roundPeriod.to,
+    previous,
     sixWeeksAgo: startOfDay(addWeeks(roundPeriod.from, -6)),
     twelveWeeksAgo: startOfDay(addWeeks(roundPeriod.from, -12)),
     yearStart: new Date(roundPeriod.from.getFullYear(), 0, 1),
@@ -76,20 +78,18 @@ export async function buildPlanningControls(now = new Date()) {
   const assignmentGaps = [];
 
   for (const person of people) {
+    const vr18 = vr18PeriodCounts(person.enrollments, w, w.previous);
     const counts = {
       count6w: personalEnrollmentCount(person.enrollments, w.sixWeeksAgo, w.to),
       count12w: personalEnrollmentCount(person.enrollments, w.twelveWeeksAgo, w.to),
       countYear: personalEnrollmentCount(person.enrollments, w.yearStart, w.to),
-      countPeriod: personalEnrollmentCount(person.enrollments, w.from, w.to),
+      countPeriod: vr18.currentCount,
+      countPrevious: vr18.previousCount,
     };
-    const last = lastPersonalDutyDate(person.enrollments);
     if (person.obligation === OBLIGATIONS.VR18) {
-      counts.vr18Done = !vr18NeedsSlotInPeriod(last, w.from, w.to);
+      counts.vr18Done = !vr18NeedsFillInCurrent(vr18);
     }
-    const executed = executedCountForObligation(person, {
-      ...counts,
-      count12w: counts.vr18Done === false ? 0 : counts.count12w,
-    });
+    const executed = executedCountForObligation(person, counts);
     const stillNeeded = remainingObligation(person, executed);
     const row = {
       id: person.id,

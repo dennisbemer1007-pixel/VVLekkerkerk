@@ -5,10 +5,10 @@ import { ADMIN_ROLES, isAdminRole, publicPerson, publicPersonBrief } from '../li
 import { parseTeamDutySlots } from '../lib/teamFunctions.js';
 import { teamIdsForActor } from '../lib/authz.js';
 import { addWeeks, endOfDay, startOfDay } from '../lib/dates.js';
-import { executedCountForObligation, remainingObligation, personalEnrollmentCount } from '../lib/obligation.js';
+import { executedCountForObligation, remainingObligation, personalEnrollmentCount, vr18PeriodCounts } from '../lib/obligation.js';
 import { mapService, serviceInclude } from '../lib/serviceHelpers.js';
 import { getClubSettings, seasonRangeFromLabel } from '../lib/season.js';
-import { periodFromRound } from '../lib/planningPeriod.js';
+import { periodFromRound, previousPlanningPeriod } from '../lib/planningPeriod.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { normalizePersonName } from '../lib/personMatch.js';
 import { writeAudit } from '../lib/audit.js';
@@ -69,6 +69,7 @@ router.get(
       const roundPeriod = await periodFromRound(prisma);
       const from = roundPeriod.from;
       const to = roundPeriod.to;
+      const previous = await previousPlanningPeriod(prisma, from);
       const yearStart = new Date(from.getFullYear(), 0, 1);
       const today = startOfDay(new Date());
       const season = seasonRangeFromLabel(settings.seasonLabel, settings.seasonStartMonth);
@@ -140,10 +141,13 @@ router.get(
             where: { personId: member.id },
             include: { service: true },
           });
+          const vr18 = vr18PeriodCounts(enrollments, { from, to }, previous);
           const counts = {
             count6w: personalEnrollmentCount(enrollments, startOfDay(addWeeks(from, -6)), to),
             count12w: personalEnrollmentCount(enrollments, startOfDay(addWeeks(from, -12)), to),
             countYear: personalEnrollmentCount(enrollments, yearStart, to),
+            countPeriod: vr18.currentCount,
+            countPrevious: vr18.previousCount,
           };
           const executed = executedCountForObligation(member, counts);
           const teamStands = enrollments.filter(

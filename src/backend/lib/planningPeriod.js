@@ -1,37 +1,52 @@
-import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek, toIsoDate } from './dates.js';
+import {
+  parseCalendarDate,
+  planningEndSunday,
+  startOfWeekUtc,
+  sundayUtcNoon,
+  toIsoDate,
+  utcDayEnd,
+  utcDayStart,
+} from './dates.js';
 import { getActiveRound } from './planningRounds.js';
 
 const MAX_DAYS = 400;
 
 /** Planningen lopen van maandag t/m zondag. Gekozen datums worden daarop afgerond. */
 export function resolvePlanningPeriod({ from, to, weeks } = {}, now = new Date()) {
-  const rawStart = from ? startOfDay(new Date(from)) : startOfDay(now);
-  if (Number.isNaN(rawStart.getTime())) {
+  const rawStart = from ? parseCalendarDate(from) : parseCalendarDate(now);
+  if (!rawStart || Number.isNaN(rawStart.getTime())) {
     const err = new Error('Ongeldige begindatum.');
     err.status = 400;
     throw err;
   }
-  const start = startOfWeek(rawStart);
-  let end;
+  const startNoon = startOfWeekUtc(rawStart);
+  let endNoon;
   if (to) {
-    const rawEnd = startOfDay(new Date(to));
-    if (Number.isNaN(rawEnd.getTime())) {
+    const rawEnd = parseCalendarDate(to);
+    if (!rawEnd || Number.isNaN(rawEnd.getTime())) {
       const err = new Error('Ongeldige einddatum.');
       err.status = 400;
       throw err;
     }
-    end = endOfWeek(rawEnd);
+    endNoon = planningEndSunday(rawEnd);
+    if (utcDayEnd(endNoon) < utcDayStart(startNoon)) {
+      endNoon = sundayUtcNoon(rawEnd);
+    }
   } else {
     const w = Number(weeks);
     const weekCount = Number.isFinite(w) && w > 0 ? w : 6;
-    end = endOfWeek(addWeeks(start, weekCount - 1));
+    const weekStart = new Date(startNoon.getTime());
+    weekStart.setUTCDate(weekStart.getUTCDate() + (weekCount - 1) * 7);
+    endNoon = sundayUtcNoon(weekStart);
   }
+  const start = utcDayStart(startNoon);
+  const end = utcDayEnd(endNoon);
   if (end < start) {
     const err = new Error('De einddatum moet op of na de begindatum liggen.');
     err.status = 400;
     throw err;
   }
-  const days = Math.round((end - start) / 86400000) + 1;
+  const days = Math.round((utcDayStart(endNoon) - start) / 86400000) + 1;
   if (days > MAX_DAYS) {
     const err = new Error('Kies een periode van maximaal 13 maanden.');
     err.status = 400;
@@ -43,15 +58,51 @@ export function resolvePlanningPeriod({ from, to, weeks } = {}, now = new Date()
 export async function periodFromRound(prisma, fallbackNow = new Date()) {
   const round = await getActiveRound(prisma);
   if (round?.fromDate && round?.toDate) {
+    const fromNoon = parseCalendarDate(round.fromDate);
+    const toNoon = parseCalendarDate(round.toDate);
     return {
-      from: startOfDay(round.fromDate),
-      to: endOfDay(round.toDate),
+      from: utcDayStart(fromNoon),
+      to: utcDayEnd(toNoon),
       roundId: round.id,
       label: round.label || 'Planning',
       official: Boolean(round.official),
     };
   }
   return { ...resolvePlanningPeriod({}, fallbackNow), roundId: round?.id, label: round?.label || 'Planning', official: false };
+}
+
+/** Vorige planningsronde: eindigt vóór de start van de huidige. Geen vorige → null (eerste planning ooit). */
+export function pickPreviousRound(rounds, currentFrom) {
+  const start = utcDayStart(parseCalendarDate(currentFrom) || currentFrom);
+  if (Number.isNaN(start.getTime())) return null;
+  const startMs = start.getTime();
+  let best = null;
+  let bestEnd = -Infinity;
+  for (const round of rounds || []) {
+    if (!round?.fromDate || !round?.toDate) continue;
+    const end = utcDayEnd(parseCalendarDate(round.toDate));
+    if (Number.isNaN(end.getTime()) || end.getTime() >= startMs) continue;
+    if (end.getTime() > bestEnd) {
+      best = round;
+      bestEnd = end.getTime();
+    }
+  }
+  return best;
+}
+
+export async function previousPlanningPeriod(prisma, currentFrom) {
+  const rounds = await prisma.planningRound.findMany({
+    where: { fromDate: { not: null }, toDate: { not: null } },
+    select: { id: true, label: true, fromDate: true, toDate: true },
+  });
+  const round = pickPreviousRound(rounds, currentFrom);
+  if (!round) return null;
+  return {
+    from: utcDayStart(parseCalendarDate(round.fromDate)),
+    to: utcDayEnd(parseCalendarDate(round.toDate)),
+    roundId: round.id,
+    label: round.label || 'Planning',
+  };
 }
 
 export function periodJson(period) {
@@ -75,7 +126,7 @@ export function isWithinPlanningPeriod(date, period) {
  * Zo blijft de lopende periode inschrijfbaar als er al een volgende ronde actief is.
  */
 export async function enrollableServiceRange(prisma, now = new Date()) {
-  const today = startOfDay(now);
+  const today = utcDayStart(now);
   const rounds = await prisma.planningRound.findMany({
     where: { fromDate: { not: null }, toDate: { not: null } },
     select: { fromDate: true, toDate: true },
@@ -83,7 +134,7 @@ export async function enrollableServiceRange(prisma, now = new Date()) {
   let to = today;
   let found = false;
   for (const round of rounds) {
-    const end = endOfDay(round.toDate);
+    const end = utcDayEnd(parseCalendarDate(round.toDate));
     if (end < today) continue;
     found = true;
     if (end > to) to = end;

@@ -13,7 +13,7 @@ const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
 const OBLIGATIONS = [
   { value: 'NONE', label: 'Geen (vrijwilliger)' },
   { value: 'FULL', label: 'Verplicht (min. 1× per planningperiode)' },
-  { value: 'VR18', label: 'VR18+ (min. 1× / 12 weken)' },
+  { value: 'VR18', label: 'VR18+ (min. 1× per 2 planningen)' },
 ];
 const ACCOUNT_FILTERS = [
   { value: '', label: 'Alle' },
