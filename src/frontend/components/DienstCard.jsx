@@ -6,13 +6,7 @@ import {
 } from '../utils/formatDate.js';
 import { unenrollActions } from '../utils/uitschrijven.js';
 import { occupancyFraction, teamSpotLines } from '../utils/teamLines.js';
-
-function obligationMark(person) {
-  if (!person) return '';
-  if (person.obligation === 'FULL' || person.mandatoryBar) return ' *';
-  if (person.obligation === 'VR18') return ' VR18+';
-  return '';
-}
+import { obligationMark } from '../utils/obligationMark.js';
 
 function displayReason(reason, adminMode) {
   if (!reason) return null;

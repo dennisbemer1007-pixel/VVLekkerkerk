@@ -18,7 +18,7 @@ import { periodFromRound, previousPlanningPeriod } from './planningPeriod.js';
 
 export async function buildPlanningControls(now = new Date()) {
   const roundPeriod = await periodFromRound(prisma, now);
-  const previous = await previousPlanningPeriod(prisma, roundPeriod.from);
+  const previous = await previousPlanningPeriod(prisma, roundPeriod.from, roundPeriod.to);
   const w = {
     from: roundPeriod.from,
     to: roundPeriod.to,

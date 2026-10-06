@@ -69,7 +69,7 @@ router.get(
       const roundPeriod = await periodFromRound(prisma);
       const from = roundPeriod.from;
       const to = roundPeriod.to;
-      const previous = await previousPlanningPeriod(prisma, from);
+      const previous = await previousPlanningPeriod(prisma, from, to);
       const yearStart = new Date(from.getFullYear(), 0, 1);
       const today = startOfDay(new Date());
       const season = seasonRangeFromLabel(settings.seasonLabel, settings.seasonStartMonth);

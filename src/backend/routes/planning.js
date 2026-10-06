@@ -96,7 +96,7 @@ router.get(
     const round = await getActiveRound(prisma);
     const seasonStart = round?.fromDate ? startOfDay(round.fromDate) : yearStart;
     const seasonEnd = round?.toDate ? endOfDay(round.toDate) : endOfDay(now);
-    const previous = round?.fromDate ? await previousPlanningPeriod(prisma, seasonStart) : null;
+    const previous = round?.fromDate ? await previousPlanningPeriod(prisma, seasonStart, seasonEnd) : null;
     const currentPeriod = { from: seasonStart, to: seasonEnd };
 
     const dutyStats = people.map((p) => {

@@ -100,9 +100,11 @@ import {
 import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
 import {
   clampServiceDateFilter,
+  inferPrecedingPeriod,
   isWithinPlanningPeriod,
   pickPreviousRound,
   resolvePlanningPeriod,
+  resolvePreviousPeriod,
 } from '../src/backend/lib/planningPeriod.js';
 import { compareServicesByDateThenTime, toIsoDate } from '../src/backend/lib/dates.js';
 import {
@@ -123,6 +125,7 @@ import {
   weekStartsInRange,
 } from '../src/backend/lib/pdfRoster.js';
 import { defaultPlanningEndInput, toDateInputValue } from '../src/frontend/utils/formatDate.js';
+import { obligationMark } from '../src/frontend/utils/obligationMark.js';
 import {
   assessFit,
   buildShifts,
@@ -1225,6 +1228,91 @@ assert(
       ],
       '2026-12-07',
     )?.id === 1,
+  );
+}
+
+assert('VR18 merkteken ook als mandatoryBar true is', obligationMark({ obligation: 'VR18', mandatoryBar: true }) === ' VR18+');
+assert('FULL merkteken blijft sterretje', obligationMark({ obligation: 'FULL', mandatoryBar: true }) === ' *');
+
+// Levi-scenario: 3 aaneengesloten 6-weekse planningen (17 okt, 2 dec, 30 jan)
+{
+  const p1 = resolvePlanningPeriod({ from: '2026-10-12', weeks: 6 });
+  const p2 = resolvePlanningPeriod({ from: '2026-11-23', weeks: 6 });
+  const p3 = resolvePlanningPeriod({ from: '2027-01-04', weeks: 6 });
+  assert(
+    'Levi-periodes: okt/dec/jan zijn drie opeenvolgende 6-weken',
+    toIsoDate(p1.from) === '2026-10-12' &&
+      toIsoDate(p1.to) === '2026-11-22' &&
+      toIsoDate(p2.from) === '2026-11-23' &&
+      toIsoDate(p2.to) === '2027-01-03' &&
+      toIsoDate(p3.from) === '2027-01-04' &&
+      toIsoDate(p3.to) === '2027-02-14' &&
+      isWithinPlanningPeriod(new Date('2026-10-17T12:00:00.000Z'), p1) &&
+      isWithinPlanningPeriod(new Date('2026-12-02T12:00:00.000Z'), p2) &&
+      isWithinPlanningPeriod(new Date('2027-01-30T12:00:00.000Z'), p3),
+  );
+
+  const octDuty = {
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { date: new Date('2026-10-17T12:00:00.000Z') },
+  };
+  const decDuty = {
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { date: new Date('2026-12-02T12:00:00.000Z') },
+  };
+  const janDuty = {
+    kind: 'PERSONAL',
+    noShow: false,
+    service: { date: new Date('2027-01-30T12:00:00.000Z') },
+  };
+
+  const rounds = [
+    { id: 1, fromDate: p1.from, toDate: p1.to },
+    { id: 2, fromDate: p2.from, toDate: p2.to },
+    { id: 3, fromDate: p3.from, toDate: p3.to },
+  ];
+  const prevOfP2 = resolvePreviousPeriod(rounds, p2.from, p2.to);
+  const prevOfP3 = resolvePreviousPeriod(rounds, p3.from, p3.to);
+  assert(
+    'VR18 2e planning overslaan als 17 okt in vorige ronde staat',
+    vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty], p2, prevOfP2)) === false,
+  );
+  assert(
+    'VR18 3e planning mag als 2e leeg is (1× per 2: stand-skip-stand)',
+    vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty], p3, prevOfP3)) === true,
+  );
+  assert(
+    'VR18 3e planning overslaan als 2 dec wél in vorige staat',
+    vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty, decDuty], p3, prevOfP3)) === false,
+  );
+
+  const jumped = [{ id: 1, fromDate: '2026-10-12', toDate: '2026-11-30' }];
+  assert(
+    'overlappende t/m door datum-sprong telt nog als vorige planning',
+    pickPreviousRound(jumped, p2.from)?.id === 1 &&
+      vr18NeedsFillInCurrent(
+        vr18PeriodCounts([octDuty], p2, resolvePreviousPeriod(jumped, p2.from, p2.to)),
+      ) === false,
+  );
+
+  const inferred = inferPrecedingPeriod(p2.from, p2.to);
+  assert(
+    'zonder ronde-rij: vorige venster bevat 17 okt dus 2 dec niet opnieuw vullen',
+    inferred &&
+      toIsoDate(inferred.from) === '2026-10-12' &&
+      toIsoDate(inferred.to) === '2026-11-22' &&
+      vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty], p2, inferred)) === false,
+  );
+  assert(
+    'zonder ronde-rij: eerste planning ooit blijft vullen',
+    vr18NeedsFillInCurrent(vr18PeriodCounts([], p1, inferPrecedingPeriod(p1.from, p1.to))) === true,
+  );
+  assert(
+    'drie AUTO-diensten achter elkaar schendt 1× per 2 (2 dec is de extra)',
+    vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty, decDuty, janDuty], p2, prevOfP2)) === false &&
+      vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty, decDuty, janDuty], p3, prevOfP3)) === false,
   );
 }
 
