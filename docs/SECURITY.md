@@ -9,7 +9,7 @@ AVG-keuzes in de app: [FO-KEUZES.md](FO-KEUZES.md) (bewaartermijnen 24 maanden, 
 | Recht / plicht | Hoe |
 |----------------|-----|
 | Doelbinding | Alleen kantineplanning |
-| Dataminimalisatie | Contact niet in roosters; personenlijst niet voor vrijwilligers; Admin ziet e-mail/telefoon gemaskeerd (`d***@…`, `06 **** 15`); Barcommissie voluit |
+| Dataminimalisatie | Contact niet in roosters; personenlijst niet voor vrijwilligers; Admin ziet e-mail/telefoon gemaskeerd (`d***@…`, `06 **** 15`) en laatst-ingelogd; Barcommissie voluit contact, geen laatst-ingelogd |
 | Inzage / kopie | Voorkeuren → Gegevens downloaden; audit van de export |
 | Rectificatie | Barcommissie past personen aan |
 | Wissen | Account deactiveren; **Wis contact** wist e-mail/telefoon/foto/inlog; namen in roosters blijven (verplichting/inhaal) |

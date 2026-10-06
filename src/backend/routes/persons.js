@@ -79,9 +79,16 @@ router.get(
       }
       const includeInactive = req.query.all === 'true' && isAdmin;
       const includeNameless = req.query.includeNameless === 'true' && isAdmin;
+      const viewerIsAdmin = canonicalAccessRole(req.person.role) === 'Admin';
       const persons = await prisma.person.findMany({
         where: includeInactive ? undefined : { active: true },
-        include: { team: true, guardian: true },
+        include: {
+          team: true,
+          guardian: true,
+          ...(viewerIsAdmin
+            ? { sessions: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 } }
+            : {}),
+        },
         orderBy: { name: 'asc' },
       });
       let visible = includeNameless
