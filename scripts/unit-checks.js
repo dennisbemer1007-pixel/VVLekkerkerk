@@ -1723,7 +1723,7 @@ assert(
     'personen-rijacties staan op één regel, zelfde hoogte',
     personenSrc.includes('flex-nowrap') &&
       personenSrc.includes('data-testid="person-row-actions"') &&
-      personenSrc.includes('min-w-[6.75rem]') &&
+      personenSrc.includes('min-w-[5.5rem]') &&
       !personenSrc.includes('flex flex-wrap justify-end gap-1'),
   );
   assert(

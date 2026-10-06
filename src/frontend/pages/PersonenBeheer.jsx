@@ -63,7 +63,7 @@ function PersonRowActions({ person, onEdit, onToggleActive, onInvite, onDelete }
       <IconButton size="sm" title={`${person.name} bewerken`} onClick={() => onEdit(person)}>✏️</IconButton>
       <button
         type="button"
-        className="inline-flex h-8 min-w-[6.75rem] shrink-0 items-center justify-center rounded-sm border border-vvl-border bg-white px-2 text-xs font-bold uppercase tracking-wide text-vvl-primary hover:bg-vvl-secondary"
+        className="inline-flex h-8 min-w-[5.5rem] shrink-0 items-center justify-center rounded-sm border border-vvl-border bg-white px-2 text-xs font-bold uppercase tracking-wide text-vvl-primary hover:bg-vvl-secondary sm:min-w-[6.75rem]"
         title={person.active === false ? `${person.name} activeren` : `${person.name} deactiveren`}
         onClick={() => onToggleActive(person, person.active === false)}
       >
@@ -923,7 +923,7 @@ export default function PersonenBeheer() {
                   aria-label="Selecteer alles"
                 />
               </th>
-              <th className="w-28 p-2 font-bold sm:w-36">Naam</th>
+              <th className="w-24 p-2 font-bold sm:w-36">Naam</th>
               <th className="hidden w-40 p-2 font-bold sm:table-cell">E-mail</th>
               <th className="hidden w-28 p-2 font-bold md:table-cell">Telefoon</th>
               <th className="hidden w-24 p-2 font-bold sm:table-cell">Rol</th>
@@ -933,7 +933,7 @@ export default function PersonenBeheer() {
               {isAdminViewer ? (
                 <th className="hidden w-28 p-2 font-bold lg:table-cell">Laatst ingelogd</th>
               ) : null}
-              <th className="w-[13.5rem] p-2 font-bold"> </th>
+              <th className="w-[12.25rem] p-2 font-bold sm:w-[13.5rem]"> </th>
             </tr>
           </thead>
           <tbody>
