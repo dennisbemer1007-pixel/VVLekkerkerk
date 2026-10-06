@@ -1,17 +1,12 @@
 import { Link } from 'react-router-dom';
 
-import { PageTitle } from '../components/PageHelp.jsx';
-import { PAGE_HELP } from '../utils/pageHelp.js';
-
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-vvl-muted px-4 py-10">
       <div className="mx-auto max-w-2xl space-y-6">
         <header className="text-center">
           <img src="/logo.png" alt="V.V. Lekkerkerk" className="vvl-logo mx-auto mb-4 h-20 w-20 object-contain" />
-          <PageTitle className="justify-center" {...PAGE_HELP.privacy}>
-            Privacy
-          </PageTitle>
+          <h1 className="page-title">Privacy</h1>
           <p className="mt-2 text-sm text-gray-700">VVL Planning App — V.V. Lekkerkerk</p>
         </header>
 

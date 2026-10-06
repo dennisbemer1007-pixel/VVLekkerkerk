@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { PageTitle } from '../components/PageHelp.jsx';
 import { api } from '../hooks/useApi.js';
-import { PAGE_HELP } from '../utils/pageHelp.js';
 
 export default function WachtwoordReset() {
   const { token } = useParams();
@@ -43,9 +41,7 @@ export default function WachtwoordReset() {
     return (
       <div className="min-h-screen bg-vvl-muted px-4 py-10">
         <div className="mx-auto max-w-md space-y-4 text-center">
-          <PageTitle className="justify-center" {...PAGE_HELP.wachtwoordReset}>
-            Wachtwoord resetten
-          </PageTitle>
+          <h1 className="page-title">Wachtwoord resetten</h1>
           <p className="vvl-card text-sm text-red-800">{error}</p>
           <Link to="/wachtwoord-vergeten" className="vvl-btn-outline inline-flex">
             Nieuwe link aanvragen
@@ -81,9 +77,7 @@ export default function WachtwoordReset() {
     <div className="min-h-screen bg-vvl-muted px-4 py-10">
       <div className="mx-auto max-w-md space-y-6">
         <header className="text-center">
-          <PageTitle className="justify-center" {...PAGE_HELP.wachtwoordReset}>
-            Nieuw wachtwoord
-          </PageTitle>
+          <h1 className="page-title">Nieuw wachtwoord</h1>
           <p className="mt-2 text-sm text-gray-700">
             Voor <strong>{info.name}</strong> ({info.email})
           </p>

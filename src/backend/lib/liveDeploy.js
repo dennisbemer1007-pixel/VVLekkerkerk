@@ -7,8 +7,15 @@ export const TOURNAMENT_MIGRATION = '20261003160000_tournaments';
 export const REFEREE_MIGRATION = '20261003180000_referees';
 export const CALENDAR_MIGRATION = '20261004120000_calendar';
 export const CHANTAL_MIGRATION = '20261004150000_chantal_tester';
+export const CHANTAL3_MIGRATION = '20261006100000_chantal_ronde3';
 
-export const LIVE_MIGRATIONS = [TOURNAMENT_MIGRATION, REFEREE_MIGRATION, CALENDAR_MIGRATION, CHANTAL_MIGRATION];
+export const LIVE_MIGRATIONS = [
+  TOURNAMENT_MIGRATION,
+  REFEREE_MIGRATION,
+  CALENDAR_MIGRATION,
+  CHANTAL_MIGRATION,
+  CHANTAL3_MIGRATION,
+];
 
 export function deployStateDir(dbFile) {
   return resolveDataDir() || (dbFile ? path.dirname(dbFile) : process.cwd());

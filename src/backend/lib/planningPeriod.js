@@ -1,26 +1,30 @@
-import { addWeeks, endOfDay, startOfDay, toIsoDate } from './dates.js';
+import { addWeeks, endOfDay, endOfWeek, startOfDay, startOfWeek, toIsoDate } from './dates.js';
 import { getActiveRound } from './planningRounds.js';
 
 const MAX_DAYS = 400;
 
+/** Planningen lopen van maandag t/m zondag. Gekozen datums worden daarop afgerond. */
 export function resolvePlanningPeriod({ from, to, weeks } = {}, now = new Date()) {
-  const start = from ? startOfDay(new Date(from)) : startOfDay(now);
-  if (Number.isNaN(start.getTime())) {
+  const rawStart = from ? startOfDay(new Date(from)) : startOfDay(now);
+  if (Number.isNaN(rawStart.getTime())) {
     const err = new Error('Ongeldige begindatum.');
     err.status = 400;
     throw err;
   }
+  const start = startOfWeek(rawStart);
   let end;
   if (to) {
-    end = endOfDay(new Date(to));
+    const rawEnd = startOfDay(new Date(to));
+    if (Number.isNaN(rawEnd.getTime())) {
+      const err = new Error('Ongeldige einddatum.');
+      err.status = 400;
+      throw err;
+    }
+    end = endOfWeek(rawEnd);
   } else {
     const w = Number(weeks);
-    end = endOfDay(addWeeks(start, Number.isFinite(w) && w > 0 ? w : 6));
-  }
-  if (Number.isNaN(end.getTime())) {
-    const err = new Error('Ongeldige einddatum.');
-    err.status = 400;
-    throw err;
+    const weekCount = Number.isFinite(w) && w > 0 ? w : 6;
+    end = endOfWeek(addWeeks(start, weekCount - 1));
   }
   if (end < start) {
     const err = new Error('De einddatum moet op of na de begindatum liggen.');
@@ -64,6 +68,31 @@ export function isWithinPlanningPeriod(date, period) {
   const t = new Date(date).getTime();
   if (Number.isNaN(t) || !period?.from || !period?.to) return false;
   return t >= period.from.getTime() && t <= period.to.getTime();
+}
+
+/**
+ * Huidige + toekomstige planningen: vanaf vandaag tot de laatste einddatum.
+ * Zo blijft de lopende periode inschrijfbaar als er al een volgende ronde actief is.
+ */
+export async function enrollableServiceRange(prisma, now = new Date()) {
+  const today = startOfDay(now);
+  const rounds = await prisma.planningRound.findMany({
+    where: { fromDate: { not: null }, toDate: { not: null } },
+    select: { fromDate: true, toDate: true },
+  });
+  let to = today;
+  let found = false;
+  for (const round of rounds) {
+    const end = endOfDay(round.toDate);
+    if (end < today) continue;
+    found = true;
+    if (end > to) to = end;
+  }
+  if (!found) {
+    const active = await periodFromRound(prisma, now);
+    return { from: today, to: active.to > today ? active.to : today };
+  }
+  return { from: today, to };
 }
 
 /**

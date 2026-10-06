@@ -1,4 +1,6 @@
 /** Bardienst-verplichting (los van access-rol). HALF is verwijderd; legacy wordt FULL. */
+import { addWeeks, endOfDay, startOfDay } from './dates.js';
+
 export const OBLIGATIONS = {
   NONE: 'NONE',
   FULL: 'FULL',
@@ -122,6 +124,7 @@ export function isExemptedOn(person, date = new Date()) {
 /**
  * Quota (dashboard/overzicht): FULL ≥1 in 6 weken; VR18 ≥1 in 12 weken.
  * Auto-invullen (stap 3) gebruikt fillExecutedCount: FULL = deze planningperiode.
+ * VR18+: eerstvolgende dienst 12 weken na de vorige persoonlijke dienst.
  */
 export function underQuota(person, count6w, countYear, count12w = count6w) {
   if (isExemptedOn(person)) return false;
@@ -136,6 +139,34 @@ export function underQuota(person, count6w, countYear, count12w = count6w) {
   return false;
 }
 
+export function lastPersonalDutyDate(enrollments) {
+  let max = null;
+  for (const enrollment of enrollments || []) {
+    if (!isPersonalEnrollment(enrollment)) continue;
+    const d = new Date(enrollment.service?.date ?? enrollment.createdAt);
+    if (Number.isNaN(d.getTime())) continue;
+    if (!max || d > max) max = d;
+  }
+  return max;
+}
+
+/** VR18+ mag weer op of na 12 weken na de vorige persoonlijke dienst. */
+export function vr18NextDueDate(lastPersonal) {
+  if (!lastPersonal) return null;
+  return startOfDay(addWeeks(lastPersonal, 12));
+}
+
+export function vr18EligibleOn(serviceDate, lastPersonal) {
+  const due = vr18NextDueDate(lastPersonal);
+  if (!due) return true;
+  return startOfDay(serviceDate) >= due;
+}
+
+export function vr18NeedsSlotInPeriod(lastPersonal, periodFrom, periodTo) {
+  const due = vr18NextDueDate(lastPersonal) || startOfDay(periodFrom);
+  return due.getTime() <= endOfDay(periodTo).getTime();
+}
+
 export function executedCountForObligation(person, counts) {
   const obligation = normalizeObligation(person.obligation);
   if (obligation === OBLIGATIONS.FULL) return counts.countPeriod ?? counts.count6w ?? 0;
@@ -146,12 +177,16 @@ export function executedCountForObligation(person, counts) {
 /**
  * Stap 3 (auto-invullen):
  * - Verplicht: minstens 1 persoonlijke dienst in déze planningsperiode
- * - VR18+: minstens 1 persoonlijke dienst in de afgelopen 12 weken
+ * - VR18+: 0 zolang er in deze periode nog een moment is ≥12 weken na de vorige dienst
  */
 export function fillExecutedCount(person, counts) {
   const obligation = normalizeObligation(person.obligation);
   if (obligation === OBLIGATIONS.FULL) return counts.countPeriod ?? counts.count6w ?? 0;
-  if (obligation === OBLIGATIONS.VR18) return counts.count12w ?? 0;
+  if (obligation === OBLIGATIONS.VR18) {
+    if (counts.vr18Done === true) return 1;
+    if (counts.vr18Done === false) return 0;
+    return counts.count12w ?? 0;
+  }
   return 0;
 }
 

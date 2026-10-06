@@ -23,6 +23,7 @@ import {
   REFEREE_MIGRATION,
   CALENDAR_MIGRATION,
   CHANTAL_MIGRATION,
+  CHANTAL3_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
 import {
   repairAccidentalWeekendTeams,
@@ -79,6 +80,7 @@ console.log(
   REFEREE_MIGRATION,
   CALENDAR_MIGRATION,
   CHANTAL_MIGRATION,
+  CHANTAL3_MIGRATION,
 );
 
 const dbFile = resolveLiveDbFile(root);

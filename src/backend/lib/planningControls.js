@@ -8,6 +8,9 @@ import {
   personalEnrollmentCount,
   remainingObligation,
   isUnavailableOn,
+  lastPersonalDutyDate,
+  OBLIGATIONS,
+  vr18NeedsSlotInPeriod,
 } from './obligation.js';
 import { skipReasonForPerson } from './autoFill.js';
 import { blocksForPerson, overlappingMatchBlocks } from './matchBlocks.js';
@@ -79,7 +82,14 @@ export async function buildPlanningControls(now = new Date()) {
       countYear: personalEnrollmentCount(person.enrollments, w.yearStart, w.to),
       countPeriod: personalEnrollmentCount(person.enrollments, w.from, w.to),
     };
-    const executed = executedCountForObligation(person, counts);
+    const last = lastPersonalDutyDate(person.enrollments);
+    if (person.obligation === OBLIGATIONS.VR18) {
+      counts.vr18Done = !vr18NeedsSlotInPeriod(last, w.from, w.to);
+    }
+    const executed = executedCountForObligation(person, {
+      ...counts,
+      count12w: counts.vr18Done === false ? 0 : counts.count12w,
+    });
     const stillNeeded = remainingObligation(person, executed);
     const row = {
       id: person.id,

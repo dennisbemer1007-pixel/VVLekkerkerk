@@ -27,6 +27,10 @@ function parseActivity(body) {
     locked: Boolean(body.locked),
     note: body.note?.trim() || null,
     barRequired: body.barRequired === '' || body.barRequired == null ? null : Math.max(0, Number(body.barRequired) || 0),
+    openForEnrollment:
+      body.openForEnrollment === undefined
+        ? (ACTIVITY_TYPES.includes(body.type) && body.type !== 'klaverjas')
+        : Boolean(body.openForEnrollment),
   };
 }
 

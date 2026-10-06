@@ -42,3 +42,21 @@ export function toIsoDate(d) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/** Kalenderdag in Amsterdam, zodat 23:00 UTC en 00:00 UTC dezelfde clubdag kunnen zijn. */
+export function serviceCalendarKey(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
+}
+
+export function serviceStartMinutes(time) {
+  const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+}
+
+export function compareServicesByDateThenTime(a, b) {
+  const da = serviceCalendarKey(a?.date).localeCompare(serviceCalendarKey(b?.date));
+  if (da) return da;
+  return serviceStartMinutes(a?.time) - serviceStartMinutes(b?.time);
+}

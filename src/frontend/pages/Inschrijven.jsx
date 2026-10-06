@@ -34,8 +34,12 @@ export default function Inschrijven({ mode = 'open' }) {
   const [confirmText, setConfirmText] = useState('');
   const listScrollRef = useRef(0);
   const listTopRef = useRef(null);
-
   const choices = useMemo(() => voorWieChoices(user, children), [user, children]);
+
+  const visibleServices = useMemo(() => {
+    if (mode === 'mine' || can('beheer')) return services;
+    return services.filter((s) => s.activity?.openForEnrollment !== false);
+  }, [services, mode, can]);
 
   const load = useCallback(() => {
     const params = {};
@@ -166,7 +170,7 @@ export default function Inschrijven({ mode = 'open' }) {
             aria-label="Soort dienst"
             data-testid="filter-dienst-type"
           >
-            <option value="">Bar en keuken</option>
+            <option value="">Alle open diensten</option>
             <option value="BAR">Alleen bar</option>
             <option value="KITCHEN">Alleen keuken</option>
           </select>
@@ -180,13 +184,13 @@ export default function Inschrijven({ mode = 'open' }) {
         onBack={handleBack}
         emptyDetail="Kies een dienst in de lijst."
         list={
-          services.length === 0 ? (
+          visibleServices.length === 0 ? (
             <p className="vvl-card text-sm text-gray-600" data-testid="diensten-leeg">
               Geen diensten.
             </p>
           ) : (
             <ul className="space-y-2" data-testid="diensten-lijst">
-              {services.map((s) => (
+              {visibleServices.map((s) => (
                 <li key={s.id}>
                   <ServiceLine
                     service={s}
@@ -200,7 +204,7 @@ export default function Inschrijven({ mode = 'open' }) {
           )
         }
         detail={
-          services
+          visibleServices
             .filter((s) => s.id === selectedId)
             .map((s) => (
               <div key={s.id} className="space-y-3" data-testid="dienst-detail">

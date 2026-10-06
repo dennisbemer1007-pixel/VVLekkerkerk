@@ -1,3 +1,5 @@
+import { endOfWeek, startOfWeek, toIsoDate } from '../../backend/lib/dates.js';
+
 export const SERVICE_TYPE_LABEL = {
   BAR: 'Bardienst',
   KITCHEN: 'Keukendienst',
@@ -20,19 +22,42 @@ export function toDateInputValue(date) {
   return `${y}-${m}-${day}`;
 }
 
+export function serviceCalendarKey(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
+}
+
+export function serviceStartMinutes(time) {
+  const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+}
+
+export function compareServicesByDateThenTime(a, b) {
+  const da = serviceCalendarKey(a?.date).localeCompare(serviceCalendarKey(b?.date));
+  if (da) return da;
+  return serviceStartMinutes(a?.time) - serviceStartMinutes(b?.time);
+}
+
 export function todayInputValue() {
   return toDateInputValue(new Date());
 }
 
-/** Standaard einddatum planning: tot 31 december als dat minstens 6 weken is, anders +3 maanden. */
+/** Standaard einddatum planning: tot 31 december als dat minstens 6 weken is, anders +3 maanden. Afronden op zondag. */
 export function defaultPlanningEndInput(now = new Date()) {
   const minEnd = new Date(now);
   minEnd.setDate(minEnd.getDate() + 42);
   const yearEnd = new Date(now.getFullYear(), 11, 31);
-  if (yearEnd >= minEnd) return toDateInputValue(yearEnd);
-  const later = new Date(now);
-  later.setMonth(later.getMonth() + 3);
-  return toDateInputValue(later);
+  const raw = yearEnd >= minEnd ? yearEnd : (() => {
+    const later = new Date(now);
+    later.setMonth(later.getMonth() + 3);
+    return later;
+  })();
+  return toIsoDate(endOfWeek(raw));
+}
+
+export function defaultPlanningStartInput(now = new Date()) {
+  return toIsoDate(startOfWeek(now));
 }
 
 export function formatMatchDate(date) {
