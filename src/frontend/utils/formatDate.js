@@ -69,6 +69,20 @@ export function formatMatchDate(date) {
   });
 }
 
+/** Laatste inlog (Amsterdam), of em-dash als onbekend. */
+export function formatLastLogin(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function isFutureMatchDate(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);

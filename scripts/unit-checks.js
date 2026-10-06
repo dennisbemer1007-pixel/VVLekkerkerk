@@ -1719,6 +1719,20 @@ assert(
       !personenSrc.includes('Kind van / gekoppeld aan ouder') &&
       !personenSrc.includes('GuardianPicker'),
   );
+  assert(
+    'personen-rijacties staan op één regel, zelfde hoogte',
+    personenSrc.includes('flex-nowrap') &&
+      personenSrc.includes('data-testid="person-row-actions"') &&
+      personenSrc.includes('min-w-[5.5rem]') &&
+      !personenSrc.includes('flex flex-wrap justify-end gap-1'),
+  );
+  assert(
+    'laatst-ingelogd kolom alleen voor admin in personen',
+    personenSrc.includes('Laatst ingelogd') &&
+      personenSrc.includes('isAdminViewer') &&
+      personenSrc.includes('lastLoginAt') &&
+      personenSrc.includes("canonicalRole(user?.role) === 'Admin'"),
+  );
   const planningExportSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/planning.js'),
     'utf8',
@@ -1920,6 +1934,17 @@ assert(
     'personen-import weigert gemaskeerde contactgegevens',
     maskedImport.ok === false &&
       /sterretjes/i.test(maskedImport.invalidRows[0]?.error || ''),
+  );
+  const pendingWithLogin = {
+    ...pending,
+    sessions: [{ createdAt: '2026-10-06T11:00:00.000Z' }],
+  };
+  assert(
+    'laatst ingelogd alleen voor admin, niet in API naar barcommissie',
+    publicPerson(pendingWithLogin, { viewerRole: 'Admin' }).lastLoginAt === '2026-10-06T11:00:00.000Z' &&
+      publicPerson(pendingWithLogin, { viewerRole: 'Barcommissie' }).lastLoginAt === undefined &&
+      publicPerson(pendingWithLogin, { viewerRole: 'Vrijwilliger' }).lastLoginAt === undefined &&
+      publicPerson(pending, { includeContact: true, viewerRole: 'Admin' }).lastLoginAt === null,
   );
 }
 const meerSrc = fs.readFileSync(

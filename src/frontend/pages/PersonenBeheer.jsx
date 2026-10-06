@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import DesktopOnly from '../components/DesktopOnly.jsx';
 import NlDateInput from '../components/NlDateInput.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
+import { canonicalRole } from '../navConfig.js';
 import RefereeLevelField, { RefereeBadges } from '../scheids/RefereeLevelField.jsx';
 import { REFEREE_LEVELS } from '../scheids/categories.js';
 import { useRefereeFeature } from '../scheids/feature.jsx';
-import { toDateInputValue } from '../utils/formatDate.js';
+import { formatLastLogin, toDateInputValue } from '../utils/formatDate.js';
 
 const ROLES = ['Vrijwilliger', 'Teamcoördinator', 'Barcommissie', 'Admin'];
 const OBLIGATIONS = [
@@ -51,6 +53,31 @@ function IconButton({ title, onClick, children, tone = 'default', size = 'md' })
       {children}
       <span className="sr-only">{title}</span>
     </button>
+  );
+}
+
+function PersonRowActions({ person, onEdit, onToggleActive, onInvite, onDelete }) {
+  const canInvite = !person.hasAccount && Boolean(person.email);
+  return (
+    <div className="flex flex-nowrap items-center justify-end gap-1" data-testid="person-row-actions">
+      <IconButton size="sm" title={`${person.name} bewerken`} onClick={() => onEdit(person)}>✏️</IconButton>
+      <button
+        type="button"
+        className="inline-flex h-8 min-w-[5.5rem] shrink-0 items-center justify-center rounded-sm border border-vvl-border bg-white px-2 text-xs font-bold uppercase tracking-wide text-vvl-primary hover:bg-vvl-secondary sm:min-w-[6.75rem]"
+        title={person.active === false ? `${person.name} activeren` : `${person.name} deactiveren`}
+        onClick={() => onToggleActive(person, person.active === false)}
+      >
+        {person.active === false ? 'Activeren' : 'Deactiveren'}
+      </button>
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
+        {canInvite ? (
+          <IconButton size="sm" title={`Uitnodiging sturen naar ${person.name}`} onClick={() => onInvite(person)}>✉️</IconButton>
+        ) : (
+          <span className="h-8 w-8" aria-hidden="true" />
+        )}
+      </span>
+      <IconButton size="sm" title={`${person.name} verwijderen`} tone="danger" onClick={() => onDelete(person)}>🗑️</IconButton>
+    </div>
   );
 }
 
@@ -440,6 +467,8 @@ function PersonImport({ onDone }) {
 }
 
 export default function PersonenBeheer() {
+  const { user } = useAuth();
+  const isAdminViewer = canonicalRole(user?.role) === 'Admin';
   const { enabled: scheidsOn } = useRefereeFeature();
   const [persons, setPersons] = useState([]);
   const [levelsById, setLevelsById] = useState({});
@@ -880,7 +909,7 @@ export default function PersonenBeheer() {
         </div>
       ) : null}
 
-      <div className="w-full min-w-0">
+      <div className="w-full min-w-0 overflow-x-auto">
         <table className="w-full table-fixed text-sm">
           <thead className="bg-black text-left text-white">
             <tr>
@@ -894,14 +923,17 @@ export default function PersonenBeheer() {
                   aria-label="Selecteer alles"
                 />
               </th>
-              <th className="w-28 p-2 font-bold sm:w-36">Naam</th>
+              <th className="w-24 p-2 font-bold sm:w-36">Naam</th>
               <th className="hidden w-40 p-2 font-bold sm:table-cell">E-mail</th>
               <th className="hidden w-28 p-2 font-bold md:table-cell">Telefoon</th>
               <th className="hidden w-24 p-2 font-bold sm:table-cell">Rol</th>
               <th className="hidden w-24 p-2 font-bold lg:table-cell">Team</th>
               <th className="hidden w-20 p-2 font-bold md:table-cell">Vrijgest.</th>
               <th className="w-14 p-2 font-bold sm:w-16">Acc.</th>
-              <th className="w-28 p-2 font-bold"> </th>
+              {isAdminViewer ? (
+                <th className="hidden w-28 p-2 font-bold lg:table-cell">Laatst ingelogd</th>
+              ) : null}
+              <th className="w-[12.25rem] p-2 font-bold sm:w-[13.5rem]"> </th>
             </tr>
           </thead>
           <tbody>
@@ -926,6 +958,11 @@ export default function PersonenBeheer() {
                     {p.phone ? ` · ${p.phone}` : ''}
                     {p.exempted ? ' · vrijgesteld' : ''}
                   </span>
+                  {isAdminViewer ? (
+                    <span className="mt-0.5 block truncate text-xs font-normal text-gray-600 lg:hidden">
+                      Laatst: {formatLastLogin(p.lastLoginAt)}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="hidden truncate p-2 sm:table-cell">{p.email || '—'}</td>
                 <td className="hidden truncate p-2 md:table-cell">{p.phone || '—'}</td>
@@ -935,22 +972,17 @@ export default function PersonenBeheer() {
                 <td className="truncate p-2 text-xs sm:text-sm">
                   {p.hasAccount ? 'Wel' : p.invitePending ? 'Open' : 'Geen'}
                 </td>
+                {isAdminViewer ? (
+                  <td className="hidden truncate p-2 text-xs lg:table-cell">{formatLastLogin(p.lastLoginAt)}</td>
+                ) : null}
                 <td className="p-1 sm:p-2">
-                  <div className="flex flex-wrap justify-end gap-1">
-                    <IconButton size="sm" title={`${p.name} bewerken`} onClick={() => openEdit(p)}>✏️</IconButton>
-                    <button
-                      type="button"
-                      className="vvl-btn-outline px-2 text-xs min-h-8"
-                      title={p.active === false ? `${p.name} activeren` : `${p.name} deactiveren`}
-                      onClick={() => setActive(p, p.active === false)}
-                    >
-                      {p.active === false ? 'Activeren' : 'Deactiveren'}
-                    </button>
-                    {!p.hasAccount && p.email ? (
-                      <IconButton size="sm" title={`Uitnodiging sturen naar ${p.name}`} onClick={() => resend(p)}>✉️</IconButton>
-                    ) : null}
-                    <IconButton size="sm" title={`${p.name} verwijderen`} tone="danger" onClick={() => deletePerson(p)}>🗑️</IconButton>
-                  </div>
+                  <PersonRowActions
+                    person={p}
+                    onEdit={openEdit}
+                    onToggleActive={setActive}
+                    onInvite={resend}
+                    onDelete={deletePerson}
+                  />
                 </td>
               </tr>
             ))}

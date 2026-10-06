@@ -30,8 +30,9 @@ export default function Privacy() {
           <p>
             <strong>Wie ziet wat:</strong> de clubbrede personenlijst is voor barcommissie en
             admin. Barcommissie ziet e-mail en telefoon voluit. Admin ziet die gegevens
-            afgeschermd (bijv. d***@live.com, 06 **** 15). Teamcoördinatoren zien namen van hun
-            teams. Vrijwilligers zien namen op het rooster, niet iemands e-mail of telefoon.
+            afgeschermd (bijv. d***@live.com, 06 **** 15). “Laatst ingelogd” is alleen voor
+            admin. Teamcoördinatoren zien namen van hun teams. Vrijwilligers zien namen op het
+            rooster, niet iemands e-mail of telefoon.
           </p>
           <p>
             <strong>Jouw rechten:</strong> inzage en kopie via Inschrijven → Gegevens downloaden

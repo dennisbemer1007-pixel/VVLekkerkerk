@@ -88,7 +88,7 @@ PDF van de **huidige week**, bar én keuken. Titel “officieel” als de ronde 
 ### AVG
 Auditlogs **24 maanden**. Contact, foto en inlog van gedeactiveerde accounts na **24 maanden** wissen. Roosterhistorie blijft. Publieke pagina `/privacy`. Eigen export als **Excel** via Inschrijven (`GET /api/persons/me/export.xlsx`).
 
-Contact op de personenlijst: **barcommissie** ziet e-mail en telefoon voluit; **admin** ziet ze server-side gemaskeerd (`d***@live.com`, `06 **** 15`). Overige rollen zien geen contact. Eigen `/api/auth/me` en eigen AVG-export blijven volledig.
+Contact op de personenlijst: **barcommissie** ziet e-mail en telefoon voluit; **admin** ziet ze server-side gemaskeerd (`d***@live.com`, `06 **** 15`). “Laatst ingelogd” alleen voor **admin** (niet in de API naar barcommissie). Overige rollen zien geen contact. Eigen `/api/auth/me` en eigen AVG-export blijven volledig.
 
 ### Hosting
 Productie: **Render Starter** (of gelijkwaardig) met persistente schijf (`DATA_DIR`). Render Free is alleen demo: data verdwijnt bij slaapstand; herinneringen lopen dan niet betrouwbaar.

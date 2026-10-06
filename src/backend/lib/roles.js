@@ -100,6 +100,11 @@ export function publicPerson(person, options = {}) {
     createdAt: person.createdAt ?? null,
   };
 
+  if (canonicalAccessRole(options.viewerRole) === 'Admin') {
+    const last = person.lastLoginAt ?? person.sessions?.[0]?.createdAt ?? null;
+    result.lastLoginAt = last ? new Date(last).toISOString() : null;
+  }
+
   if (person.photoUrl) result.photoUrl = person.photoUrl;
 
   if (includeContact) {
