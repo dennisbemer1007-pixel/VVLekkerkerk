@@ -112,6 +112,14 @@ export function utcDayEnd(d) {
   return new Date(Date.UTC(noon.getUTCFullYear(), noon.getUTCMonth(), noon.getUTCDate(), 23, 59, 59, 999));
 }
 
+export function addUtcDays(d, days) {
+  const noon = parseCalendarDate(d);
+  if (!noon) return d;
+  const x = new Date(noon.getTime());
+  x.setUTCDate(x.getUTCDate() + Number(days || 0));
+  return parseCalendarDate(x);
+}
+
 /** Kalenderdag in Amsterdam, zodat 23:00 UTC en 00:00 UTC dezelfde clubdag kunnen zijn. */
 export function serviceCalendarKey(date) {
   const d = date instanceof Date ? date : new Date(date);

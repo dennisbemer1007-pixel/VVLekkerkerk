@@ -64,7 +64,8 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     : await periodFromRound(prisma);
   from = period.from;
   to = period.to;
-  const previous = await previousPlanningPeriod(prisma, from);
+  const previous = await previousPlanningPeriod(prisma, from, to);
+  // Alleen bijschrijven; bestaande AUTO-inschrijvingen in andere periodes blijven staan.
   const windows = {
     from,
     to,

@@ -1,4 +1,5 @@
 import {
+  addUtcDays,
   parseCalendarDate,
   planningEndSunday,
   startOfWeekUtc,
@@ -71,15 +72,21 @@ export async function periodFromRound(prisma, fallbackNow = new Date()) {
   return { ...resolvePlanningPeriod({}, fallbackNow), roundId: round?.id, label: round?.label || 'Planning', official: false };
 }
 
-/** Vorige planningsronde: eindigt vóór de start van de huidige. Geen vorige → null (eerste planning ooit). */
+/**
+ * Vorige planningsronde t.o.v. currentFrom.
+ * 1. Ronde die eindigt vóór de huidige start (ideaal, aaneengesloten).
+ * 2. Anders de ronde die het laatst begon vóór de huidige start — ook als de
+ *    oude t/m-datum door afronding in de huidige periode overlapt.
+ */
 export function pickPreviousRound(rounds, currentFrom) {
   const start = utcDayStart(parseCalendarDate(currentFrom) || currentFrom);
   if (Number.isNaN(start.getTime())) return null;
   const startMs = start.getTime();
+  const dated = (rounds || []).filter((round) => round?.fromDate && round?.toDate);
+
   let best = null;
   let bestEnd = -Infinity;
-  for (const round of rounds || []) {
-    if (!round?.fromDate || !round?.toDate) continue;
+  for (const round of dated) {
     const end = utcDayEnd(parseCalendarDate(round.toDate));
     if (Number.isNaN(end.getTime()) || end.getTime() >= startMs) continue;
     if (end.getTime() > bestEnd) {
@@ -87,22 +94,51 @@ export function pickPreviousRound(rounds, currentFrom) {
       bestEnd = end.getTime();
     }
   }
+  if (best) return best;
+
+  let bestStart = -Infinity;
+  for (const round of dated) {
+    const from = utcDayStart(parseCalendarDate(round.fromDate));
+    if (Number.isNaN(from.getTime()) || from.getTime() >= startMs) continue;
+    if (from.getTime() > bestStart) {
+      best = round;
+      bestStart = from.getTime();
+    }
+  }
   return best;
 }
 
-export async function previousPlanningPeriod(prisma, currentFrom) {
+/** Zelfde lengte als de huidige periode, eindigend de dag vóór de huidige start. */
+export function inferPrecedingPeriod(currentFrom, currentTo) {
+  const start = utcDayStart(parseCalendarDate(currentFrom) || currentFrom);
+  const end = utcDayEnd(parseCalendarDate(currentTo) || currentFrom);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const days = Math.max(1, Math.round((utcDayStart(end) - start) / 86400000) + 1);
+  const prevTo = utcDayEnd(addUtcDays(start, -1));
+  const prevFrom = utcDayStart(addUtcDays(utcDayStart(prevTo), -(days - 1)));
+  return { from: prevFrom, to: prevTo, inferred: true };
+}
+
+export function resolvePreviousPeriod(rounds, currentFrom, currentTo) {
+  const round = pickPreviousRound(rounds, currentFrom);
+  if (round) {
+    return {
+      from: utcDayStart(parseCalendarDate(round.fromDate)),
+      to: utcDayEnd(parseCalendarDate(round.toDate)),
+      roundId: round.id,
+      label: round.label || 'Planning',
+    };
+  }
+  if (currentTo) return inferPrecedingPeriod(currentFrom, currentTo);
+  return null;
+}
+
+export async function previousPlanningPeriod(prisma, currentFrom, currentTo) {
   const rounds = await prisma.planningRound.findMany({
     where: { fromDate: { not: null }, toDate: { not: null } },
     select: { id: true, label: true, fromDate: true, toDate: true },
   });
-  const round = pickPreviousRound(rounds, currentFrom);
-  if (!round) return null;
-  return {
-    from: utcDayStart(parseCalendarDate(round.fromDate)),
-    to: utcDayEnd(parseCalendarDate(round.toDate)),
-    roundId: round.id,
-    label: round.label || 'Planning',
-  };
+  return resolvePreviousPeriod(rounds, currentFrom, currentTo);
 }
 
 export function periodJson(period) {
