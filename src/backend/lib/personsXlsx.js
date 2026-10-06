@@ -1,3 +1,4 @@
+import { maskEmail, maskPhone } from './contactMask.js';
 import { OBLIGATION_LABELS } from './obligation.js';
 
 /**
@@ -84,15 +85,17 @@ export function personTemplateSheets(teams = []) {
 }
 
 /** Export: zelfde structuur, gevuld met alle personen (her-importeerbaar). */
-export function personExportRowsSheets(persons = [], teams = []) {
+export function personExportRowsSheets(persons = [], teams = [], { maskContact = false } = {}) {
   const rows = persons.map((p) => [
     p.name || '',
-    p.email || '',
-    p.phone || '',
+    maskContact ? maskEmail(p.email) : p.email || '',
+    maskContact ? maskPhone(p.phone) : p.phone || '',
     p.team?.name || '',
     p.role || '',
     p.obligation || 'NONE',
-    p.guardian?.email || p.guardian?.name || '',
+    maskContact
+      ? p.guardian?.name || ''
+      : p.guardian?.email || p.guardian?.name || '',
     p.exempted ? 'ja' : 'nee',
   ]);
   return [

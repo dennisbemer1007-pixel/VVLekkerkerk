@@ -10,7 +10,8 @@ import {
   parseUnavailableWeekdays,
   parsePreferredSlots,
 } from '../lib/obligation.js';
-import { isAdminRole, ADMIN_ROLES } from '../lib/roles.js';
+import { isAdminRole, ADMIN_ROLES, canonicalAccessRole } from '../lib/roles.js';
+import { contactUpdateFromBody, looksMaskedEmail, looksMaskedPhone } from '../lib/contactMask.js';
 import { normalizeRole, resolvePublicAppUrl } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator, teamIdsForActor } from '../lib/authz.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
@@ -320,7 +321,8 @@ router.get(
         prisma.team.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
       ]);
       const visible = persons.filter((p) => !isNamelessRosterPerson(p));
-      const buf = workbookToXlsx(personExportRowsSheets(visible, teams));
+      const maskContact = canonicalAccessRole(req.person.role) === 'Admin';
+      const buf = workbookToXlsx(personExportRowsSheets(visible, teams, { maskContact }));
       await writeAudit({
         actorId: req.person.id,
         action: 'person.export.xlsx',
@@ -583,6 +585,9 @@ router.post(
       }
       const cleanGuardianId = guardianId ? Number(guardianId) : null;
       const cleanEmail = email?.trim().toLowerCase() || null;
+      if (looksMaskedEmail(cleanEmail) || looksMaskedPhone(phone)) {
+        return res.status(400).json({ error: 'Vul een echt e-mailadres en telefoonnummer in, geen sterretjes.' });
+      }
       if (!cleanEmail && !cleanGuardianId) {
         return res.status(400).json({ error: 'Vul een e-mailadres in, of kies "Hoort bij"' });
       }
@@ -743,6 +748,10 @@ router.put(
 
       const { name, phone, role, active, teamId, email, exempted, guardianId } = req.body;
 
+      const existing = await prisma.person.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: 'Persoon niet gevonden' });
+      const contactPatch = contactUpdateFromBody({ email, phone }, existing);
+
       let cleanGuardianId;
       if (guardianId !== undefined) {
         cleanGuardianId = guardianId ? Number(guardianId) : null;
@@ -757,19 +766,16 @@ router.put(
         }
       }
 
-      if (email !== undefined) {
-        const cleanEmail = email?.trim().toLowerCase() || null;
-        const existing = await prisma.person.findUnique({ where: { id } });
-        const willHaveGuardian = cleanGuardianId !== undefined ? cleanGuardianId : existing?.guardianId;
-        if (!cleanEmail && !willHaveGuardian) {
+      if (contactPatch.email !== undefined) {
+        const willHaveGuardian = cleanGuardianId !== undefined ? cleanGuardianId : existing.guardianId;
+        if (!contactPatch.email && !willHaveGuardian) {
           return res.status(400).json({ error: 'Vul een e-mailadres in, of kies "Hoort bij"' });
         }
       }
 
       const data = {
         ...(name !== undefined && { name: name.trim() }),
-        ...(email !== undefined && { email: email?.trim().toLowerCase() || null }),
-        ...(phone !== undefined && { phone: phone?.trim() || null }),
+        ...contactPatch,
         ...(role !== undefined && { role: normalizeRole(role, 'Vrijwilliger') }),
         ...(exempted !== undefined && { exempted: Boolean(exempted) }),
         ...(exempted !== undefined && {
