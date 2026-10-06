@@ -2461,6 +2461,31 @@ assert(
 
 assert('opschonen-woord met spaties en hoofdletters', confirmWordOk('  OpSchonen  ') === true);
 assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false && confirmWordOk('wissen') === false && confirmWordOk('op schonen') === false);
+{
+  const resetSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/environmentReset.js'),
+    'utf8',
+  );
+  const instellingenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Instellingen.jsx'),
+    'utf8',
+  );
+  assert(
+    'opschonen wist ook teams na de VACUUM-back-up',
+    resetSrc.includes("VACUUM INTO") &&
+      resetSrc.includes('await tx.team.deleteMany()') &&
+      resetSrc.includes('await tx.personTeam.deleteMany()') &&
+      resetSrc.includes("teamDutyTeamIds: '[]'") &&
+      /key:\s*'teams'/.test(resetSrc) &&
+      resetSrc.includes("label: 'Teams (incl. speeltijden en teamkoppelingen)'") &&
+      !/blijft:\s*\[[\s\S]*key:\s*'teams'/.test(resetSrc),
+  );
+  assert(
+    'instellingen-tekst noemt teams onder wissen',
+    instellingenSrc.includes('teams (incl. speeltijden)') &&
+      instellingenSrc.includes('dienstregels en jaarplanning blijven'),
+  );
+}
 
 {
   const evil = renderMail(

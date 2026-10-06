@@ -376,7 +376,16 @@ async function main() {
 
   // Admin instellingen + opschonen preview (geen echte wipe hier)
   const wipePreview = await req('/api/settings/opschonen', { token: admin });
-  ok('admin opschonen-voorbeeld', wipePreview.status === 200 && Array.isArray(wipePreview.json?.wissen));
+  ok(
+    'admin opschonen-voorbeeld',
+    wipePreview.status === 200 &&
+      Array.isArray(wipePreview.json?.wissen) &&
+      Array.isArray(wipePreview.json?.blijft) &&
+      wipePreview.json.wissen.some((row) => row.key === 'teams') &&
+      wipePreview.json.wissen.some((row) => row.key === 'teamKoppelingen') &&
+      !wipePreview.json.blijft.some((row) => row.key === 'teams') &&
+      wipePreview.json.blijft.some((row) => row.key === 'dienstregels'),
+  );
   const club = await req('/api/settings/club', { token: admin });
   ok('clubinstellingen', club.status === 200);
 

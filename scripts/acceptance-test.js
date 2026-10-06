@@ -1324,7 +1324,8 @@ async function main() {
         Array.isArray(wipePreview.json?.wissen) &&
         Array.isArray(wipePreview.json?.blijft) &&
         wipePreview.json.wissen.some((row) => row.key === 'diensten') &&
-        wipePreview.json.blijft.some((row) => row.key === 'teams'),
+        wipePreview.json.wissen.some((row) => row.key === 'teams') &&
+        !wipePreview.json.blijft.some((row) => row.key === 'teams'),
       String(wipePreview.status),
     ),
   );
