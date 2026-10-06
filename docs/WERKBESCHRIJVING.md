@@ -207,7 +207,7 @@ Zie ook `/privacy` en [SECURITY.md](SECURITY.md).
 - **Wijzigen:** barcommissie past personen aan.
 - **Wissen van contact:** account deactiveren, daarna **Wis contact** (e-mail, telefoon, foto, inlog). Namen in roosters blijven (verplichting/inhaal).
 - **Retentie:** audit 24 maanden; contact inactief 24 maanden (`deactivatedAt`).
-- **Dataminimalisatie:** vrijwilligers krijgen geen clubbrede personenlijst en geen e-mail/telefoon van anderen.
+- **Dataminimalisatie:** vrijwilligers krijgen geen clubbrede personenlijst en geen e-mail/telefoon van anderen. Admin ziet contact gemaskeerd; barcommissie voluit.
 
 ---
 

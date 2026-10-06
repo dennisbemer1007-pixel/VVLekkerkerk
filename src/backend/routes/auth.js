@@ -11,7 +11,7 @@ import {
   requireRole,
   passwordMatches,
 } from '../lib/auth.js';
-import { accessForRole, ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
+import { accessForRole, ADMIN_ROLES, canonicalAccessRole, isAdminRole } from '../lib/roles.js';
 import { normalizeObligation } from '../lib/obligation.js';
 import { trySendInviteEmail, trySendPasswordResetEmail } from '../lib/mail.js';
 import { passwordResetLink, resetExpiry } from '../lib/passwordReset.js';
@@ -19,6 +19,7 @@ import { resolvePublicAppUrl, normalizeRole } from '../lib/appUrl.js';
 import { canManagePersonAsTeamCoordinator } from '../lib/authz.js';
 import { nextPersonNumber, syncPrimaryTeamMembership } from '../lib/personNumber.js';
 import { publicDemoAccountList } from '../lib/demoAccounts.js';
+import { looksMaskedEmail, looksMaskedPhone } from '../lib/contactMask.js';
 
 const router = Router();
 
@@ -311,6 +312,9 @@ router.post(
       }
 
       const cleanEmail = email.trim().toLowerCase();
+      if (looksMaskedEmail(cleanEmail) || looksMaskedPhone(phone)) {
+        return res.status(400).json({ error: 'Vul een echt e-mailadres in, geen sterretjes.' });
+      }
       let chosenRole = normalizeRole(role, 'Vrijwilliger');
       let chosenTeamId = teamId ? Number(teamId) : null;
       const chosenObligation = normalizeObligation(obligation, mandatoryBar);
@@ -391,11 +395,14 @@ router.post(
       });
 
       res.status(201).json({
-        person: publicPerson(person, { includeContact: true }),
+        person: publicPerson(person, { viewerRole: req.person.role }),
         inviteLink: link,
         emailSent: mail.sent,
         emailError: mail.sent ? null : mail.reason,
-        mailto: `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(
+        mailto:
+          canonicalAccessRole(req.person.role) === 'Admin'
+            ? ''
+            : `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(
           'Uitnodiging VVL Planning App',
         )}&body=${encodeURIComponent(
           `Hoi ${person.name},\n\nJe bent uitgenodigd voor de VVL Planning App van V.V. Lekkerkerk.\n\nMaak je account aan via deze link:\n${link}\n\nDe link is 14 dagen geldig.\n\nGroet,\nV.V. Lekkerkerk`,
@@ -443,11 +450,14 @@ router.post(
       });
 
       res.json({
-        person: publicPerson(updated, { includeContact: true }),
+        person: publicPerson(updated, { viewerRole: req.person.role }),
         inviteLink: link,
         emailSent: mail.sent,
         emailError: mail.sent ? null : mail.reason,
-        mailto: `mailto:${encodeURIComponent(updated.email)}?subject=${encodeURIComponent(
+        mailto:
+          canonicalAccessRole(req.person.role) === 'Admin'
+            ? ''
+            : `mailto:${encodeURIComponent(updated.email)}?subject=${encodeURIComponent(
           'Uitnodiging VVL Planning App',
         )}&body=${encodeURIComponent(
           `Hoi ${updated.name},\n\nMaak je account aan via:\n${link}\n\nGroet,\nV.V. Lekkerkerk`,

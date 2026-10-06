@@ -1,3 +1,4 @@
+import { maskEmail, maskPhone } from './contactMask.js';
 import {
   isMandatoryObligation,
   normalizeObligation,
@@ -58,14 +59,15 @@ export function canAccess(role, feature) {
 
 /**
  * Publieke weergave van een persoon.
- * E-mail en telefoon alleen voor beheerders (Barcommissie / Admin).
+ * E-mail en telefoon: Barcommissie voluit, Admin gemaskeerd, overige rollen niet.
+ * Eigen gegevens (`includeContact: true`) blijven volledig.
  * Secrets (wachtwoord-hash, tokens) worden altijd weggelaten.
  */
 export function publicPerson(person, options = {}) {
   if (!person) return null;
-  const includeContact =
-    options.includeContact === true ||
-    (options.viewerRole && isAdminRole(options.viewerRole));
+  const ownFullContact = options.includeContact === true;
+  const includeContact = ownFullContact || (options.viewerRole && isAdminRole(options.viewerRole));
+  const maskContact = includeContact && !ownFullContact && canonicalAccessRole(options.viewerRole) === 'Admin';
 
   const obligation = normalizeObligation(person.obligation);
   const team = person.team
@@ -101,8 +103,8 @@ export function publicPerson(person, options = {}) {
   if (person.photoUrl) result.photoUrl = person.photoUrl;
 
   if (includeContact) {
-    result.email = person.email ?? null;
-    result.phone = person.phone ?? null;
+    result.email = maskContact && person.email ? maskEmail(person.email) : person.email ?? null;
+    result.phone = maskContact && person.phone ? maskPhone(person.phone) : person.phone ?? null;
     // Barcommissie/admin mogen de uitnodigingslink altijd zien zolang het account open staat.
     if (person.inviteToken && !person.passwordHash) {
       result.inviteToken = person.inviteToken;

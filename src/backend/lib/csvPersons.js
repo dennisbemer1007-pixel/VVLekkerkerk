@@ -1,4 +1,5 @@
 import { compactHeader } from './csvMatches.js';
+import { looksMaskedEmail, looksMaskedPhone } from './contactMask.js';
 import { normalizeObligation } from './obligation.js';
 import { normalizeRole } from './appUrl.js';
 import { buildTeamIndex, clubTeamLabel, findTeamInIndex } from './knvbTeams.js';
@@ -137,11 +138,20 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       continue;
     }
     const email = String(raw.email || '').trim().toLowerCase() || null;
+    const phone = String(raw.phone || '').trim() || null;
+    const guardianRef = String(raw.guardian ?? '').trim() || null;
+    if (looksMaskedEmail(email) || looksMaskedPhone(phone) || looksMaskedEmail(guardianRef)) {
+      invalidRows.push({
+        ...raw,
+        error:
+          'Afgeschermd e-mailadres of telefoon (sterretjes) kan niet geïmporteerd worden. Gebruik volledige gegevens of laat de barcommissie importeren.',
+      });
+      continue;
+    }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       invalidRows.push({ ...raw, error: 'Ongeldig e-mailadres' });
       continue;
     }
-    const phone = String(raw.phone || '').trim() || null;
     const teamName = String(raw.team || '').trim();
     let teamId = null;
     let matchedTeamName = null;
@@ -159,7 +169,6 @@ export function validatePersonRows(parsedRows, { teams = [] } = {}) {
       matchedTeamName = team.name;
     }
     const exemptedRaw = String(raw.exempted ?? '').trim().toLowerCase();
-    const guardianRef = String(raw.guardian ?? '').trim() || null;
     rows.push({
       name,
       email,

@@ -28,10 +28,10 @@ export default function Privacy() {
             blijft, zodat verplichting en inhaal kloppen.
           </p>
           <p>
-            <strong>Wie ziet wat:</strong> de clubbrede personenlijst (inclusief contact) is alleen
-            voor barcommissie en admin. Teamcoördinatoren zien namen van hun teams. Vrijwilligers
-            zien namen op het rooster van diensten waarop ze kijken, niet iemands e-mail of
-            telefoon.
+            <strong>Wie ziet wat:</strong> de clubbrede personenlijst is voor barcommissie en
+            admin. Barcommissie ziet e-mail en telefoon voluit. Admin ziet die gegevens
+            afgeschermd (bijv. d***@live.com, 06 **** 15). Teamcoördinatoren zien namen van hun
+            teams. Vrijwilligers zien namen op het rooster, niet iemands e-mail of telefoon.
           </p>
           <p>
             <strong>Jouw rechten:</strong> inzage en kopie via Inschrijven → Gegevens downloaden

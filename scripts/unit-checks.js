@@ -1850,6 +1850,13 @@ assert(
 }
 {
   const { publicPerson, publicPersonBrief } = await import('../src/backend/lib/roles.js');
+  const {
+    maskEmail,
+    maskPhone,
+    contactUpdateFromBody,
+    isUnchangedMaskedEmail,
+  } = await import('../src/backend/lib/contactMask.js');
+  const { personExportRowsSheets } = await import('../src/backend/lib/personsXlsx.js');
   const pending = {
     id: 9,
     name: 'Nieuw',
@@ -1857,15 +1864,62 @@ assert(
     inviteToken: 'tok-xyz',
     passwordHash: null,
     email: 'nieuw@vvl.demo',
+    phone: '06-12345615',
   };
   const asCommittee = publicPerson(pending, { viewerRole: 'Barcommissie' });
   const asVolunteer = publicPerson(pending, { viewerRole: 'Vrijwilliger' });
+  const asAdmin = publicPerson(pending, { viewerRole: 'Admin' });
+  const asBestuur = publicPerson(pending, { viewerRole: 'Bestuur' });
+  const asCoordinator = publicPerson(pending, { viewerRole: 'Coördinator' });
+  const asOwn = publicPerson(pending, { includeContact: true, viewerRole: 'Admin' });
   assert(
     'uitnodigingstoken alleen voor barcommissie/admin',
     asCommittee.inviteToken === 'tok-xyz' &&
       asCommittee.invitePending === true &&
       asVolunteer.inviteToken == null &&
       publicPersonBrief(pending).inviteToken == null,
+  );
+  assert('maskeer e-mail d***@domain', maskEmail('dennis@live.com') === 'd***@live.com');
+  assert('maskeer telefoon 06 **** 15', maskPhone('0612345615') === '06 **** 15' && maskPhone('06-12345615') === '06 **** 15');
+  assert(
+    'admin ziet contact gemaskeerd, barcommissie voluit, vrijwilliger niet',
+    asAdmin.email === 'n***@vvl.demo' &&
+      asAdmin.phone === '06 **** 15' &&
+      asBestuur.email === 'n***@vvl.demo' &&
+      asCoordinator.email === 'nieuw@vvl.demo' &&
+      asCommittee.email === 'nieuw@vvl.demo' &&
+      asCommittee.phone === '06-12345615' &&
+      asVolunteer.email === undefined &&
+      asVolunteer.phone === undefined,
+  );
+  assert(
+    'eigen gegevens blijven volledig ook voor admin',
+    asOwn.email === 'nieuw@vvl.demo' && asOwn.phone === '06-12345615',
+  );
+  assert(
+    'gemaskeerde waarde overschrijft het echte adres niet',
+    isUnchangedMaskedEmail('n***@vvl.demo', 'nieuw@vvl.demo') &&
+      contactUpdateFromBody({ email: 'n***@vvl.demo', phone: '06 **** 15' }, pending).email === undefined &&
+      contactUpdateFromBody({ email: 'n***@vvl.demo', phone: '06 **** 15' }, pending).phone === undefined &&
+      contactUpdateFromBody({ email: 'ander@vvl.demo', phone: '0699988877' }, pending).email === 'ander@vvl.demo',
+  );
+  const maskedSheet = personExportRowsSheets([pending], [], { maskContact: true });
+  const fullSheet = personExportRowsSheets([pending], [], { maskContact: false });
+  assert(
+    'personen-excel: admin gemaskeerd, barcommissie voluit',
+    maskedSheet[0].rows[0][1] === 'n***@vvl.demo' &&
+      maskedSheet[0].rows[0][2] === '06 **** 15' &&
+      fullSheet[0].rows[0][1] === 'nieuw@vvl.demo' &&
+      fullSheet[0].rows[0][2] === '06-12345615',
+  );
+  const maskedImport = validatePersonRows(
+    [{ name: 'Nieuw', email: 'n***@vvl.demo', phone: '06 **** 15' }],
+    { teams: [] },
+  );
+  assert(
+    'personen-import weigert gemaskeerde contactgegevens',
+    maskedImport.ok === false &&
+      /sterretjes/i.test(maskedImport.invalidRows[0]?.error || ''),
   );
 }
 const meerSrc = fs.readFileSync(

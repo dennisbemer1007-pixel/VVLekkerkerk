@@ -705,6 +705,7 @@ export default function PersonenBeheer() {
 
   const mailtoFor = (person, link) => {
     if (!person?.email || !link) return '';
+    if (String(person.email).includes('***')) return '';
     return `mailto:${encodeURIComponent(person.email)}?subject=${encodeURIComponent(
       'Uitnodiging VVL Planning App',
     )}&body=${encodeURIComponent(
@@ -1064,12 +1065,17 @@ export default function PersonenBeheer() {
               <div>
                 <label className="vvl-label">E-mail *</label>
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
+                  autoComplete="off"
                   className="vvl-input"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required={!editId}
                 />
+                {String(form.email || '').includes('***') ? (
+                  <p className="mt-1 text-xs text-gray-600">Sterretjes laten het bestaande adres ongewijzigd.</p>
+                ) : null}
               </div>
               <div>
                 <label className="vvl-label">Telefoon</label>
@@ -1078,6 +1084,9 @@ export default function PersonenBeheer() {
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
+                {/\d{2}\s\*{4}\s\d{2}/.test(String(form.phone || '')) ? (
+                  <p className="mt-1 text-xs text-gray-600">Sterretjes laten het bestaande nummer ongewijzigd.</p>
+                ) : null}
               </div>
               <div>
                 <label className="vvl-label">Rol</label>
