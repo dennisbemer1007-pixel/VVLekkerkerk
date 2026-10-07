@@ -4,10 +4,14 @@
  * Run: node scripts/functional-e2e.mjs
  * Raakt géén Render/live clubdatabase.
  */
+import { spawnSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer-core';
 
 const base = (process.env.ACCEPT_BASE || 'http://127.0.0.1:5173').replace(/\/$/, '');
 const api = process.env.API_BASE || 'http://127.0.0.1:3001';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let pass = 0;
 let fail = 0;
 const findings = [];
@@ -160,11 +164,7 @@ async function bellPanelFits(browser, { email, password, width }) {
   await context.close();
 }
 
-async function personenEditZonderKinderen(browser, { email, password, width = 1280 }) {
-  await new Promise((r) => setTimeout(r, 400));
-  const context = await browser.createBrowserContext();
-  const page = await context.newPage();
-  await page.setViewport({ width, height: 900, isMobile: width <= 500, hasTouch: width <= 500 });
+async function loginPage(page, email, password) {
   await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.evaluate(() => {
     try {
@@ -187,7 +187,99 @@ async function personenEditZonderKinderen(browser, { email, password, width = 12
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]'),
   ]);
+}
+
+async function persoonToevoegenNaOpschonen(browser) {
+  const adminLogin = await login('admin@vvl.local', 'admin123');
+  const adminToken = adminLogin.json?.token;
+  ok('opschonen-toevoegen: admin login', Boolean(adminToken), String(adminLogin.status));
+  if (!adminToken) return;
+
+  const wipe = await req('/api/settings/opschonen', {
+    method: 'POST',
+    token: adminToken,
+    body: { confirm: 'opschonen' },
+  });
+  ok('opschonen-toevoegen: omgeving opgeschoond', wipe.status === 200, String(wipe.status));
+
+  const teamsBefore = await req('/api/teams', { token: adminToken });
+  const teamCount = Array.isArray(teamsBefore.json) ? teamsBefore.json.length : -1;
+  ok('opschonen-toevoegen: geen teams meer', teamCount === 0, `teams=${teamCount}`);
+
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await loginPage(page, 'admin@vvl.local', 'admin123');
   await page.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('[data-testid="person-add"]', { timeout: 15000 });
+  const addInfo = await page.$eval('[data-testid="person-add"]', (el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      text: (el.innerText || '').replace(/\s+/g, ' ').trim(),
+      top: r.top,
+      visible: r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight,
+    };
+  });
+  ok(
+    'opschonen-toevoegen: + Persoon toevoegen zichtbaar op mobiel',
+    addInfo.visible && /\+/.test(addInfo.text) && /persoon toevoegen/i.test(addInfo.text),
+    JSON.stringify(addInfo),
+  );
+
+  await page.click('[data-testid="person-add"]');
+  await page.waitForSelector('[aria-label="Persoon toevoegen"]', { timeout: 8000 });
+  await page.waitForSelector('[data-testid="person-form-no-teams"]', { timeout: 5000 });
+  ok('opschonen-toevoegen: formulier werkt zonder teams', true);
+
+  const stamp = Date.now();
+  const name = `Chantal Handmatig ${stamp}`;
+  const email = `chantal.handmatig.${stamp}@vvl.test`;
+  await page.click('[data-testid="person-form-name"]', { clickCount: 3 });
+  await page.type('[data-testid="person-form-name"]', name, { delay: 5 });
+  await page.click('[data-testid="person-form-email"]', { clickCount: 3 });
+  await page.type('[data-testid="person-form-email"]', email, { delay: 5 });
+  await page.click('[aria-label="Persoon toevoegen"] button[type="submit"]');
+  await new Promise((r) => setTimeout(r, 1500));
+  await page.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await new Promise((r) => setTimeout(r, 1000));
+  const body = await page.evaluate(() => document.body?.innerText || '');
+  ok('opschonen-toevoegen: nieuwe persoon staat in de lijst', body.includes(name), name);
+
+  // Barcommissie-account blijft na opschonen; e-mail niet uit admin-lijst halen (die is gemaskeerd).
+  const barLogin = await login('mark@vvl.demo', 'demo123');
+  if (barLogin.json?.token) {
+    const barCtx = await browser.createBrowserContext();
+    const barPage = await barCtx.newPage();
+    await barPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+    await loginPage(barPage, 'mark@vvl.demo', 'demo123');
+    await barPage.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const barAdd = await barPage.$('[data-testid="person-add"]');
+    ok('opschonen-toevoegen: barcommissie ziet + Persoon toevoegen', Boolean(barAdd));
+    await barCtx.close();
+  } else {
+    ok('opschonen-toevoegen: barcommissie login na opschonen', false, String(barLogin.status));
+  }
+
+  await context.close();
+
+  // Herstel volledige demodata (accounts + teams + diensten) zodat herhaalde E2E-runs groen blijven.
+  const restore = spawnSync(process.execPath, ['scripts/seed-mock.js'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, SEED_DEMO: 'true' },
+  });
+  ok('opschonen-toevoegen: demodata hersteld', restore.status === 0, String(restore.status));
+}
+
+async function personenEditZonderKinderen(browser, { email, password, width = 1280 }) {
+  await new Promise((r) => setTimeout(r, 400));
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  await page.setViewport({ width, height: 900, isMobile: width <= 500, hasTouch: width <= 500 });
+  await loginPage(page, email, password);
+  await page.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('[data-testid="person-add"]', { timeout: 15000 });
+  ok(`UI ${email} Personen heeft + Persoon toevoegen`, Boolean(await page.$('[data-testid="person-add"]')));
   await page.waitForSelector('[data-testid="person-row-actions"]', { timeout: 15000 });
   const editBtn = await page.$('button[title$=" bewerken"], button[aria-label$=" bewerken"]');
   ok(`UI ${email} Personen heeft bewerkknop`, Boolean(editBtn));
@@ -483,7 +575,7 @@ async function main() {
       password: 'demo123',
       path: '/mensen',
       width: 375,
-      expectText: ['Persoon toevoegen'],
+      expectText: ['Persoon toevoegen', '+'],
       forbidText: ['meer kolommen', 'Personen beheren en een planning', 'Kind toevoegen (alleen naam)'],
     });
     await personenEditZonderKinderen(browser, { email: 'mark@vvl.demo', password: 'demo123', width: 375 });
@@ -541,6 +633,7 @@ async function main() {
     await bellPanelFits(browser, { email: 'sandra@vvl.demo', password: 'demo123', width: 390 });
     await bellPanelFits(browser, { email: 'mark@vvl.demo', password: 'demo123', width: 390 });
     await bellPanelFits(browser, { email: 'admin@vvl.local', password: 'admin123', width: 1280 });
+    await persoonToevoegenNaOpschonen(browser);
   } catch (e) {
     ok('puppeteer UI suite', false, e.message);
   } finally {

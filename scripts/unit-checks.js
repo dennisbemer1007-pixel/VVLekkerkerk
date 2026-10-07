@@ -1931,6 +1931,15 @@ assert(
       !personenSrc.includes('min-w-[5.5rem]'),
   );
   assert(
+    'personen heeft altijd zichtbare + Persoon toevoegen-knop',
+    personenSrc.includes('data-testid="person-add"') &&
+      personenSrc.includes('data-testid="person-add-bar"') &&
+      personenSrc.includes('Persoon toevoegen') &&
+      personenSrc.includes('sticky top-14') &&
+      personenSrc.includes('person-form-no-teams') &&
+      personenSrc.includes('Nog geen teams'),
+  );
+  assert(
     'deactiveren en activeren vragen bevestiging',
     personenSrc.includes("const verb = active ? 'activeren' : 'deactiveren'") &&
       personenSrc.includes('window.confirm(`${p.name} ${verb}?`)'),

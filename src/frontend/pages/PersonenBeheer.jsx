@@ -707,33 +707,49 @@ export default function PersonenBeheer() {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="vvl-btn-primary min-h-11" onClick={openAdd}>
-          Persoon toevoegen
-        </button>
-        <button
-          type="button"
-          className="vvl-btn-outline min-h-11"
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          {filtersOpen ? 'Filters sluiten' : 'Filters'}
-        </button>
-        <button
-          type="button"
-          className="vvl-btn-outline min-h-11 text-xs"
-          onClick={toggleSelectAll}
-          disabled={!selectablePersons.length}
-        >
-          {allSelected ? 'Selecteer niets' : 'Alles selecteren'}
-        </button>
-        <button
-          type="button"
-          className="vvl-btn-outline min-h-11 text-xs"
-          disabled={bulkBusy || !selectedIds.length}
-          onClick={sendBulkInvites}
-        >
-          {bulkBusy ? 'Versturen…' : `Uitnodigen (${selectedIds.length})`}
-        </button>
+      <div
+        className="sticky top-14 z-20 -mx-4 border-b border-vvl-border bg-vvl-muted/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none"
+        data-testid="person-add-bar"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <button
+            type="button"
+            className="vvl-btn-primary inline-flex min-h-11 w-full items-center justify-center gap-2 sm:w-auto"
+            onClick={openAdd}
+            data-testid="person-add"
+            aria-label="Persoon toevoegen"
+          >
+            <span aria-hidden="true" className="text-lg font-black leading-none">
+              +
+            </span>
+            <span>Persoon toevoegen</span>
+          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="vvl-btn-outline min-h-11"
+              onClick={() => setFiltersOpen((v) => !v)}
+            >
+              {filtersOpen ? 'Filters sluiten' : 'Filters'}
+            </button>
+            <button
+              type="button"
+              className="vvl-btn-outline min-h-11 text-xs"
+              onClick={toggleSelectAll}
+              disabled={!selectablePersons.length}
+            >
+              {allSelected ? 'Selecteer niets' : 'Alles selecteren'}
+            </button>
+            <button
+              type="button"
+              className="vvl-btn-outline min-h-11 text-xs"
+              disabled={bulkBusy || !selectedIds.length}
+              onClick={sendBulkInvites}
+            >
+              {bulkBusy ? 'Versturen…' : `Uitnodigen (${selectedIds.length})`}
+            </button>
+          </div>
+        </div>
       </div>
 
       {filtersOpen ? (
@@ -1006,6 +1022,7 @@ export default function PersonenBeheer() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
+                  data-testid="person-form-name"
                 />
               </div>
               <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
@@ -1042,6 +1059,7 @@ export default function PersonenBeheer() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required={!editId}
+                  data-testid="person-form-email"
                 />
                 {String(form.email || '').includes('***') ? (
                   <p className="mt-1 text-xs text-gray-600">Sterretjes laten het bestaande adres ongewijzigd.</p>
@@ -1068,12 +1086,23 @@ export default function PersonenBeheer() {
               </div>
               <div>
                 <label className="vvl-label">Team</label>
-                <select className="vvl-input" value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
+                <select
+                  className="vvl-input"
+                  value={form.teamId}
+                  onChange={(e) => setForm({ ...form, teamId: e.target.value })}
+                  data-testid="person-form-team"
+                >
                   <option value="">— Geen team —</option>
                   {teams.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
+                {teams.length === 0 ? (
+                  <p className="mt-1 text-xs text-gray-600" data-testid="person-form-no-teams">
+                    Nog geen teams. Je kunt de persoon nu zonder team opslaan; teams voeg je later toe
+                    via Beheer → Teams of een import.
+                  </p>
+                ) : null}
               </div>
               {scheidsOn ? (
                 <RefereeLevelField value={refereeLevels} onChange={setRefereeLevels} />
