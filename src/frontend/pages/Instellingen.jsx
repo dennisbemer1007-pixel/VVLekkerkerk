@@ -399,9 +399,10 @@ export default function Instellingen() {
         <section className="space-y-3 border-t border-vvl-border pt-6" data-testid="opschonen-blok">
           <h2 className="text-xs font-bold uppercase tracking-wide text-vvl-accent">Omgeving opschonen</h2>
           <p className="text-sm text-gray-700">
-            Dit wist diensten, inschrijvingen, ruilen, wedstrijden, teams (incl. speeltijden) en alle
-            personen zonder barcommissie- of adminrol, voor de officiële livegang. Admin- en
-            barcommissie-accounts, mailteksten, clubinstellingen, dienstregels en jaarplanning blijven.
+            Dit wist diensten, inschrijvingen, ruilen, wedstrijden, teams (incl. speeltijden),
+            jaarplanning en alle personen zonder barcommissie- of adminrol, voor de officiële
+            livegang. Admin- en barcommissie-accounts, mailteksten, clubinstellingen en
+            dienstregels blijven.
           </p>
           <button
             type="button"

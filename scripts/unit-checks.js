@@ -2481,9 +2481,20 @@ assert('opschonen-woord leeg of fout doet niets', confirmWordOk('') === false &&
       !/blijft:\s*\[[\s\S]*key:\s*'teams'/.test(resetSrc),
   );
   assert(
-    'instellingen-tekst noemt teams onder wissen',
+    'opschonen wist jaarplanning na diensten, dienstregels blijven',
+    resetSrc.includes('await tx.service.deleteMany()') &&
+      resetSrc.includes('await tx.activity.deleteMany()') &&
+      resetSrc.indexOf('await tx.service.deleteMany()') < resetSrc.indexOf('await tx.activity.deleteMany()') &&
+      /key:\s*'jaarplanning'/.test(resetSrc) &&
+      !/blijft:\s*\[[\s\S]*key:\s*'jaarplanning'/.test(resetSrc) &&
+      /blijft:\s*\[[\s\S]*key:\s*'dienstregels'/.test(resetSrc),
+  );
+  assert(
+    'instellingen-tekst noemt teams en jaarplanning onder wissen',
     instellingenSrc.includes('teams (incl. speeltijden)') &&
-      instellingenSrc.includes('dienstregels en jaarplanning blijven'),
+      instellingenSrc.includes('jaarplanning') &&
+      instellingenSrc.includes('dienstregels blijven') &&
+      !instellingenSrc.includes('dienstregels en jaarplanning blijven'),
   );
 }
 

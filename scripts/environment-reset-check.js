@@ -237,6 +237,16 @@ async function seed(db) {
       toDate: new Date('2026-12-31T00:00:00Z'),
     },
   });
+  await db.activity.create({
+    data: {
+      name: 'Wipe klaverjas',
+      date: new Date('2026-11-07T00:00:00Z'),
+      startTime: '20:00',
+      endTime: '23:00',
+      type: 'klaverjas',
+      openForEnrollment: false,
+    },
+  });
 
   return { adminId: admin.id, teamId: team.id, teamName: team.name };
 }
@@ -449,7 +459,10 @@ async function main() {
       preview.wissen.some((row) => row.key === 'diensten' && row.count === baseline.services) &&
         preview.wissen.some((row) => row.key === 'teams' && row.count === baseline.teams.length) &&
         preview.wissen.some((row) => row.key === 'teamKoppelingen' && row.count >= 2) &&
+        preview.wissen.some((row) => row.key === 'jaarplanning' && row.count === baseline.activities) &&
+        baseline.activities >= 1 &&
         !preview.blijft.some((row) => row.key === 'teams') &&
+        !preview.blijft.some((row) => row.key === 'jaarplanning') &&
         preview.blijft.some((row) => row.key === 'dienstregels' && row.count === baseline.rules.length),
     );
 
@@ -529,8 +542,12 @@ async function main() {
     );
     assert('mailteksten blijven', JSON.stringify(baseline.mail) === JSON.stringify(mailAfter));
     assert('clubgegevens blijven', JSON.stringify(baseline.club) === JSON.stringify(clubAfter));
-    assert('jaarplanning blijft', (await db.activity.count()) === baseline.activities);
+    assert(
+      'jaarplanning is weg',
+      (await db.activity.count()) === 0 && result.gewist.jaarplanning === baseline.activities,
+    );
     assert('resultaat meldt nul teams die blijven', result.blijft.teams === 0);
+    assert('resultaat meldt nul jaarplanning die blijft', result.blijft.jaarplanning === 0);
 
     const audit = await db.auditLog.findFirst({
       where: { action: 'environment.reset' },

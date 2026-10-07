@@ -263,6 +263,7 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
         count: teams,
       },
       { key: 'teamKoppelingen', label: 'Persoon–teamkoppelingen', count: teamKoppelingen },
+      { key: 'jaarplanning', label: 'Jaarplanning', count: activiteiten },
       { key: 'toernooien', label: 'Toernooien', count: toernooien },
     ],
     blijft: [
@@ -272,7 +273,6 @@ export async function previewEnvironmentReset(db, { dbPath, destDir } = {}) {
         label: 'Dienstregels (teamvoorwaarden worden losgekoppeld)',
         count: dienstregels,
       },
-      { key: 'jaarplanning', label: 'Jaarplanning', count: activiteiten },
       { key: 'mailteksten', label: 'Mailteksten', count: mail ? 1 : 0 },
       { key: 'club', label: 'Clubgegevens en overige instellingen', count: club ? 1 : 0 },
     ],
@@ -302,6 +302,7 @@ async function wipeInside(tx, { actorId, backupFilename }) {
     personen: await tx.person.count({ where: { id: { notIn: keptList } } }),
     teams: await tx.team.count(),
     teamKoppelingen: await tx.personTeam.count(),
+    jaarplanning: await tx.activity.count(),
   };
 
   await tx.refereeSwap.deleteMany();
@@ -311,6 +312,7 @@ async function wipeInside(tx, { actorId, backupFilename }) {
   await tx.enrollment.deleteMany();
   await tx.serviceTeamDuty.deleteMany();
   await tx.service.deleteMany();
+  await tx.activity.deleteMany();
   await tx.tournamentMatch.deleteMany();
   await tx.tournamentTeam.deleteMany();
   await tx.tournamentPoule.deleteMany();
@@ -432,13 +434,14 @@ export async function runEnvironmentReset(db, options = {}) {
 
   const blijftPersonen = await db.person.count({ where: { role: { in: KEPT_ROLES } } });
   const blijftTeams = await db.team.count();
-  const message = `Omgeving opgeschoond. Gewist: ${gewist.diensten} diensten, ${gewist.inschrijvingen} inschrijvingen, ${gewist.ruilverzoeken} ruilverzoeken, ${gewist.meldingen} meldingen, ${gewist.afwezigheden} afwezigheden, ${gewist.wedstrijden} wedstrijden, ${gewist.personen} personen en ${gewist.teams} teams. Back-up: ${backup.filename}.${mailWarning}`;
+  const blijftJaarplanning = await db.activity.count();
+  const message = `Omgeving opgeschoond. Gewist: ${gewist.diensten} diensten, ${gewist.inschrijvingen} inschrijvingen, ${gewist.ruilverzoeken} ruilverzoeken, ${gewist.meldingen} meldingen, ${gewist.afwezigheden} afwezigheden, ${gewist.wedstrijden} wedstrijden, ${gewist.personen} personen, ${gewist.teams} teams en ${gewist.jaarplanning} jaarplanning-items. Back-up: ${backup.filename}.${mailWarning}`;
 
   return {
     message,
     backup: backup.filename,
     backupPath: backup.path,
     gewist,
-    blijft: { personen: blijftPersonen, teams: blijftTeams },
+    blijft: { personen: blijftPersonen, teams: blijftTeams, jaarplanning: blijftJaarplanning },
   };
 }
