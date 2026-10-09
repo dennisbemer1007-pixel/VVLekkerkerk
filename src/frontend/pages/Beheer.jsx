@@ -991,7 +991,9 @@ function TeamsBeheer() {
               setTeamForm({ ...teamForm, morningBarOrKitchenOnly: e.target.checked })
             }
           />
-          Alleen ochtendbardienst of keuken (geen middag-/avondbar, bijv. O19)
+          Alleen ochtendbardienst of keuken (geen middag-/avondbar, bijv. O19).
+          Wedstrijden blijven gewoon blokkeren: alleen inplannen als er geen
+          wedstrijdconflict is.
         </label>
         {teamForm.teamDutyUse ? (
           <div className="sm:col-span-2 flex flex-wrap gap-3">

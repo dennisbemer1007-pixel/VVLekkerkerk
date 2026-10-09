@@ -15,7 +15,7 @@ export function personMorningBarOrKitchenOnly(person) {
   return teamsWithMorningBarOrKitchenOnly(person).length > 0;
 }
 
-/** Keuken altijd ok; bar alleen ochtend. */
+/** Keuken altijd ok; bar alleen ochtend. Wedstrijdconflict blijft apart (matchBlocks). */
 export function serviceOkForMorningBarOrKitchenOnly(service) {
   if (!service) return false;
   if (service.type === 'KITCHEN') return true;
