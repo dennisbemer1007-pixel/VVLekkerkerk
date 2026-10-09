@@ -34,6 +34,7 @@ function parseRuleBody(body) {
     conditionTeamName: body.conditionTeamName?.trim() || null,
     conditionActivityType: body.conditionActivityType?.trim() || null,
     kickoffAfter: body.kickoffAfter?.trim() || null,
+    fixedPersonId: body.fixedPersonId ? Number(body.fixedPersonId) : null,
     teamDuty: Boolean(body.teamDuty),
     teamDutySlotRole: body.teamDutySlotRole?.trim() || null,
     teamDutyReserved: Math.max(0, Math.min(20, Number(body.teamDutyReserved) || 0)),
@@ -50,11 +51,24 @@ function parseRuleBody(body) {
 function validateRule(data) {
   if (!data.name) return 'Naam is verplicht';
   if (!data.startTime || !data.endTime) return 'Begin- en eindtijd zijn verplicht';
+  if (
+    (data.conditionType === 'HOME_MATCH_TEAM' || data.conditionType === 'NO_HOME_MATCH_TEAM') &&
+    !data.conditionTeamId &&
+    !data.conditionTeamName
+  ) {
+    return 'Kies een team bij deze voorwaarde';
+  }
   return null;
 }
 
 function presentRule(rule) {
-  return { ...rule, teamDutyTeamIds: parseTeamDutyTeamIds(rule.teamDutyTeamIds) };
+  return {
+    ...rule,
+    teamDutyTeamIds: parseTeamDutyTeamIds(rule.teamDutyTeamIds),
+    fixedPerson: rule.fixedPerson
+      ? { id: rule.fixedPerson.id, name: rule.fixedPerson.name }
+      : null,
+  };
 }
 
 router.get(
@@ -62,7 +76,7 @@ router.get(
   admin(async (_req, res, next) => {
     try {
       const rules = await prisma.serviceRule.findMany({
-        include: { conditionTeam: true },
+        include: { conditionTeam: true, fixedPerson: true },
         orderBy: [{ sortOrder: 'asc' }, { weekday: 'asc' }, { startTime: 'asc' }],
       });
       res.json(

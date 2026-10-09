@@ -347,6 +347,7 @@ async function wipeInside(tx, { actorId, backupFilename }) {
   await tx.calendarFeed.deleteMany({
     where: { personId: { notIn: keptList } },
   });
+  await tx.serviceRule.updateMany({ data: { fixedPersonId: null } });
   await tx.person.deleteMany({ where: { id: { notIn: keptList } } });
 
   // Teams volledig weg: eerst FK's van blijvende accounts en dienstregels losmaken.
@@ -354,7 +355,7 @@ async function wipeInside(tx, { actorId, backupFilename }) {
   await tx.personTeam.deleteMany();
   await tx.team.updateMany({ data: { coordinatorId: null } });
   await tx.serviceRule.updateMany({
-    data: { conditionTeamId: null, teamDutyTeamIds: '[]' },
+    data: { conditionTeamId: null, teamDutyTeamIds: '[]', fixedPersonId: null },
   });
   await tx.calendarFeed.deleteMany({ where: { teamId: { not: null } } });
   await tx.team.deleteMany();

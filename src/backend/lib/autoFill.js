@@ -1,5 +1,5 @@
 import prisma from './prisma.js';
-import { addWeeks, startOfDay } from './dates.js';
+import { addWeeks, compareServicesSaturdayFirst, startOfDay } from './dates.js';
 import {
   fillExecutedCount,
   isExemptedOn,
@@ -13,6 +13,7 @@ import {
 } from './obligation.js';
 import { isAbsentOn } from './absences.js';
 import { blocksForPerson, overlappingMatchBlocks, serviceOutsideMatchBlocks } from './matchBlocks.js';
+import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { writeAudit } from './audit.js';
 import { trySendScheduledConfirmation } from './mail.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
@@ -75,7 +76,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     yearStart: new Date(from.getFullYear(), 0, 1),
   };
 
-  const services = await prisma.service.findMany({
+  const servicesRaw = await prisma.service.findMany({
     where: {
       active: true,
       draft: false,
@@ -84,6 +85,8 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     include: serviceInclude,
     orderBy: [{ date: 'asc' }, { time: 'asc' }],
   });
+  // Eerst alle zaterdagen (wedstrijddruk), daarna overige dagen — zelfde matchblokkades.
+  const services = [...servicesRaw].sort(compareServicesSaturdayFirst);
 
   const mandatory = await prisma.person.findMany({
     where: {
@@ -92,7 +95,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     },
     include: {
       team: true,
-      teamMemberships: { where: { active: true } },
+      teamMemberships: { where: { active: true }, include: { team: true } },
       enrollments: { include: { service: true } },
       absences: true,
     },
@@ -145,6 +148,9 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       if (isUnavailableOn(person, service.date)) continue;
       if (isAbsentOn(person.absences, service.date)) {
         row.hadAbsence = true;
+        continue;
+      }
+      if (blockedByMorningBarOrKitchenOnly(person, service)) {
         continue;
       }
       const overlap = overlappingMatchBlocks(service, row.blocks);

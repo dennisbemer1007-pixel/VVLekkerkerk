@@ -12,6 +12,7 @@ export const CONDITION_OPTIONS = [
   { id: 'ALWAYS', label: 'Altijd' },
   { id: 'HOME_MATCH', label: 'Bij thuiswedstrijd' },
   { id: 'HOME_MATCH_TEAM', label: 'Bij thuiswedstrijd van een team' },
+  { id: 'NO_HOME_MATCH_TEAM', label: 'Geen thuiswedstrijd van een team' },
   { id: 'ACTIVITY', label: 'Bij een activiteit' },
   { id: 'MANUAL', label: 'Alleen handmatig' },
 ];

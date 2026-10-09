@@ -725,6 +725,7 @@ function TeamsBeheer() {
     matchDurationMinutes: 90,
     availabilityUse: true,
     teamDutyUse: false,
+    morningBarOrKitchenOnly: false,
     teamDutySlots: [],
   });
   const [assign, setAssign] = useState({ serviceId: '', personId: '' });
@@ -791,6 +792,7 @@ function TeamsBeheer() {
         matchDurationMinutes: Number(teamForm.matchDurationMinutes) || 90,
         availabilityUse: teamForm.availabilityUse,
         teamDutyUse: teamForm.teamDutyUse,
+        morningBarOrKitchenOnly: teamForm.morningBarOrKitchenOnly,
         teamDutySlots: teamForm.teamDutySlots,
       });
       setTeamForm({
@@ -799,6 +801,7 @@ function TeamsBeheer() {
         matchDurationMinutes: 90,
         availabilityUse: true,
         teamDutyUse: false,
+        morningBarOrKitchenOnly: false,
         teamDutySlots: [],
       });
       await load();
@@ -977,6 +980,21 @@ function TeamsBeheer() {
           />
           Teamdienst bij thuiswedstrijd (jeugd: ouders vullen de bardienstcoördinator in)
         </label>
+        <label
+          className="flex items-center gap-2 text-sm font-semibold sm:col-span-2"
+          data-testid="team-ochtend-keuken"
+        >
+          <input
+            type="checkbox"
+            checked={teamForm.morningBarOrKitchenOnly}
+            onChange={(e) =>
+              setTeamForm({ ...teamForm, morningBarOrKitchenOnly: e.target.checked })
+            }
+          />
+          Alleen ochtendbardienst of keuken (geen middag-/avondbar, bijv. O19).
+          Wedstrijden blijven gewoon blokkeren: alleen inplannen als er geen
+          wedstrijdconflict is.
+        </label>
         {teamForm.teamDutyUse ? (
           <div className="sm:col-span-2 flex flex-wrap gap-3">
             {['MORNING', 'SECOND', 'LAST'].map((slot) => (
@@ -1126,6 +1144,18 @@ function TeamsBeheer() {
                   }
                 />
                 Teamdienst
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(t.morningBarOrKitchenOnly)}
+                  onChange={(e) =>
+                    api
+                      .updateTeam(t.id, { morningBarOrKitchenOnly: e.target.checked })
+                      .then(load)
+                  }
+                />
+                Alleen ochtend/keuken
               </label>
             </div>
             {t.members?.length ? (
@@ -1708,6 +1738,7 @@ function PlanningBeheer() {
             type="button"
             className="vvl-btn-outline"
             disabled={busy}
+            data-testid="herinneringen-2-dagen"
             onClick={() =>
               run(
                 () => api.sendDutyReminders(),
@@ -1716,9 +1747,11 @@ function PlanningBeheer() {
                     return 'Mail niet ingesteld — stel SMTP in bij E-mail.';
                   }
                   const failed = r.failed ?? 0;
+                  const personal = r.personal?.sent ?? 0;
+                  const teamco = r.coordinators?.sent ?? 0;
                   return failed
-                    ? `Herinneringen: ${r.sent ?? 0} verstuurd, ${failed} mislukt.`
-                    : `Herinneringen: ${r.sent ?? 0} verstuurd.`;
+                    ? `Herinneringen: ${r.sent ?? 0} verstuurd (${personal} persoonlijk, ${teamco} teamco), ${failed} mislukt.`
+                    : `Herinneringen: ${r.sent ?? 0} verstuurd (${personal} persoonlijk, ${teamco} teamco).`;
                 },
               )
             }
@@ -1726,6 +1759,13 @@ function PlanningBeheer() {
             Herinneringen over 2 dagen
           </button>
         </div>
+        <p className="text-xs text-gray-600" data-testid="herinneringen-uitleg">
+          “Herinneringen over 2 dagen” stuurt nu (als SMTP aanstaat) mails voor diensten over
+          precies twee dagen: aan iedereen die persoonlijk staat ingeschreven, én aan
+          bardienstcoördinatoren van teams met een teamdienst die dag. Dit is niet hetzelfde als
+          “Maak officieel” (dat vergrendelt het rooster). Normaal lopen herinneringen automatisch;
+          deze knop forceert dezelfde run meteen.
+        </p>
         {isOfficial ? (
           <p className="text-sm font-semibold text-emerald-900">
             Dit rooster is officieel. Met “Officieel terugdraaien” zet je de vergrendeling weer uit.
