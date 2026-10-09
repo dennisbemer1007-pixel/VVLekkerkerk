@@ -53,9 +53,9 @@ export function evaluateRule(rule, ctx) {
   if (type === 'MANUAL') return { ok: false, reason: 'manual' };
   if (type === 'ALWAYS') return { ok: true };
 
-  if (type === 'HOME_MATCH' || type === 'HOME_MATCH_TEAM') {
+  if (type === 'HOME_MATCH' || type === 'HOME_MATCH_TEAM' || type === 'NO_HOME_MATCH_TEAM') {
     let matches = ctx.homeMatches || [];
-    if (type === 'HOME_MATCH_TEAM') {
+    if (type === 'HOME_MATCH_TEAM' || type === 'NO_HOME_MATCH_TEAM') {
       const team = resolveConditionTeam(rule, ctx.teams);
       if (!team) return { ok: false, reason: 'unknown-team', unknownTeam: rule.conditionTeamName };
       matches = matches.filter((m) => m.teamId === team.id);
@@ -68,6 +68,9 @@ export function evaluateRule(rule, ctx) {
           return k != null && k >= min;
         });
       }
+    }
+    if (type === 'NO_HOME_MATCH_TEAM') {
+      return { ok: matches.length === 0, matches: [] };
     }
     return { ok: matches.length > 0, matches };
   }

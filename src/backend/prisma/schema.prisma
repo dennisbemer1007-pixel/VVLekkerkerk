@@ -57,6 +57,7 @@ model Person {
   refereeAssignments RefereeAssignment[]
   refereeSwapsRequested RefereeSwap[] @relation("RefereeSwapRequester")
   refereeSwapsReceived  RefereeSwap[] @relation("RefereeSwapCounterparty")
+  fixedPersonRules ServiceRule[] @relation("RuleFixedPerson")
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 }
@@ -111,6 +112,8 @@ model Team {
   /** JSON: MORNING | SECOND | LAST */
   teamDutySlots        String    @default("[]")
   functionsConfigured  Boolean   @default(false)
+  /** Alleen ochtendbardienst of keuken (geen middag-/avondbar, bijv. O19). */
+  morningBarOrKitchenOnly Boolean @default(false)
   members              Person[]
   memberships          PersonTeam[]
   matches              Match[]
@@ -167,13 +170,16 @@ model ServiceRule {
   type                  ServiceType
   required              Int          @default(1)
   slot                  String?
-  /** ALWAYS | HOME_MATCH | HOME_MATCH_TEAM | ACTIVITY | MANUAL */
+  /** ALWAYS | HOME_MATCH | HOME_MATCH_TEAM | NO_HOME_MATCH_TEAM | ACTIVITY | MANUAL */
   conditionType         String       @default("ALWAYS")
   conditionTeamId       Int?
   conditionTeam         Team?        @relation("RuleConditionTeam", fields: [conditionTeamId], references: [id])
   conditionTeamName     String?
   conditionActivityType String?
   kickoffAfter          String?
+  /** Vaste vrijwilliger die bij toepassen van de regel wordt ingeschreven. */
+  fixedPersonId         Int?
+  fixedPerson           Person?      @relation("RuleFixedPerson", fields: [fixedPersonId], references: [id])
   teamDuty              Boolean      @default(false)
   /** MORNING | SECOND | LAST */
   teamDutySlotRole      String?
@@ -257,6 +263,8 @@ model ServiceTeamDuty {
   serviceId Int
   teamId    Int
   reserved  Int     @default(2)
+  /** Mail aan bardienstcoördinator 2 dagen van tevoren verstuurd. */
+  coordinatorRemindedAt DateTime?
   service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 

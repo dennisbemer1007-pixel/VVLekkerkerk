@@ -16,6 +16,7 @@ const emptyRule = {
   conditionTeamName: '',
   conditionActivityType: '',
   kickoffAfter: '',
+  fixedPersonId: '',
   teamDuty: false,
   teamDutySlotRole: '',
   teamDutyReserved: 2,
@@ -45,6 +46,7 @@ export default function DienstregelsBeheer() {
   const formRef = useRef(null);
   const [rules, setRules] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [persons, setPersons] = useState([]);
   const [form, setForm] = useState(emptyRule);
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState('');
@@ -52,10 +54,11 @@ export default function DienstregelsBeheer() {
   const [busy, setBusy] = useState(false);
 
   const load = () =>
-    Promise.all([api.getServiceRules(), api.getTeams()])
-      .then(([r, t]) => {
+    Promise.all([api.getServiceRules(), api.getTeams(), api.getPersons().catch(() => [])])
+      .then(([r, t, p]) => {
         setRules(r);
         setTeams(t);
+        setPersons(Array.isArray(p) ? p.filter((x) => x.active !== false) : []);
       })
       .catch((e) => setError(e.message));
 
@@ -78,6 +81,7 @@ export default function DienstregelsBeheer() {
         weekday: form.weekday === '' ? null : Number(form.weekday),
         required: Number(form.required),
         conditionTeamId: form.conditionTeamId || null,
+        fixedPersonId: form.fixedPersonId || null,
         teamDuty: Boolean(form.teamDuty),
         teamDutyReserved: Number(form.teamDutyReserved) || 0,
         teamDutyAgeFrom: form.teamDutyAgeFrom === '' ? null : Number(form.teamDutyAgeFrom),
@@ -231,13 +235,19 @@ export default function DienstregelsBeheer() {
             ))}
           </select>
         </div>
-        {form.conditionType === 'HOME_MATCH_TEAM' ? (
+        {form.conditionType === 'HOME_MATCH_TEAM' ||
+        form.conditionType === 'NO_HOME_MATCH_TEAM' ? (
           <div>
-            <label className="vvl-label">Team (thuis)</label>
+            <label className="vvl-label">
+              {form.conditionType === 'NO_HOME_MATCH_TEAM'
+                ? 'Team (geen thuiswedstrijd)'
+                : 'Team (thuis)'}
+            </label>
             <select
               className="vvl-input"
               value={form.conditionTeamId}
               onChange={(e) => setForm({ ...form, conditionTeamId: e.target.value })}
+              data-testid="dienstregel-condition-team"
             >
               <option value="">— kies team —</option>
               {teams.map((t) => (
@@ -248,6 +258,25 @@ export default function DienstregelsBeheer() {
             </select>
           </div>
         ) : null}
+        <div className="sm:col-span-2" data-testid="dienstregel-vaste-persoon">
+          <label className="vvl-label">Vaste persoon (optioneel)</label>
+          <select
+            className="vvl-input"
+            value={form.fixedPersonId}
+            onChange={(e) => setForm({ ...form, fixedPersonId: e.target.value })}
+          >
+            <option value="">— niemand —</option>
+            {persons.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-600">
+            Bij toepassen van de regels wordt deze persoon automatisch ingeschreven, bijvoorbeeld
+            iemand die elke dinsdagavond wil staan.
+          </p>
+        </div>
         {form.conditionType === 'ACTIVITY' ? (
           <div>
             <label className="vvl-label">Type activiteit</label>
@@ -414,6 +443,7 @@ export default function DienstregelsBeheer() {
                     conditionTeamName: r.conditionTeamName || '',
                     conditionActivityType: r.conditionActivityType || '',
                     kickoffAfter: r.kickoffAfter || '',
+                    fixedPersonId: r.fixedPersonId ? String(r.fixedPersonId) : '',
                     teamDutySlotRole: r.teamDutySlotRole || '',
                     teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
                     teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',
@@ -473,6 +503,7 @@ export default function DienstregelsBeheer() {
                   {CONDITION_OPTIONS.find((c) => c.id === r.conditionType)?.label || r.conditionType}
                   {r.conditionTeam?.name ? ` · ${r.conditionTeam.name}` : ''}
                   {r.conditionActivityType ? ` · ${r.conditionActivityType}` : ''}
+                  {r.fixedPerson?.name ? ` · vast: ${r.fixedPerson.name}` : ''}
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex flex-wrap justify-end gap-2">
@@ -489,6 +520,7 @@ export default function DienstregelsBeheer() {
                           conditionTeamName: r.conditionTeamName || '',
                           conditionActivityType: r.conditionActivityType || '',
                           kickoffAfter: r.kickoffAfter || '',
+                          fixedPersonId: r.fixedPersonId ? String(r.fixedPersonId) : '',
                           teamDutySlotRole: r.teamDutySlotRole || '',
                           teamDutyReserved: r.teamDutyReserved || shiftDefaults(r.teamDutySlotRole).teamDutyReserved || 2,
                           teamDutyAgeFrom: r.teamDutyAgeFrom ?? '',

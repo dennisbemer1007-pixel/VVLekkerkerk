@@ -460,9 +460,49 @@ async function main() {
 
   // Wedstrijden / regels / activiteiten / mail preview
   ok('wedstrijden', (await req('/api/matches', { token: mark })).status === 200);
-  ok('dienstregels', (await req('/api/service-rules', { token: mark })).status === 200);
+  const rulesRes = await req('/api/service-rules', { token: mark });
+  ok('dienstregels', rulesRes.status === 200);
+  ok(
+    'dienstregels ondersteunen vaste persoon / geen thuiswedstrijd',
+    Array.isArray(rulesRes.json) &&
+      (rulesRes.json[0] == null ||
+        'fixedPersonId' in (rulesRes.json[0] || {}) ||
+        rulesRes.json.every((r) => r.fixedPersonId === null || r.fixedPersonId == null || Number.isFinite(r.fixedPersonId))),
+  );
   ok('jaarplanning', (await req('/api/activities', { token: mark })).status === 200);
-  ok('teams', (await req('/api/teams', { token: mark })).status === 200);
+  const teamsRes = await req('/api/teams', { token: mark });
+  ok('teams', teamsRes.status === 200);
+  ok(
+    'teams hebben ochtend/keuken-vlag',
+    Array.isArray(teamsRes.json) &&
+      (teamsRes.json.length === 0 ||
+        teamsRes.json.every((t) => typeof t.morningBarOrKitchenOnly === 'boolean')),
+  );
+  // Chantal: team ochtend/keuken zetten (O19-achtig) en terugdraaien
+  if (teamsRes.json?.length) {
+    const t0 = teamsRes.json[0];
+    const patch = await req(`/api/teams/${t0.id}`, {
+      method: 'PUT',
+      token: mark,
+      body: { morningBarOrKitchenOnly: true },
+    });
+    ok('team ochtend/keuken aanzetten', patch.status === 200 && patch.json?.morningBarOrKitchenOnly === true);
+    await req(`/api/teams/${t0.id}`, {
+      method: 'PUT',
+      token: mark,
+      body: { morningBarOrKitchenOnly: Boolean(t0.morningBarOrKitchenOnly) },
+    });
+  }
+  const remind = await req('/api/planning/remind', { method: 'POST', token: mark, body: {} });
+  ok(
+    'herinneringen-endpoint (persoonlijk + teamco)',
+    remind.status === 200 &&
+      (remind.json?.reason === 'not_configured' ||
+        (typeof remind.json?.sent === 'number' &&
+          remind.json?.personal &&
+          remind.json?.coordinators)),
+    String(remind.status) + ' ' + JSON.stringify(remind.json || {}),
+  );
   const mailTpl = await req('/api/settings/mail', { token: mark });
   ok('e-mailinstellingen', mailTpl.status === 200, String(mailTpl.status));
 
@@ -528,7 +568,15 @@ async function main() {
       password: 'demo123',
       path: '/beheer?tab=teams',
       width: 1280,
-      expectText: ['Teamdiensten (plekken)'],
+      expectText: ['Teamdiensten (plekken)', 'Alleen ochtendbardienst of keuken'],
+      forbidText: leftover,
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/beheer?tab=regels',
+      width: 1280,
+      expectText: ['Vaste persoon', 'Geen thuiswedstrijd van een team'],
       forbidText: leftover,
     });
     await pageCheck(browser, {

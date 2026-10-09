@@ -21,8 +21,56 @@ import {
   shouldAttachTeamDutiesToLocked,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
+import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
+
+const FIXED_PERSON_REASON = 'Vaste persoon volgens dienstregel';
+
+export async function ensureFixedPersonEnrollment(serviceId, rule) {
+  const personId = rule?.fixedPersonId ? Number(rule.fixedPersonId) : null;
+  if (!personId || !serviceId) return { enrolled: false, reason: 'no-fixed-person' };
+
+  const [service, person] = await Promise.all([
+    prisma.service.findUnique({
+      where: { id: serviceId },
+      include: { enrollments: true },
+    }),
+    prisma.person.findUnique({
+      where: { id: personId },
+      include: {
+        team: true,
+        teamMemberships: { where: { active: true }, include: { team: true } },
+      },
+    }),
+  ]);
+  if (!service?.active || service.draft) return { enrolled: false, reason: 'inactive-service' };
+  if (!person?.active) return { enrolled: false, reason: 'inactive-person' };
+  if (service.enrollments.some((e) => e.personId === personId && !e.noShow)) {
+    return { enrolled: false, reason: 'already' };
+  }
+  if (blockedByMorningBarOrKitchenOnly(person, service)) {
+    return { enrolled: false, reason: 'morning-bar-kitchen-only' };
+  }
+
+  if (service.enrollments.length >= service.required) {
+    await prisma.service.update({
+      where: { id: serviceId },
+      data: { required: service.enrollments.length + 1 },
+    });
+  }
+
+  await prisma.enrollment.create({
+    data: {
+      serviceId,
+      personId,
+      source: 'AUTO',
+      kind: 'PERSONAL',
+      reason: FIXED_PERSON_REASON,
+    },
+  });
+  return { enrolled: true };
+}
 
 function buildNote(rule, evaluation, assignments) {
   const bits = [rule.name];
@@ -99,6 +147,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     prisma.serviceRule.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+      include: { fixedPerson: true },
     }),
     prisma.match.findMany({
       where: { date: { gte: start, lte: end } },
@@ -219,6 +268,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  let fixedEnrolled = 0;
   const createdServices = [];
 
   for (const spec of needed.values()) {
@@ -242,6 +292,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       active: true,
     };
 
+    let serviceId = null;
+
     if (target) {
       if (target.origin === 'MANUAL') {
         skipped += 1;
@@ -260,8 +312,13 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
           });
           await syncTeamDuties(target.id, spec.assignments);
           updated += 1;
+          serviceId = target.id;
         } else {
           skipped += 1;
+        }
+        if (serviceId && spec.rule.fixedPersonId) {
+          const fix = await ensureFixedPersonEnrollment(serviceId, spec.rule);
+          if (fix.enrolled) fixedEnrolled += 1;
         }
         continue;
       }
@@ -271,21 +328,27 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       });
       await syncTeamDuties(target.id, spec.assignments);
       updated += 1;
-      continue;
+      serviceId = target.id;
+    } else {
+      const service = await prisma.service.create({
+        data: {
+          ...payload,
+          origin: 'AUTO',
+          draft: false,
+          locked: false,
+        },
+        include: serviceInclude,
+      });
+      await syncTeamDuties(service.id, spec.assignments);
+      created += 1;
+      createdServices.push(mapService(service));
+      serviceId = service.id;
     }
 
-    const service = await prisma.service.create({
-      data: {
-        ...payload,
-        origin: 'AUTO',
-        draft: false,
-        locked: false,
-      },
-      include: serviceInclude,
-    });
-    await syncTeamDuties(service.id, spec.assignments);
-    created += 1;
-    createdServices.push(mapService(service));
+    if (serviceId && spec.rule.fixedPersonId) {
+      const fix = await ensureFixedPersonEnrollment(serviceId, spec.rule);
+      if (fix.enrolled) fixedEnrolled += 1;
+    }
   }
 
   let removed = 0;
@@ -355,6 +418,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     updated,
     skipped,
     removed,
+    fixedEnrolled,
     slots: needed.size,
     teamDuties,
     services: createdServices,

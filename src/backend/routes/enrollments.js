@@ -19,6 +19,7 @@ import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
 import { getActiveRound } from '../lib/planningRounds.js';
 import { enrollableServiceRange, isWithinPlanningPeriod } from '../lib/planningPeriod.js';
+import { blockedByMorningBarOrKitchenOnly } from '../lib/dutyRestrictions.js';
 
 const router = Router();
 
@@ -144,7 +145,10 @@ router.post(
 
       const person = await prisma.person.findUnique({
         where: { id: targetId },
-        include: { team: true, teamMemberships: { where: { active: true } } },
+        include: {
+          team: true,
+          teamMemberships: { where: { active: true }, include: { team: true } },
+        },
       });
       if (!person?.active) {
         return res.status(400).json({ error: 'Deze persoon is niet actief' });
@@ -203,6 +207,17 @@ router.post(
               'De open plekken op deze dienst zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.',
           });
         }
+      }
+      if (
+        servicePreview &&
+        blockedByMorningBarOrKitchenOnly(person, servicePreview) &&
+        !isAdminRole(req.person.role)
+      ) {
+        return res.status(409).json({
+          error:
+            'Dit team mag alleen ochtendbardienst of keukendienst (geen middag-/avondbar).',
+          code: 'MORNING_BAR_KITCHEN_ONLY',
+        });
       }
       if (servicePreview && !fillingTeamDuty) {
         const matches = await prisma.match.findMany({

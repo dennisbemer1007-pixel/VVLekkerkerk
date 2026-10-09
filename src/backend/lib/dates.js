@@ -137,3 +137,19 @@ export function compareServicesByDateThenTime(a, b) {
   if (da) return da;
   return serviceStartMinutes(a?.time) - serviceStartMinutes(b?.time);
 }
+
+/** Zaterdag (Amsterdam) eerst, daarna overige dagen op datum/tijd. */
+export function isSaturdayService(service) {
+  const key = serviceCalendarKey(service?.date);
+  if (!key) return false;
+  const [y, m, d] = key.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay() === 6;
+}
+
+export function compareServicesSaturdayFirst(a, b) {
+  const satA = isSaturdayService(a) ? 0 : 1;
+  const satB = isSaturdayService(b) ? 0 : 1;
+  if (satA !== satB) return satA - satB;
+  return compareServicesByDateThenTime(a, b);
+}

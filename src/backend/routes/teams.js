@@ -35,6 +35,9 @@ function teamFunctionFields(body) {
   if (body.active !== undefined) data.active = Boolean(body.active);
   if (body.availabilityUse !== undefined) data.availabilityUse = Boolean(body.availabilityUse);
   if (body.teamDutyUse !== undefined) data.teamDutyUse = Boolean(body.teamDutyUse);
+  if (body.morningBarOrKitchenOnly !== undefined) {
+    data.morningBarOrKitchenOnly = Boolean(body.morningBarOrKitchenOnly);
+  }
   if (body.teamDutySlots !== undefined) {
     const slots = Array.isArray(body.teamDutySlots)
       ? body.teamDutySlots
@@ -44,7 +47,8 @@ function teamFunctionFields(body) {
   if (
     body.availabilityUse !== undefined ||
     body.teamDutyUse !== undefined ||
-    body.teamDutySlots !== undefined
+    body.teamDutySlots !== undefined ||
+    body.morningBarOrKitchenOnly !== undefined
   ) {
     data.functionsConfigured = true;
   }

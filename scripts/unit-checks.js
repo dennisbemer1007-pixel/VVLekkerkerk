@@ -26,7 +26,17 @@ import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
 import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
 import { mobileNavForRole, navForRole, navItemActive } from '../src/frontend/navConfig.js';
-import { dutyReminderEmail, reminderWindow } from '../src/backend/lib/reminders.js';
+import {
+  dutyReminderEmail,
+  reminderWindow,
+  teamCoordinatorReminderEmail,
+  REMINDER_DECISION,
+} from '../src/backend/lib/reminders.js';
+import {
+  blockedByMorningBarOrKitchenOnly,
+  personMorningBarOrKitchenOnly,
+  serviceOkForMorningBarOrKitchenOnly,
+} from '../src/backend/lib/dutyRestrictions.js';
 import {
   customMailTemplates,
   filterMailAudience,
@@ -106,7 +116,12 @@ import {
   resolvePlanningPeriod,
   resolvePreviousPeriod,
 } from '../src/backend/lib/planningPeriod.js';
-import { compareServicesByDateThenTime, toIsoDate } from '../src/backend/lib/dates.js';
+import {
+  compareServicesByDateThenTime,
+  compareServicesSaturdayFirst,
+  isSaturdayService,
+  toIsoDate,
+} from '../src/backend/lib/dates.js';
 import {
   SLOT_ROWS,
   WEEKDAY_SLOT_ROWS,
@@ -2337,7 +2352,9 @@ assert(
       liveDeploySrc.includes('20261003180000_referees') &&
       liveDeploySrc.includes('20261004150000_chantal_tester') &&
       liveDeploySrc.includes('20261006100000_chantal_ronde3') &&
+      liveDeploySrc.includes('20261009120000_chantal_herinnering_o19') &&
       renderStartSrc.includes('CHANTAL3_MIGRATION') &&
+      renderStartSrc.includes('CHANTAL5_MIGRATION') &&
       renderStartSrc.includes('backupSqlite') &&
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
@@ -3122,6 +3139,154 @@ assert(
       liveDeploySrc.includes('20261004120000_calendar') &&
       serverSrc.includes("app.use('/api/calendar', calendarRouter)"),
   );
+}
+
+// Chantal ronde: teamco-herinnering, O19 ochtend/keuken, zaterdag-eerst, vaste persoon, geen thuiswedstrijd
+{
+  const teamcoMail = teamCoordinatorReminderEmail({
+    name: 'Sandra',
+    teamName: 'O12-1',
+    dateText: 'zaterdag 11 oktober',
+    time: '12:00 - 16:30',
+    typeLabel: 'bardienst',
+    appUrl: 'https://planning.vvlekkerkerk.nl',
+  });
+  assert('teamco-herinnering noemt team', teamcoMail.subject.includes('O12-1'));
+  assert('teamco-herinnering noemt twee dagen', teamcoMail.text.includes('twee dagen'));
+  assert(
+    'herinnering-besluit noemt teamco en knop',
+    REMINDER_DECISION.includes('bardienstcoördinator') &&
+      REMINDER_DECISION.includes('Herinneringen over 2 dagen'),
+  );
+
+  const o19 = { team: { morningBarOrKitchenOnly: true } };
+  assert('O19-team is ochtend/keuken-only', personMorningBarOrKitchenOnly(o19) === true);
+  assert(
+    'ochtendbar ok voor O19',
+    serviceOkForMorningBarOrKitchenOnly({ type: 'BAR', time: '07:30 - 12:00', slot: 'MORNING' }) ===
+      true,
+  );
+  assert(
+    'keuken ok voor O19',
+    serviceOkForMorningBarOrKitchenOnly({ type: 'KITCHEN', time: '12:00 - 16:30' }) === true,
+  );
+  assert(
+    'middagbar geblokkeerd voor O19',
+    blockedByMorningBarOrKitchenOnly(o19, {
+      type: 'BAR',
+      time: '12:00 - 16:30',
+      slot: 'AFTERNOON',
+    }) === true,
+  );
+  assert(
+    'avondbar geblokkeerd voor O19',
+    blockedByMorningBarOrKitchenOnly(o19, { type: 'BAR', time: '18:30 - 00:00' }) === true,
+  );
+  assert(
+    'zonder vlag geen blokkade',
+    blockedByMorningBarOrKitchenOnly(
+      { team: { morningBarOrKitchenOnly: false } },
+      { type: 'BAR', time: '18:30 - 00:00' },
+    ) === false,
+  );
+
+  const fri = { date: new Date('2026-10-09T12:00:00Z'), time: '19:00 - 22:00' }; // vrijdag
+  const sat = { date: new Date('2026-10-10T12:00:00Z'), time: '07:30 - 12:00' }; // zaterdag
+  const sun = { date: new Date('2026-10-11T12:00:00Z'), time: '09:00 - 12:00' }; // zondag
+  assert('isSaturdayService herkent zaterdag', isSaturdayService(sat) === true);
+  assert('isSaturdayService weigert vrijdag', isSaturdayService(fri) === false);
+  const sorted = [fri, sun, sat].sort(compareServicesSaturdayFirst);
+  assert(
+    'autoFill sorteert zaterdag eerst',
+    isSaturdayService(sorted[0]) === true && sorted[1] === fri && sorted[2] === sun,
+  );
+  // Vrijdag 9 okt vóór zondag 11 okt binnen niet-zaterdagen
+  assert(
+    'na zaterdag blijft datumvolgorde',
+    compareServicesByDateThenTime(fri, sun) < 0,
+  );
+
+  const zondag2 = { id: 42, name: 'Zondag 2' };
+  const noMatchRule = {
+    active: true,
+    conditionType: 'NO_HOME_MATCH_TEAM',
+    conditionTeamId: 42,
+  };
+  assert(
+    'geen thuiswedstrijd team X: ok zonder match',
+    evaluateRule(noMatchRule, {
+      date: new Date('2026-10-11T12:00:00'),
+      weekday: 0,
+      homeMatches: [],
+      teams: [zondag2],
+    }).ok === true,
+  );
+  assert(
+    'geen thuiswedstrijd team X: niet ok met match',
+    evaluateRule(noMatchRule, {
+      date: new Date('2026-10-11T12:00:00'),
+      weekday: 0,
+      homeMatches: [{ teamId: 42, home: true }],
+      teams: [zondag2],
+    }).ok === false,
+  );
+
+  const migration5 = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/prisma/migrations/20261009120000_chantal_herinnering_o19/migration.sql',
+    ),
+    'utf8',
+  );
+  assert(
+    'chantal5-migratie is additief',
+    migration5.includes('morningBarOrKitchenOnly') &&
+      migration5.includes('fixedPersonId') &&
+      migration5.includes('coordinatorRemindedAt') &&
+      !/DROP TABLE/i.test(migration5) &&
+      !/DROP COLUMN/i.test(migration5),
+  );
+  const beheerSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),
+    'utf8',
+  );
+  const regelsSrc = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/frontend/pages/DienstregelsBeheer.jsx',
+    ),
+    'utf8',
+  );
+  assert(
+    'UI heeft ochtend/keuken, herinnering-uitleg en vaste persoon',
+    beheerSrc.includes('morningBarOrKitchenOnly') &&
+      beheerSrc.includes('herinneringen-uitleg') &&
+      regelsSrc.includes('fixedPersonId') &&
+      regelsSrc.includes('NO_HOME_MATCH_TEAM') &&
+      CONDITION_TYPES_HAS_NO_HOME(),
+  );
+  function CONDITION_TYPES_HAS_NO_HOME() {
+    return (
+      fs
+        .readFileSync(
+          path.resolve(
+            path.dirname(fileURLToPath(import.meta.url)),
+            '../src/backend/lib/defaultServiceRules.js',
+          ),
+          'utf8',
+        )
+        .includes('NO_HOME_MATCH_TEAM') &&
+      fs
+        .readFileSync(
+          path.resolve(
+            path.dirname(fileURLToPath(import.meta.url)),
+            '../src/frontend/pages/planningLabels.js',
+          ),
+          'utf8',
+        )
+        .includes('NO_HOME_MATCH_TEAM')
+    );
+  }
 }
 
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

@@ -24,6 +24,7 @@ import {
   CALENDAR_MIGRATION,
   CHANTAL_MIGRATION,
   CHANTAL3_MIGRATION,
+  CHANTAL5_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
 import {
   repairAccidentalWeekendTeams,
@@ -81,6 +82,7 @@ console.log(
   CALENDAR_MIGRATION,
   CHANTAL_MIGRATION,
   CHANTAL3_MIGRATION,
+  CHANTAL5_MIGRATION,
 );
 
 const dbFile = resolveLiveDbFile(root);

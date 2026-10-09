@@ -7,7 +7,7 @@ import { dienstLabel, formatDutyDate, renderMail, resolveMailTemplates } from '.
 export const REMINDER_DAYS_AHEAD = 2;
 
 export const REMINDER_DECISION =
-  'E-mailherinnering 2 dagen voor een ingeplande dienst, alleen als SMTP aanstaat. Geen push/WhatsApp. De tekst is aanpasbaar in Beheer → E-mail. Productie-server moet wakker blijven (geen Free-sleep) wil dit betrouwbaar lopen.';
+  'E-mailherinnering 2 dagen voor een ingeplande dienst, alleen als SMTP aanstaat. Persoonlijk aan wie staat ingeschreven, en apart aan de bardienstcoördinator als diens team een teamdienst heeft. Geen push/WhatsApp. De tekst is aanpasbaar in Beheer → E-mail (persoonlijk). Productie-server moet wakker blijven (geen Free-sleep) wil dit betrouwbaar lopen. De knop “Herinneringen over 2 dagen” forceert dezelfde run buiten de automatische 50-minuten-throttle.';
 
 export function reminderWindow(now = new Date()) {
   const day = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + REMINDER_DAYS_AHEAD));
@@ -29,6 +29,37 @@ export function dutyReminderEmail({ name, dateText, time, typeLabel, appUrl, tem
   );
 }
 
+/** Mail aan bardienstcoördinator: team heeft over 2 dagen een teamdienst. */
+export function teamCoordinatorReminderEmail({
+  name,
+  teamName,
+  dateText,
+  time,
+  typeLabel,
+  appUrl,
+}) {
+  const subject = `Herinnering teamdienst ${teamName} ${dateText}`;
+  const body = `Hoi ${name},
+
+Over twee dagen heeft ${teamName} een teamdienst (${typeLabel}): ${dateText}, ${time}.
+
+Zet zo nodig nog ouders op naam via de app.
+${appUrl ? `\nBekijk de planning: ${appUrl}\n` : ''}
+Groet,
+V.V. Lekkerkerk`;
+  return renderMail(
+    { subject, body },
+    {
+      naam: name,
+      datum: dateText,
+      tijd: time,
+      dienst: typeLabel,
+      link: appUrl || '',
+    },
+    { templateKey: 'reminder' },
+  );
+}
+
 let lastRunAt = 0;
 
 export async function maybeRunDutyReminders({ force = false } = {}) {
@@ -38,15 +69,7 @@ export async function maybeRunDutyReminders({ force = false } = {}) {
   return runDutyReminders();
 }
 
-export async function runDutyReminders({ now = new Date() } = {}) {
-  const settings = await getMailSettings();
-  if (!isMailReady(settings)) {
-    return { sent: 0, failed: 0, skipped: 0, reason: 'not_configured' };
-  }
-
-  const { from, to } = reminderWindow(now);
-  const templates = resolveMailTemplates(settings.templates);
-
+async function sendPersonalReminders({ from, to, templates, appUrl }) {
   const enrollments = await prisma.enrollment.findMany({
     where: {
       remindedAt: null,
@@ -63,13 +86,6 @@ export async function runDutyReminders({ now = new Date() } = {}) {
 
   let sent = 0;
   let failed = 0;
-  const appUrl = (() => {
-    try {
-      return resolvePublicAppUrl();
-    } catch {
-      return '';
-    }
-  })();
 
   for (const enrollment of enrollments) {
     if (!enrollment.person?.email) {
@@ -106,5 +122,103 @@ export async function runDutyReminders({ now = new Date() } = {}) {
     }
   }
 
-  return { sent, failed, skipped: 0, considered: enrollments.length };
+  return { sent, failed, considered: enrollments.length };
+}
+
+async function sendTeamCoordinatorReminders({ from, to, appUrl }) {
+  const duties = await prisma.serviceTeamDuty.findMany({
+    where: {
+      coordinatorRemindedAt: null,
+      service: {
+        active: true,
+        draft: false,
+        date: { gte: from, lte: to },
+      },
+      team: {
+        active: true,
+        coordinator: { active: true, email: { not: null } },
+      },
+    },
+    include: {
+      service: true,
+      team: { include: { coordinator: true } },
+    },
+  });
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const duty of duties) {
+    const coordinator = duty.team?.coordinator;
+    if (!coordinator?.email) {
+      failed += 1;
+      continue;
+    }
+    try {
+      const content = teamCoordinatorReminderEmail({
+        name: coordinator.name,
+        teamName: duty.team.name,
+        dateText: formatDutyDate(duty.service.date),
+        time: duty.service.time,
+        typeLabel: dienstLabel(duty.service.type),
+        appUrl,
+      });
+      const result = await sendMail({ to: coordinator.email, ...content });
+      if (!result?.sent) {
+        console.error(
+          '[Mail] Teamco-herinnering niet verstuurd',
+          duty.teamId,
+          result?.reason || 'onbekend',
+        );
+        failed += 1;
+        continue;
+      }
+      await prisma.serviceTeamDuty.update({
+        where: { id: duty.id },
+        data: { coordinatorRemindedAt: new Date() },
+      });
+      sent += 1;
+    } catch (err) {
+      console.error('[Mail] Teamco-herinnering mislukt', duty.teamId, err.message);
+      failed += 1;
+    }
+  }
+
+  return { sent, failed, considered: duties.length };
+}
+
+export async function runDutyReminders({ now = new Date() } = {}) {
+  const settings = await getMailSettings();
+  if (!isMailReady(settings)) {
+    return {
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      reason: 'not_configured',
+      personal: { sent: 0, failed: 0, considered: 0 },
+      coordinators: { sent: 0, failed: 0, considered: 0 },
+    };
+  }
+
+  const { from, to } = reminderWindow(now);
+  const templates = resolveMailTemplates(settings.templates);
+  const appUrl = (() => {
+    try {
+      return resolvePublicAppUrl();
+    } catch {
+      return '';
+    }
+  })();
+
+  const personal = await sendPersonalReminders({ from, to, templates, appUrl });
+  const coordinators = await sendTeamCoordinatorReminders({ from, to, appUrl });
+
+  return {
+    sent: personal.sent + coordinators.sent,
+    failed: personal.failed + coordinators.failed,
+    skipped: 0,
+    considered: personal.considered + coordinators.considered,
+    personal,
+    coordinators,
+  };
 }
