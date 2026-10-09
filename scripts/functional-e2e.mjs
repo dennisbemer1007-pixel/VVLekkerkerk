@@ -253,7 +253,13 @@ async function persoonToevoegenNaOpschonen(browser) {
     await barPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     await loginPage(barPage, 'mark@vvl.demo', 'demo123');
     await barPage.goto(`${base}/mensen`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const barAdd = await barPage.$('[data-testid="person-add"]');
+    let barAdd = null;
+    try {
+      await barPage.waitForSelector('[data-testid="person-add"]', { timeout: 15000 });
+      barAdd = await barPage.$('[data-testid="person-add"]');
+    } catch {
+      barAdd = null;
+    }
     ok('opschonen-toevoegen: barcommissie ziet + Persoon toevoegen', Boolean(barAdd));
     await barCtx.close();
   } else {
