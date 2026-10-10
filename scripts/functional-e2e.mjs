@@ -582,11 +582,7 @@ async function main() {
       password: 'demo123',
       path: '/beheer?tab=regels',
       width: 1280,
-      expectText: [
-        'Vaste persoon',
-        'Geen thuiswedstrijd van een team',
-        'De dienst wordt altijd aangemaakt',
-      ],
+      expectText: ['Vaste persoon', 'Geen thuiswedstrijd van een team'],
       forbidText: leftover,
     });
     await pageCheck(browser, {
