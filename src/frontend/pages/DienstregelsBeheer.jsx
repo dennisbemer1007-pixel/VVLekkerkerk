@@ -256,6 +256,13 @@ export default function DienstregelsBeheer() {
                 </option>
               ))}
             </select>
+            {form.conditionType === 'NO_HOME_MATCH_TEAM' ? (
+              <p className="mt-1 text-xs text-gray-600">
+                De dienst wordt altijd aangemaakt. Alleen de vaste persoon hieronder wordt
+                ingeschreven als dit team die dag <strong>geen</strong> thuiswedstrijd heeft.
+                Kies het team zoals in de app (bijv. “Lekkerkerk 2 (zo)”, niet “Zondag 2”).
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="sm:col-span-2" data-testid="dienstregel-vaste-persoon">
@@ -273,8 +280,9 @@ export default function DienstregelsBeheer() {
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-600">
-            Bij toepassen van de regels wordt deze persoon automatisch ingeschreven, bijvoorbeeld
-            iemand die elke dinsdagavond wil staan.
+            Bij toepassen van de regels wordt deze persoon automatisch ingeschreven als de
+            voorwaarde klopt (bijv. elke dinsdagavond, of zondagochtend zonder thuiswedstrijd
+            van Lekkerkerk 2). Speelt het team wél thuis, dan blijft de dienst open.
           </p>
         </div>
         {form.conditionType === 'ACTIVITY' ? (

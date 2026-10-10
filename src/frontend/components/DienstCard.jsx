@@ -5,7 +5,7 @@ import {
   occupancyStatus,
 } from '../utils/formatDate.js';
 import { unenrollActions } from '../utils/uitschrijven.js';
-import { occupancyFraction, teamSpotLines } from '../utils/teamLines.js';
+import { enrollmentNameWithTeam, occupancyFraction, teamSpotLines } from '../utils/teamLines.js';
 import { obligationMark } from '../utils/obligationMark.js';
 
 function displayReason(reason, adminMode) {
@@ -216,12 +216,15 @@ export default function DienstCard({
           ))}
           {dienst.enrollments?.filter((e) => !teamLineIds.has(e.id)).map((e) => {
             const reason = displayReason(e.reason, adminMode);
+            const displayName =
+              e.kind === 'TEAM'
+                ? enrollmentNameWithTeam(e, e.forTeam?.name)
+                : e.person?.name ?? 'Onbekend';
             return (
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
                 <span>
-                  {e.person?.name ?? 'Onbekend'}
+                  {displayName}
                   {obligationMark(e.person)}
-                  {e.kind === 'TEAM' ? ' · team' : ''}
                   {e.noShow ? ' · no-show' : ''}
                   {reason ? (
                     <span className="block text-xs font-normal text-gray-600">{reason}</span>

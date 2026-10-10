@@ -3,6 +3,7 @@ import { mapService, serviceInclude, serviceLocation } from './serviceHelpers.js
 import { ensureClubDefaults } from './clubDefaults.js';
 import {
   datesInRange,
+  evaluateFixedPersonCondition,
   evaluateRule,
   sameCalendarDay,
   serviceKey,
@@ -25,7 +26,25 @@ import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
-const FIXED_PERSON_REASON = 'Vaste persoon volgens dienstregel';
+export const FIXED_PERSON_REASON = 'Vaste persoon volgens dienstregel';
+
+export async function removeFixedPersonEnrollment(serviceId, rule) {
+  const personId = rule?.fixedPersonId ? Number(rule.fixedPersonId) : null;
+  if (!personId || !serviceId) return { removed: false, reason: 'no-fixed-person' };
+  const existing = await prisma.enrollment.findFirst({
+    where: {
+      serviceId,
+      personId,
+      source: 'AUTO',
+      kind: 'PERSONAL',
+      reason: FIXED_PERSON_REASON,
+      noShow: false,
+    },
+  });
+  if (!existing) return { removed: false, reason: 'none' };
+  await prisma.enrollment.delete({ where: { id: existing.id } });
+  return { removed: true };
+}
 
 export async function ensureFixedPersonEnrollment(serviceId, rule) {
   const personId = rule?.fixedPersonId ? Number(rule.fixedPersonId) : null;
@@ -44,7 +63,7 @@ export async function ensureFixedPersonEnrollment(serviceId, rule) {
       },
     }),
   ]);
-  if (!service?.active || service.draft) return { enrolled: false, reason: 'inactive-service' };
+  if (!service?.active) return { enrolled: false, reason: 'inactive-service' };
   if (!person?.active) return { enrolled: false, reason: 'inactive-person' };
   if (service.enrollments.some((e) => e.personId === personId && !e.noShow)) {
     return { enrolled: false, reason: 'already' };
@@ -70,6 +89,18 @@ export async function ensureFixedPersonEnrollment(serviceId, rule) {
     },
   });
   return { enrolled: true };
+}
+
+/** Schrijf vaste persoon in of haal AUTO-inschrijving weg als de voorwaarde niet meer klopt. */
+export async function syncFixedPersonEnrollment(serviceId, rule, ctx) {
+  if (!rule?.fixedPersonId || !serviceId) return { enrolled: false, removed: false };
+  const gate = evaluateFixedPersonCondition(rule, ctx);
+  if (gate.ok) {
+    const enrolled = await ensureFixedPersonEnrollment(serviceId, rule);
+    return { ...enrolled, removed: false, gateOk: true };
+  }
+  const removed = await removeFixedPersonEnrollment(serviceId, rule);
+  return { enrolled: false, ...removed, gateOk: false, gateReason: gate.reason };
 }
 
 function buildNote(rule, evaluation, assignments) {
@@ -174,27 +205,38 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     existingByKey.get(key).push(service);
   }
 
+  const existingRoundEarly = await getActiveRound(prisma);
+  const createAsDraft =
+    !existingRoundEarly?.official &&
+    (!existingRoundEarly?.status || existingRoundEarly.status === 'DRAFT');
+
   const needed = new Map();
   for (const date of datesInRange(start, end)) {
     const weekday = date.getDay();
     const homeMatches = matches.filter((m) => m.home !== false && sameCalendarDay(m.date, date));
     const dayActivities = activities.filter((a) => sameCalendarDay(a.date, date));
     for (const rule of rules) {
-      const evaluation = evaluateRule(rule, {
+      const ctx = {
         date,
         weekday,
         homeMatches,
         activities: dayActivities,
         teams,
-      });
+      };
+      const evaluation = evaluateRule(rule, ctx);
       if (!evaluation.ok) continue;
       const key = serviceKey(date, rule.type, rule.startTime);
       if (needed.has(key)) continue;
+      const fixedGate = rule.fixedPersonId
+        ? evaluateFixedPersonCondition(rule, ctx)
+        : { ok: false };
       needed.set(key, {
         key,
         date,
         rule,
         evaluation,
+        fixedPersonOk: Boolean(fixedGate.ok),
+        ruleCtx: ctx,
         homeMatches,
         candidates: eligibleTeamDutyCandidates(rule, homeMatches),
         type: rule.type,
@@ -269,7 +311,15 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   let updated = 0;
   let skipped = 0;
   let fixedEnrolled = 0;
+  let fixedRemoved = 0;
   const createdServices = [];
+
+  async function applyFixedPerson(serviceId, spec) {
+    if (!serviceId || !spec.rule.fixedPersonId) return;
+    const fix = await syncFixedPersonEnrollment(serviceId, spec.rule, spec.ruleCtx);
+    if (fix.enrolled) fixedEnrolled += 1;
+    if (fix.removed) fixedRemoved += 1;
+  }
 
   for (const spec of needed.values()) {
     const list = existingByKey.get(spec.key) || [];
@@ -290,6 +340,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       note: spec.note,
       location: spec.location,
       active: true,
+      ...(createAsDraft ? { draft: true } : { draft: false }),
     };
 
     let serviceId = null;
@@ -316,10 +367,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
         } else {
           skipped += 1;
         }
-        if (serviceId && spec.rule.fixedPersonId) {
-          const fix = await ensureFixedPersonEnrollment(serviceId, spec.rule);
-          if (fix.enrolled) fixedEnrolled += 1;
-        }
+        await applyFixedPerson(serviceId, spec);
         continue;
       }
       await prisma.service.update({
@@ -334,7 +382,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
         data: {
           ...payload,
           origin: 'AUTO',
-          draft: false,
+          draft: createAsDraft,
           locked: false,
         },
         include: serviceInclude,
@@ -345,10 +393,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       serviceId = service.id;
     }
 
-    if (serviceId && spec.rule.fixedPersonId) {
-      const fix = await ensureFixedPersonEnrollment(serviceId, spec.rule);
-      if (fix.enrolled) fixedEnrolled += 1;
-    }
+    await applyFixedPerson(serviceId, spec);
   }
 
   let removed = 0;
@@ -385,7 +430,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     removed += 1;
   }
 
-  const existingRound = await getActiveRound(prisma);
+  const existingRound = existingRoundEarly || (await getActiveRound(prisma));
   const preserveStatus = existingRound?.status && existingRound.status !== 'DRAFT';
   await prisma.planningRound.update({
     where: { id: existingRound.id },
@@ -419,6 +464,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     skipped,
     removed,
     fixedEnrolled,
+    fixedRemoved,
     slots: needed.size,
     teamDuties,
     services: createdServices,

@@ -582,7 +582,19 @@ async function main() {
       password: 'demo123',
       path: '/beheer?tab=regels',
       width: 1280,
-      expectText: ['Vaste persoon', 'Geen thuiswedstrijd van een team'],
+      expectText: [
+        'Vaste persoon',
+        'Geen thuiswedstrijd van een team',
+        'De dienst wordt altijd aangemaakt',
+      ],
+      forbidText: leftover,
+    });
+    await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/beheer?tab=planning',
+      width: 1280,
+      expectText: ['Diensten aanmaken', '1'],
       forbidText: leftover,
     });
     await pageCheck(browser, {

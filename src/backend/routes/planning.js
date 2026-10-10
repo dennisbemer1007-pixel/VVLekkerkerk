@@ -598,8 +598,12 @@ router.get(
       const services = await prisma.service.findMany({
         where: { active: true, draft: false, date: { gte: from, lte: to } },
         include: {
-          enrollments: { include: { person: true }, orderBy: { createdAt: 'asc' } },
+          enrollments: {
+            include: { person: true, forTeam: true },
+            orderBy: { createdAt: 'asc' },
+          },
           assignedTeam: true,
+          teamDuties: { include: { team: true } },
           activity: { select: { id: true, name: true, type: true } },
         },
         orderBy: [{ date: 'asc' }, { time: 'asc' }],
@@ -615,7 +619,21 @@ router.get(
         s.enrollments.length,
         s.assignedTeam?.name || '',
         s.locked ? 'ja' : 'nee',
-        (s.enrollments || []).map((e) => e.person?.name).filter(Boolean).join(', '),
+        (s.enrollments || [])
+          .map((e) => {
+            const name = e.person?.name;
+            if (!name) return '';
+            if (e.kind === 'TEAM') {
+              const team =
+                e.forTeam?.name ||
+                (s.teamDuties || []).find((d) => Number(d.teamId) === Number(e.forTeamId))?.team
+                  ?.name;
+              if (team) return `${name} (${team})`;
+            }
+            return name;
+          })
+          .filter(Boolean)
+          .join(', '),
       ]);
       const adminExport = isAdminRole(req.person.role);
       const peopleForCounts = adminExport

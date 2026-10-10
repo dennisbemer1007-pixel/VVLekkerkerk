@@ -1268,6 +1268,7 @@ function PlanningBeheer() {
     to: defaultPlanningEndInput(),
   });
   const [drafts, setDrafts] = useState([]);
+  const [periodServiceCount, setPeriodServiceCount] = useState(0);
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
   const [fromDate, setFromDate] = useState(todayInputValue());
@@ -1288,7 +1289,9 @@ function PlanningBeheer() {
       .then(([r, allRounds, withDrafts, published]) => {
         setRound(r);
         setRounds(allRounds);
-        setDrafts((withDrafts.services || []).filter((s) => s.draft));
+        const allPeriod = withDrafts.services || [];
+        setDrafts(allPeriod.filter((s) => s.draft));
+        setPeriodServiceCount(allPeriod.length);
         const open = (published.services || []).filter(
           (s) => !s.draft && (s.enrolled ?? s.enrollments?.length ?? 0) < (s.required ?? 0),
         );
@@ -1370,7 +1373,8 @@ function PlanningBeheer() {
     round?.status === 'VOLUNTEER_OPEN' ||
     round?.status === 'MANDATORY_OPEN' ||
     round?.status === 'CLOSED';
-  const hasServices = drafts.length > 0 || isPublished || isOfficial;
+  // Stap 1 is klaar zodra er diensten in de periode staan (concept of gepubliceerd).
+  const hasServices = periodServiceCount > 0 || drafts.length > 0 || isPublished || isOfficial;
   const step3Done =
     isOfficial || round?.status === 'CLOSED' || (isPublished && publishedOpen === 0);
 

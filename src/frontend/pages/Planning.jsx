@@ -527,7 +527,11 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
         <ul className="space-y-1 text-sm">
           {service.enrollments.map((e) => (
             <li key={e.id} className="flex items-center justify-between gap-2">
-              <span>{e.person?.name || '—'}</span>
+              <span>
+                {e.kind === 'TEAM' && (e.forTeam?.name || service.teamDuties?.find((d) => Number(d.teamId) === Number(e.forTeamId))?.team?.name)
+                  ? `${e.person?.name || '—'} (${e.forTeam?.name || service.teamDuties.find((d) => Number(d.teamId) === Number(e.forTeamId))?.team?.name})`
+                  : e.person?.name || '—'}
+              </span>
               <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => onRemove(e.id)}>
                 Eruit
               </button>

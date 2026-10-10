@@ -39,7 +39,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
       },
       include: {
         enrollments: {
-          include: { person: true },
+          include: { person: true, forTeam: true },
           orderBy: { createdAt: 'asc' },
         },
         teamDuties: {
