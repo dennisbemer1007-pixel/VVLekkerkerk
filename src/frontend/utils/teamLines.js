@@ -1,3 +1,14 @@
+/** Naam met team tussen haakjes, bijv. "Chantal van der Wouden (O12-1)". */
+export function enrollmentNameWithTeam(enrollment, teamName) {
+  const name = enrollment?.person?.name || 'Naam';
+  const team =
+    teamName ||
+    enrollment?.forTeam?.name ||
+    '';
+  if (!team) return name;
+  return `${name} (${team})`;
+}
+
 /** Eén regel per teamplek: teamnaam zolang de coördinator geen naam heeft gezet. */
 export function teamSpotLines(service) {
   const duties = service?.teamDuties || [];
@@ -13,9 +24,10 @@ export function teamSpotLines(service) {
       if (enrollment) {
         lines.push({
           key: `naam-${enrollment.id}`,
-          label: enrollment.person?.name || 'Naam',
+          label: enrollmentNameWithTeam(enrollment, teamName),
           team: false,
           enrollment,
+          teamName,
         });
       } else {
         lines.push({
@@ -23,6 +35,7 @@ export function teamSpotLines(service) {
           label: teamName,
           team: true,
           enrollment: null,
+          teamName,
         });
       }
     }

@@ -79,7 +79,10 @@ import { compareFillCandidates } from '../src/backend/lib/plannerOrder.js';
 import { swapBlockers } from '../src/backend/lib/swapRules.js';
 import { normalizeRole } from '../src/backend/lib/appUrl.js';
 import { canAccess, canonicalAccessRole } from '../src/backend/lib/roles.js';
-import { evaluateRule } from '../src/backend/lib/serviceRuleLogic.js';
+import {
+  evaluateFixedPersonCondition,
+  evaluateRule,
+} from '../src/backend/lib/serviceRuleLogic.js';
 import { matchBlockRange, serviceOutsideMatchBlocks } from '../src/backend/lib/matchBlocks.js';
 import { defaultTeamFunctions, isO13FirstTeam } from '../src/backend/lib/teamFunctions.js';
 import {
@@ -156,7 +159,11 @@ import { personTeamIds } from '../src/backend/lib/teamFunctions.js';
 import { skipReasonForPerson } from '../src/backend/lib/autoFill.js';
 import { isOrphanAutoService } from '../src/backend/lib/serviceDedup.js';
 import { resolveEnrollmentKind } from '../src/backend/lib/teamDutyPlanning.js';
-import { occupancyFraction, teamSpotLines } from '../src/frontend/utils/teamLines.js';
+import {
+  enrollmentNameWithTeam,
+  occupancyFraction,
+  teamSpotLines,
+} from '../src/frontend/utils/teamLines.js';
 import { matchTemplateSheets, MATCH_TEMPLATE_HEADERS } from '../src/backend/lib/matchesXlsx.js';
 import {
   PERSON_TEMPLATE_HEADERS,
@@ -897,8 +904,39 @@ const spotLines = teamSpotLines({
   enrollments: [{ id: 9, kind: 'TEAM', forTeamId: 4, noShow: false, person: { name: 'Eva Meijer' } }],
 });
 assert(
-  'teamplek twee regels: naam en team',
-  spotLines.length === 2 && spotLines[0].label === 'Eva Meijer' && spotLines[0].team === false && spotLines[1].label === 'O10-1' && spotLines[1].team === true,
+  'teamplek twee regels: naam met team tussen haakjes en open teamplek',
+  spotLines.length === 2 &&
+    spotLines[0].label === 'Eva Meijer (O10-1)' &&
+    spotLines[0].team === false &&
+    spotLines[1].label === 'O10-1' &&
+    spotLines[1].team === true,
+);
+assert(
+  'pdf toont team achter toegewezen teamplek-naam',
+  slotCellText([
+    {
+      type: 'BAR',
+      slot: 'EVENING',
+      required: 2,
+      enrollments: [
+        {
+          kind: 'TEAM',
+          forTeamId: 15,
+          noShow: false,
+          person: { name: 'Chantal van der Wouden' },
+          forTeam: { name: 'O15-3' },
+        },
+      ],
+      teamDuties: [{ teamId: 15, reserved: 1, team: { name: 'O15-3' } }],
+    },
+  ]) === 'Chantal van der Wouden (O15-3), open plek',
+);
+assert(
+  'enrollmentNameWithTeam helper',
+  enrollmentNameWithTeam(
+    { person: { name: 'Chantal van der Wouden' }, forTeam: { name: 'O12-1' } },
+    'O12-1',
+  ) === 'Chantal van der Wouden (O12-1)',
 );
 assert(
   'bezetting is gevuld/nodig',
@@ -3206,29 +3244,40 @@ assert(
     compareServicesByDateThenTime(fri, sun) < 0,
   );
 
-  const zondag2 = { id: 42, name: 'Zondag 2' };
+  const zondag2 = { id: 42, name: 'Lekkerkerk 2 (zo)' };
   const noMatchRule = {
     active: true,
+    weekday: 0,
     conditionType: 'NO_HOME_MATCH_TEAM',
     conditionTeamId: 42,
+    fixedPersonId: 7,
+  };
+  const sundayCtx = {
+    date: new Date('2026-11-08T12:00:00'),
+    weekday: 0,
+    homeMatches: [],
+    teams: [zondag2],
+  };
+  const sundayHomeCtx = {
+    ...sundayCtx,
+    homeMatches: [{ teamId: 42, home: true, time: '10:00' }],
   };
   assert(
-    'geen thuiswedstrijd team X: ok zonder match',
-    evaluateRule(noMatchRule, {
-      date: new Date('2026-10-11T12:00:00'),
-      weekday: 0,
-      homeMatches: [],
-      teams: [zondag2],
-    }).ok === true,
+    'NO_HOME_MATCH maakt dienst altijd (ook met thuiswedstrijd)',
+    evaluateRule(noMatchRule, sundayHomeCtx).ok === true &&
+      evaluateRule(noMatchRule, sundayCtx).ok === true,
   );
   assert(
-    'geen thuiswedstrijd team X: niet ok met match',
-    evaluateRule(noMatchRule, {
-      date: new Date('2026-10-11T12:00:00'),
-      weekday: 0,
-      homeMatches: [{ teamId: 42, home: true }],
-      teams: [zondag2],
-    }).ok === false,
+    'vaste persoon alleen zonder thuiswedstrijd',
+    evaluateFixedPersonCondition(noMatchRule, sundayCtx).ok === true &&
+      evaluateFixedPersonCondition(noMatchRule, sundayHomeCtx).ok === false,
+  );
+  assert(
+    'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',
+    evaluateFixedPersonCondition(
+      { ...noMatchRule, kickoffAfter: '15:00' },
+      sundayHomeCtx,
+    ).ok === false,
   );
 
   const migration5 = fs.readFileSync(

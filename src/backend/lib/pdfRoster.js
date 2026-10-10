@@ -154,8 +154,14 @@ function teamSpotTokens(service) {
     const forTeam = named.filter((row) => Number(row.forTeamId || row.forTeam?.id) === teamId);
     for (let index = 0; index < reserved; index += 1) {
       const enrollment = forTeam[index];
-      if (enrollment?.person?.name) tokens.push({ kind: 'name', text: enrollment.person.name });
-      else tokens.push({ kind: 'team', text: teamName });
+      if (enrollment?.person?.name) {
+        const team =
+          duty.team?.name || enrollment.forTeam?.name || teamName;
+        tokens.push({
+          kind: 'name',
+          text: team ? `${enrollment.person.name} (${team})` : enrollment.person.name,
+        });
+      } else tokens.push({ kind: 'team', text: teamName });
     }
   }
   return tokens;

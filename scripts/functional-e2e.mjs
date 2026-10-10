@@ -586,6 +586,14 @@ async function main() {
       forbidText: leftover,
     });
     await pageCheck(browser, {
+      email: 'mark@vvl.demo',
+      password: 'demo123',
+      path: '/beheer?tab=planning',
+      width: 1280,
+      expectText: ['Diensten aanmaken', '1'],
+      forbidText: leftover,
+    });
+    await pageCheck(browser, {
       email: 'sandra@vvl.demo',
       password: 'demo123',
       path: '/team',
