@@ -131,6 +131,13 @@ import {
   shouldHideUnpublishedAutoService,
 } from '../src/backend/lib/unpublishedAutoRepair.js';
 import {
+  dashboardAttentionEnabled,
+  dashboardServiceCounts,
+  filterCommitteeNoShowPeople,
+  isCommitteeMarkedNoShow,
+} from '../src/backend/lib/dashboardStats.js';
+import { isOrphanNoShow } from '../src/backend/lib/orphanNoShowRepair.js';
+import {
   compareServicesByDateThenTime,
   compareServicesSaturdayFirst,
   isSaturdayService,
@@ -1933,6 +1940,7 @@ assert(
       dashSrc.includes('/aandacht#no-show') &&
       dashSrc.includes('download-pdf') === false &&
       dashSrc.includes('DownloadPlanningButtons') &&
+      dashSrc.includes('dashboard-geen-publicatie') &&
       !dashSrc.includes('dash-inschrijven') &&
       !dashSrc.includes('/rooster?status='),
   );
@@ -2616,6 +2624,70 @@ assert(
       'render-start draait draft-flag repair',
       renderStartSrc.includes('repairUnpublishedAutoDraftFlags') &&
         renderStartSrc.includes('unpublishedAutoDraftFlags'),
+    );
+  }
+  {
+    assert(
+      'zonder publicatie geen aandacht-tegels',
+      dashboardAttentionEnabled({ publishedAt: null, fromDate: new Date(), toDate: new Date() }) ===
+        false,
+    );
+    assert(
+      'met publicatie wel aandacht-tegels',
+      dashboardAttentionEnabled({
+        publishedAt: new Date('2026-10-01'),
+        fromDate: new Date('2026-10-12'),
+        toDate: new Date('2026-11-22'),
+      }) === true,
+    );
+    const tileServices = [
+      { active: true, draft: false, status: 'almost', required: 2, enrollments: [{ id: 1 }] },
+      { active: true, draft: false, status: 'open', required: 2, enrollments: [] },
+      { active: true, draft: true, status: 'almost', required: 2, enrollments: [{ id: 1 }] },
+      { active: false, draft: false, status: 'almost', required: 2, enrollments: [{ id: 1 }] },
+    ];
+    const tiles = dashboardServiceCounts(tileServices);
+    assert(
+      'Nog 1 telt geen concept- of inactieve diensten',
+      tiles.almost === 1 && tiles.open === 1 && tiles.full === 0,
+    );
+    const audited = new Set([10, 20]);
+    assert('no-show met audit telt', isCommitteeMarkedNoShow(10, audited) === true);
+    assert('no-show zonder audit telt niet', isCommitteeMarkedNoShow(99, audited) === false);
+    assert(
+      'orphan no-show zonder audit is opruimbaar',
+      isOrphanNoShow({ id: 99, noShow: true }, audited) === true &&
+        isOrphanNoShow({ id: 10, noShow: true }, audited) === false &&
+        isOrphanNoShow({ id: 10, noShow: false }, audited) === false,
+    );
+    const people = [
+      { id: 1, name: 'Anna', obligation: 'FULL', role: 'Vrijwilliger', team: { name: 'JO15-1' } },
+      { id: 2, name: 'Bo', obligation: 'NONE', role: 'Vrijwilliger', team: null },
+      { id: 3, name: 'Cees', obligation: 'VR18', role: 'Vrijwilliger', team: null },
+    ];
+    const rows = [
+      { id: 10, personId: 1, service: { date: new Date('2026-09-01') } },
+      { id: 99, personId: 3, service: { date: new Date('2026-09-02') } },
+      { id: 20, personId: 2, service: { date: new Date('2026-09-03') } },
+    ];
+    const filtered = filterCommitteeNoShowPeople(people, rows, audited);
+    assert(
+      'no-show tegel: alleen audit + FULL/VR18',
+      filtered.length === 1 && filtered[0].id === 1 && filtered[0].noShowCount === 1,
+    );
+    const planningRouteSrc = fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/planning.js'),
+      'utf8',
+    );
+    assert(
+      'planning-API leeg zonder publicatie voor dashboard',
+      planningRouteSrc.includes('published: false') &&
+        planningRouteSrc.includes('dashboardAttentionEnabled') &&
+        planningRouteSrc.includes('filterCommitteeNoShowPeople'),
+    );
+    assert(
+      'render-start draait orphan-noshow repair',
+      renderStartSrc.includes('repairOrphanNoShows') && renderStartSrc.includes('orphanNoShows'),
     );
   }
   const renderYamlSrc = fs.readFileSync(
