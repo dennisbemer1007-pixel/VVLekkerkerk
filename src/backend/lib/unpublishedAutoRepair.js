@@ -6,6 +6,11 @@ import { isRoundPublishedForVolunteers } from './planningPeriod.js';
 /** Eenmalig: AUTO-diensten die zichtbaar waren zonder gepubliceerde planning verbergen/opruimen. */
 export const UNPUBLISHED_AUTO_REPAIR_ID = 'unpublished-auto-services-2026-10-13';
 
+/**
+ * Tweede pass: na #56 konden startup-sync + status≠DRAFT opnieuw draft=false AUTO
+ * aanmaken. Zet die terug naar concept (geen delete — veiligere herhaalbare fix).
+ */
+export const UNPUBLISHED_AUTO_DRAFT_REPAIR_ID = 'unpublished-auto-draft-flag-2026-10-13';
 export function unpublishedAutoRepairMarkerPath(stateDir) {
   return path.join(stateDir, `repaired-${UNPUBLISHED_AUTO_REPAIR_ID}.json`);
 }
@@ -101,6 +106,63 @@ export async function repairUnpublishedAutoServices(prisma, { stateDir, force = 
     publishedPeriods: publishedPeriods.length,
     removedEnrollments,
     removedServices,
+    draftedServices,
+    details,
+  };
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(marker, JSON.stringify(result, null, 2));
+  return result;
+}
+
+export function unpublishedAutoDraftRepairMarkerPath(stateDir) {
+  return path.join(stateDir, `repaired-${UNPUBLISHED_AUTO_DRAFT_REPAIR_ID}.json`);
+}
+
+/**
+ * Zet actieve AUTO-diensten buiten gepubliceerde planningen op draft=true.
+ * Geen deletes — bedoeld als herstel nadat sync ze opnieuw “open” zette.
+ */
+export async function repairUnpublishedAutoDraftFlags(prisma, { stateDir, force = false, now = new Date() } = {}) {
+  if (!stateDir) throw new Error('stateDir is verplicht voor unpublished-auto draft repair');
+  const marker = unpublishedAutoDraftRepairMarkerPath(stateDir);
+  if (!force && fs.existsSync(marker)) {
+    return { already: true, marker };
+  }
+
+  const rounds = await prisma.planningRound.findMany({
+    where: { publishedAt: { not: null }, fromDate: { not: null }, toDate: { not: null } },
+  });
+  const publishedPeriods = rounds.filter(isRoundPublishedForVolunteers).map((round) => ({
+    from: startOfDay(parseCalendarDate(round.fromDate)),
+    to: endOfDay(parseCalendarDate(round.toDate)),
+  }));
+
+  const today = startOfDay(now);
+  const services = await prisma.service.findMany({
+    where: {
+      origin: 'AUTO',
+      active: true,
+      draft: false,
+      date: { gte: today },
+    },
+    include: {
+      activity: { select: { id: true, openForEnrollment: true } },
+    },
+  });
+
+  let draftedServices = 0;
+  const details = [];
+  for (const service of services) {
+    if (!shouldHideUnpublishedAutoService(service, publishedPeriods)) continue;
+    await prisma.service.update({ where: { id: service.id }, data: { draft: true } });
+    draftedServices += 1;
+    details.push({ id: service.id, action: 'draft', date: toIsoDate(service.date), type: service.type });
+  }
+
+  const result = {
+    repairId: UNPUBLISHED_AUTO_DRAFT_REPAIR_ID,
+    at: new Date().toISOString(),
+    publishedPeriods: publishedPeriods.length,
     draftedServices,
     details,
   };

@@ -69,7 +69,7 @@ export default function DienstCard({
     ? dienst.enrollments?.find((e) => Number(e.personId) === Number(actingId))
     : null;
   const inactive = dienst.active === false;
-  const isDraft = Boolean(dienst.draft);
+  const isDraft = Boolean(dienst.draft) || dienst.visibleToVolunteers === false;
   const isLocked = Boolean(dienst.locked);
   const capacity = dienst.capacity;
   const teamDuties = dienst.teamDuties || [];
@@ -169,8 +169,14 @@ export default function DienstCard({
           </button>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {isDraft ? (
-            <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-bold uppercase">Concept</span>
+          {isDraft || dienst.visibleToVolunteers === false ? (
+            <span
+              className="rounded-sm bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-950"
+              data-testid="concept-label"
+              title="Nog niet zichtbaar voor vrijwilligers"
+            >
+              Concept – nog niet zichtbaar voor vrijwilligers
+            </span>
           ) : (
             <StatusBadge status={status} />
           )}

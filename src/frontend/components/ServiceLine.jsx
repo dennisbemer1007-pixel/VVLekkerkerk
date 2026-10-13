@@ -40,6 +40,7 @@ export default function ServiceLine({
     .filter(Boolean);
   const spots = rosterSpotSummary(service);
   const extra = (householdNames.length ? householdNames : spots).join(', ');
+  const isConcept = Boolean(service.draft) || service.visibleToVolunteers === false;
 
   return (
     <div
@@ -49,7 +50,10 @@ export default function ServiceLine({
     >
       <button type="button" onClick={onSelect} className="min-h-11 min-w-0 flex-1 text-left">
         <span className="flex items-center gap-2 text-sm font-bold">
-          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClass(status)}`} aria-hidden="true" />
+          <span
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ${isConcept ? 'bg-amber-400' : dotClass(status)}`}
+            aria-hidden="true"
+          />
           <span className="truncate">
             {when} · {service.time}
           </span>
@@ -58,6 +62,11 @@ export default function ServiceLine({
           {type} · {occupancyFraction(service)}
           {service.activity?.name ? ` · ${service.activity.name}` : ''}
           {extra ? ` · ${extra}` : ''}
+          {isConcept ? (
+            <span className="mt-0.5 block font-semibold text-amber-900" data-testid="concept-label">
+              Concept – nog niet zichtbaar voor vrijwilligers
+            </span>
+          ) : null}
         </span>
       </button>
       {actionLabel ? (

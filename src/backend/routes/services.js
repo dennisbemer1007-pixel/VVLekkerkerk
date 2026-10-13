@@ -54,14 +54,19 @@ router.get(
   requireAuth(async (req, res, next) => {
     try {
       let { where, filter, personId, q } = buildServiceWhere(req.query);
-      // Alleen beheerders mogen concepten zien
-      if (req.query.includeDraft === 'true' && !isAdminRole(req.person.role)) {
+      const adminViewer = isAdminRole(req.person.role);
+
+      // Concepten: beheerders altijd (met label in UI); vrijwilligers alleen via "Mijn diensten".
+      if (adminViewer || filter === 'mine') {
+        delete where.draft;
+      } else if (req.query.includeDraft === 'true') {
         where.draft = false;
       }
+
       // Vrijwilligers: alleen gepubliceerde planning of jaarplanning met open inschrijving.
-      // "Mijn diensten" blijft zichtbaar voor bestaande inschrijvingen.
+      // "Mijn diensten" blijft zichtbaar voor bestaande inschrijvingen (ook concept).
       let enrollablePeriod = null;
-      if (!isAdminRole(req.person.role) && filter !== 'mine') {
+      if (!adminViewer && filter !== 'mine') {
         enrollablePeriod = await enrollableServiceRange(prisma);
         if (enrollablePeriod.empty) {
           // Geen gepubliceerde ronde: alleen expliciet open activiteiten uit de jaarplanning.
@@ -88,12 +93,21 @@ router.get(
         orderBy: [{ date: 'asc' }, { time: 'asc' }],
       });
 
-      services = services.map(mapService);
+      if (!enrollablePeriod) {
+        enrollablePeriod = await enrollableServiceRange(prisma);
+      }
+      services = services.map((row) => {
+        const mapped = mapService(row);
+        return {
+          ...mapped,
+          visibleToVolunteers: volunteerMayAccessService(mapped, enrollablePeriod),
+        };
+      });
 
       if (filter === 'open') {
         services = services.filter((s) => s.status !== 'full');
       }
-      if (!isAdminRole(req.person.role) && filter !== 'mine') {
+      if (!adminViewer && filter !== 'mine') {
         services = services.filter((s) => volunteerMayAccessService(s, enrollablePeriod));
       }
       if (filter === 'mine') {

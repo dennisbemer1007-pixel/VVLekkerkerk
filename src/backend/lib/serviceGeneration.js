@@ -206,9 +206,10 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   }
 
   const existingRoundEarly = await getActiveRound(prisma);
+  // Zonder publishedAt blijven AUTO-diensten concept — ook als status per ongeluk
+  // VOLUNTEER_OPEN is (startup-sync mag ze dan niet als “open” terugzetten).
   const createAsDraft =
-    !existingRoundEarly?.official &&
-    (!existingRoundEarly?.status || existingRoundEarly.status === 'DRAFT');
+    !existingRoundEarly?.official && !existingRoundEarly?.publishedAt;
 
   const needed = new Map();
   for (const date of datesInRange(start, end)) {

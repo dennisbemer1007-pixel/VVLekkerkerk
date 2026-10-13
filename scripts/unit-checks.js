@@ -2587,6 +2587,36 @@ assert(
       'auto-sync zonder planningsperiode wordt overgeslagen',
       proposeSrc.includes('skippedNoPeriod') && proposeSrc.includes('!round?.fromDate || !round?.toDate'),
     );
+    assert(
+      'auto-sync zonder publicatie wordt overgeslagen',
+      proposeSrc.includes('skippedNotPublished') && proposeSrc.includes('!round?.publishedAt'),
+    );
+    const generationSrc = fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/serviceGeneration.js'),
+      'utf8',
+    );
+    assert(
+      'AUTO zonder publishedAt wordt als concept aangemaakt',
+      generationSrc.includes('!existingRoundEarly?.publishedAt') &&
+        generationSrc.includes('const createAsDraft'),
+    );
+    const repairSrc = fs.readFileSync(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../src/backend/lib/unpublishedAutoRepair.js',
+      ),
+      'utf8',
+    );
+    assert(
+      'tweede repair zet ongepubliceerde AUTO terug op draft',
+      repairSrc.includes('UNPUBLISHED_AUTO_DRAFT_REPAIR_ID') &&
+        repairSrc.includes('repairUnpublishedAutoDraftFlags'),
+    );
+    assert(
+      'render-start draait draft-flag repair',
+      renderStartSrc.includes('repairUnpublishedAutoDraftFlags') &&
+        renderStartSrc.includes('unpublishedAutoDraftFlags'),
+    );
   }
   const renderYamlSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../render.yaml'),
