@@ -119,11 +119,17 @@ import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.j
 import {
   clampServiceDateFilter,
   inferPrecedingPeriod,
+  isRoundPublishedForVolunteers,
   isWithinPlanningPeriod,
   pickPreviousRound,
   resolvePlanningPeriod,
   resolvePreviousPeriod,
+  volunteerMayAccessService,
 } from '../src/backend/lib/planningPeriod.js';
+import {
+  hasProtectedEnrollment,
+  shouldHideUnpublishedAutoService,
+} from '../src/backend/lib/unpublishedAutoRepair.js';
 import {
   compareServicesByDateThenTime,
   compareServicesSaturdayFirst,
@@ -2403,6 +2409,7 @@ assert(
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
       renderStartSrc.includes('unlinkGuardianCopiedTeam') &&
       renderStartSrc.includes('repairAccidentalActivityPlanningSync') &&
+      renderStartSrc.includes('repairUnpublishedAutoServices') &&
       renderStartSrc.includes('shouldAttemptIncidentRestore') &&
       renderStartSrc.includes('Dienst-herstel niet fataal') &&
       !/prisma db push/.test(renderStartSrc) &&
@@ -2466,6 +2473,119 @@ assert(
       'handmatige/admin-inschrijvingen blijven',
       shouldRemoveAutoEnrollment({ source: 'ADMIN' }) === false &&
         shouldRemoveAutoEnrollment({ source: 'SELF' }) === false,
+    );
+  }
+  {
+    assert(
+      'alleen gepubliceerde ronde is open voor vrijwilligers',
+      isRoundPublishedForVolunteers({
+        publishedAt: new Date('2026-10-01'),
+        fromDate: new Date('2026-10-12'),
+        toDate: new Date('2026-11-22'),
+      }) === true,
+    );
+    assert(
+      'concept-ronde zonder publicatie is dicht',
+      isRoundPublishedForVolunteers({
+        publishedAt: null,
+        status: 'DRAFT',
+        fromDate: new Date('2026-10-12'),
+        toDate: new Date('2026-11-22'),
+      }) === false,
+    );
+    const emptyPeriod = { from: new Date('2026-10-13'), to: new Date('2026-10-12'), empty: true };
+    const openPeriod = {
+      from: new Date('2026-10-12T00:00:00.000Z'),
+      to: new Date('2026-11-22T23:59:59.999Z'),
+      empty: false,
+    };
+    assert(
+      'zonder publicatie geen AUTO-dienst zichtbaar',
+      volunteerMayAccessService(
+        { active: true, draft: false, date: new Date('2026-10-17'), activity: null },
+        emptyPeriod,
+      ) === false,
+    );
+    assert(
+      'open jaarplanning-activiteit wel zichtbaar zonder publicatie',
+      volunteerMayAccessService(
+        {
+          active: true,
+          draft: false,
+          date: new Date('2026-12-11'),
+          activity: { openForEnrollment: true },
+        },
+        emptyPeriod,
+      ) === true,
+    );
+    assert(
+      'concept-dienst nooit zichtbaar voor vrijwilliger',
+      volunteerMayAccessService(
+        { active: true, draft: true, date: new Date('2026-10-17'), activity: null },
+        openPeriod,
+      ) === false,
+    );
+    assert(
+      'AUTO in gepubliceerde periode wel zichtbaar',
+      volunteerMayAccessService(
+        { active: true, draft: false, date: new Date('2026-10-17T12:00:00.000Z'), activity: null },
+        openPeriod,
+      ) === true,
+    );
+    const published = [
+      {
+        from: new Date('2026-11-01T00:00:00.000Z'),
+        to: new Date('2026-11-30T23:59:59.999Z'),
+      },
+    ];
+    assert(
+      'ongepubliceerde AUTO-dienst moet verstopt',
+      shouldHideUnpublishedAutoService(
+        {
+          origin: 'AUTO',
+          active: true,
+          date: new Date('2026-10-17'),
+          activity: null,
+        },
+        published,
+      ) === true,
+    );
+    assert(
+      'AUTO in gepubliceerde maand blijft',
+      shouldHideUnpublishedAutoService(
+        {
+          origin: 'AUTO',
+          active: true,
+          date: new Date('2026-11-10'),
+          activity: null,
+        },
+        published,
+      ) === false,
+    );
+    assert(
+      'open activiteit-AUTO niet verstoppen',
+      shouldHideUnpublishedAutoService(
+        {
+          origin: 'AUTO',
+          active: true,
+          date: new Date('2026-10-17'),
+          activity: { openForEnrollment: true },
+        },
+        published,
+      ) === false,
+    );
+    assert(
+      'SELF/ADMIN-inschrijving is beschermd',
+      hasProtectedEnrollment([{ source: 'AUTO' }, { source: 'SELF' }]) === true &&
+        hasProtectedEnrollment([{ source: 'AUTO' }]) === false,
+    );
+    const proposeSrc = fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/proposePlanning.js'),
+      'utf8',
+    );
+    assert(
+      'auto-sync zonder planningsperiode wordt overgeslagen',
+      proposeSrc.includes('skippedNoPeriod') && proposeSrc.includes('!round?.fromDate || !round?.toDate'),
     );
   }
   const renderYamlSrc = fs.readFileSync(

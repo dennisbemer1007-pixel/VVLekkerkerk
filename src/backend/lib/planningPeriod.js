@@ -158,28 +158,48 @@ export function isWithinPlanningPeriod(date, period) {
 }
 
 /**
- * Huidige + toekomstige planningen: vanaf vandaag tot de laatste einddatum.
- * Zo blijft de lopende periode inschrijfbaar als er al een volgende ronde actief is.
+ * Stap 2 “Publiceren”: vrijwilligers zien/inschrijven pas na publishedAt.
+ * Concept-rondes (DRAFT zonder publicatie) tellen niet.
+ */
+export function isRoundPublishedForVolunteers(round) {
+  return Boolean(round?.publishedAt && round?.fromDate && round?.toDate);
+}
+
+/**
+ * Inschrijfbaar venster voor vrijwilligers: alleen gepubliceerde planningen,
+ * vanaf vandaag tot de laatste einddatum. Geen fallback naar “6 weken vanaf nu”
+ * (die maakte AUTO-diensten zichtbaar zonder dat de barcommissie publiceerde).
  */
 export async function enrollableServiceRange(prisma, now = new Date()) {
   const today = utcDayStart(now);
   const rounds = await prisma.planningRound.findMany({
-    where: { fromDate: { not: null }, toDate: { not: null } },
-    select: { fromDate: true, toDate: true },
+    where: {
+      fromDate: { not: null },
+      toDate: { not: null },
+      publishedAt: { not: null },
+    },
+    select: { fromDate: true, toDate: true, publishedAt: true },
   });
-  let to = today;
-  let found = false;
+  let to = null;
   for (const round of rounds) {
+    if (!isRoundPublishedForVolunteers(round)) continue;
     const end = utcDayEnd(parseCalendarDate(round.toDate));
     if (end < today) continue;
-    found = true;
-    if (end > to) to = end;
+    if (!to || end > to) to = end;
   }
-  if (!found) {
-    const active = await periodFromRound(prisma, now);
-    return { from: today, to: active.to > today ? active.to : today };
+  if (!to) {
+    // Leeg venster: geen gepubliceerde planning.
+    return { from: today, to: new Date(today.getTime() - 1), empty: true };
   }
-  return { from: today, to };
+  return { from: today, to, empty: false };
+}
+
+/** Mag een vrijwilliger deze dienst zien/inschrijven? */
+export function volunteerMayAccessService(service, enrollablePeriod) {
+  if (!service || service.active === false || service.draft) return false;
+  if (service.activity?.openForEnrollment === true) return true;
+  if (enrollablePeriod?.empty) return false;
+  return isWithinPlanningPeriod(service.date, enrollablePeriod);
 }
 
 /**
