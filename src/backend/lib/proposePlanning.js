@@ -30,6 +30,19 @@ export async function trySyncPlanningFromMatches(options = {}) {
           skippedNoPeriod: true,
         };
       }
+      // Startup/import-sync mag geen “open” diensten terugzetten vóór Stap 2 Publiceren.
+      // Expliciete sync vanuit Planning (met from/to) mag wél concept-diensten maken.
+      if (!round?.publishedAt) {
+        return {
+          created: 0,
+          skipped: 0,
+          updated: 0,
+          removed: 0,
+          slots: 0,
+          services: [],
+          skippedNotPublished: true,
+        };
+      }
     }
     return await generateServicesFromRules(options);
   } catch (err) {

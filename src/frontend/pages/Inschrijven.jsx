@@ -40,8 +40,16 @@ export default function Inschrijven({ mode = 'open' }) {
   const visibleServices = useMemo(() => {
     if (mode === 'mine' || can('beheer')) return services;
     // Backend laat alleen gepubliceerde planning of open jaarplanning door.
-    return services.filter((s) => !s.draft);
+    return services.filter((s) => !s.draft && s.visibleToVolunteers !== false);
   }, [services, mode, can]);
+
+  const conceptCount = useMemo(
+    () =>
+      can('beheer')
+        ? visibleServices.filter((s) => s.draft || s.visibleToVolunteers === false).length
+        : 0,
+    [visibleServices, can],
+  );
 
   const load = useCallback(() => {
     const params = {};
@@ -160,6 +168,20 @@ export default function Inschrijven({ mode = 'open' }) {
             Inschrijven
           </Link>
           <p className="text-sm text-gray-700">Ook de diensten van je kinderen.</p>
+        </div>
+      ) : null}
+      {mode === 'open' && can('beheer') ? (
+        <div
+          className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950"
+          data-testid="beheer-diensten-uitleg"
+        >
+          <p className="font-semibold">Je ziet hier ook concept-diensten.</p>
+          <p className="mt-1">
+            Vrijwilligers zien diensten pas na <strong>Planning → Publiceren</strong> (of bij een
+            jaarplanning-activiteit die openstaat voor inschrijving). Concepten hebben het label
+            “Concept – nog niet zichtbaar voor vrijwilligers”.
+            {conceptCount > 0 ? ` Nu: ${conceptCount} concept-dienst(en).` : ''}
+          </p>
         </div>
       ) : null}
       {mode === 'mine' ? <ScheidsMijn /> : <ScheidsOpen />}

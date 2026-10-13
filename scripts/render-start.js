@@ -33,7 +33,10 @@ import {
   deactivateOrphanAutoServices,
 } from '../src/backend/lib/liveRepairs.js';
 import { repairAccidentalActivityPlanningSync } from '../src/backend/lib/activityPlanningRepair.js';
-import { repairUnpublishedAutoServices } from '../src/backend/lib/unpublishedAutoRepair.js';
+import {
+  repairUnpublishedAutoDraftFlags,
+  repairUnpublishedAutoServices,
+} from '../src/backend/lib/unpublishedAutoRepair.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -173,6 +176,17 @@ try {
   console.warn('[render-start] Ongepubliceerde AUTO-diensten opruimen:', err.message);
 }
 
+let unpublishedAutoDraftRepair = { already: false };
+try {
+  unpublishedAutoDraftRepair = await repairUnpublishedAutoDraftFlags(prisma, { stateDir });
+  console.log(
+    '[render-start] Ongepubliceerde AUTO-diensten als concept:',
+    JSON.stringify(unpublishedAutoDraftRepair),
+  );
+} catch (err) {
+  console.warn('[render-start] Ongepubliceerde AUTO-conceptflag:', err.message);
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -278,6 +292,7 @@ const statusFile = writeDeployStatus(stateDir, {
     orphanAutoServices: orphanRepair,
     activityPlanningSync: activityPlanningRepair,
     unpublishedAutoServices: unpublishedAutoRepair,
+    unpublishedAutoDraftFlags: unpublishedAutoDraftRepair,
   },
   flags,
   mail: {

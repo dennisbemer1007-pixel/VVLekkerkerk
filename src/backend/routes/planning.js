@@ -41,6 +41,9 @@ router.get(
   '/stats',
   requireAuth(async (req, res, next) => {
   try {
+    if (!isAdminRole(req.person.role)) {
+      return res.status(403).json({ error: 'Geen toegang tot planningsstatistieken' });
+    }
     const services = await prisma.service.findMany({
       where: { active: true, draft: false },
       include: { enrollments: true },
@@ -313,10 +316,15 @@ router.get(
   '/',
   requireAuth(async (req, res, next) => {
   try {
+    // Planninglijst is voor beheerders; vrijwilligers gebruiken /api/services.
+    if (!isAdminRole(req.person.role)) {
+      return res.status(403).json({ error: 'Geen toegang tot de planninglijst' });
+    }
+
     const { from, to, filter, personId, includeDraft, type } = req.query;
     const where = { active: true };
     if (type === 'BAR' || type === 'KITCHEN') where.type = type;
-    if (includeDraft === 'true' && isAdminRole(req.person.role)) {
+    if (includeDraft === 'true') {
       // admin mag drafts zien
     } else {
       where.draft = false;
