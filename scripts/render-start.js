@@ -32,6 +32,7 @@ import {
   deactivateDuplicateServices,
   deactivateOrphanAutoServices,
 } from '../src/backend/lib/liveRepairs.js';
+import { repairAccidentalActivityPlanningSync } from '../src/backend/lib/activityPlanningRepair.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -155,6 +156,14 @@ try {
   console.warn('[render-start] Wees-auto-diensten herstel:', err.message);
 }
 
+let activityPlanningRepair = { already: false };
+try {
+  activityPlanningRepair = await repairAccidentalActivityPlanningSync(prisma, { stateDir });
+  console.log('[render-start] Jaarplanning-sync opruimen:', JSON.stringify(activityPlanningRepair));
+} catch (err) {
+  console.warn('[render-start] Jaarplanning-sync opruimen:', err.message);
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -258,6 +267,7 @@ const statusFile = writeDeployStatus(stateDir, {
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,
     orphanAutoServices: orphanRepair,
+    activityPlanningSync: activityPlanningRepair,
   },
   flags,
   mail: {

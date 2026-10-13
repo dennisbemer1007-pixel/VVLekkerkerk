@@ -57,7 +57,7 @@ export default function ActiviteitenBeheer() {
       else await api.createActivity(payload);
       reset();
       setMsg(
-        'Activiteit opgeslagen. Passende diensten worden aangemaakt en vooraf ingeplande namen blijven staan.',
+        'Activiteit opgeslagen. Er wordt geen weekplanning gemaakt. Alleen bij “bardiensten nodig” ontstaat een losse dienst om op in te schrijven of vooraf in te plannen.',
       );
       await load();
     } catch (err) {
@@ -85,9 +85,9 @@ export default function ActiviteitenBeheer() {
           {editId ? 'Activiteit bewerken' : 'Jaarplanning: activiteit'}
         </h2>
         <p className="sm:col-span-2 lg:col-span-3 text-sm text-gray-700">
-          Klaverjasavonden, toernooien en andere clubactiviteiten. Valt een activiteit in de
-          gekozen planningsperiode, dan maken de standaard dienstregels automatisch een dienst aan.
-          Namen die je hier vooraf inplant, blijven staan bij het bijwerken van de planning.
+          Klaverjasavonden, toernooien en andere clubactiviteiten. Opslaan maakt geen planningsperiode
+          en deelt niemand automatisch in. Vul “bardiensten nodig” in voor een losse dienst (zelf
+          inschrijven of vooraf inplannen). De barplanning maak je apart onder Planning.
         </p>
         <div>
           <label className="vvl-label">Naam</label>

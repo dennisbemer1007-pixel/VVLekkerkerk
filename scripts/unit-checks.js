@@ -7,6 +7,11 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { confirmWordOk } from '../src/backend/lib/environmentReset.js';
+import {
+  isDraftUnpublishedRound,
+  looksLikeActivitySyncWeek,
+  shouldRemoveAutoEnrollment,
+} from '../src/backend/lib/activityPlanningRepair.js';
 import { splitSqlStatements, isIgnorableMigrationError } from '../src/backend/lib/liveDeploy.js';
 import { classifyServiceGap, sqlIntList, toId, shouldAttemptIncidentRestore } from '../src/backend/lib/serviceDiff.js';
 import { inHousehold } from '../src/backend/lib/household.js';
@@ -2397,11 +2402,72 @@ assert(
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
       renderStartSrc.includes('unlinkGuardianCopiedTeam') &&
+      renderStartSrc.includes('repairAccidentalActivityPlanningSync') &&
       renderStartSrc.includes('shouldAttemptIncidentRestore') &&
       renderStartSrc.includes('Dienst-herstel niet fataal') &&
       !/prisma db push/.test(renderStartSrc) &&
       !/accept-data-loss/.test(renderStartSrc),
   );
+  const activitiesSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/activities.js'),
+    'utf8',
+  );
+  assert(
+    'jaarplanning triggert geen planning-sync meer',
+    !activitiesSrc.includes('trySyncPlanningFromMatches') &&
+      !activitiesSrc.includes('proposePlanning') &&
+      activitiesSrc.includes('ensureActivityBarShift') &&
+      activitiesSrc.includes('origin: \'MANUAL\''),
+  );
+  {
+    const draftWeek = {
+      status: 'DRAFT',
+      publishedAt: null,
+      official: false,
+      fromDate: new Date('2026-12-07T00:00:00.000Z'),
+      toDate: new Date('2026-12-13T00:00:00.000Z'),
+    };
+    assert('concept-ronde zonder publicatie is opruimbaar', isDraftUnpublishedRound(draftWeek) === true);
+    assert(
+      'gepubliceerde ronde niet opruimen',
+      isDraftUnpublishedRound({ ...draftWeek, status: 'VOLUNTEER_OPEN', publishedAt: new Date() }) === false,
+    );
+    const singleDayExpanded = resolvePlanningPeriod({
+      from: '2026-12-11',
+      to: '2026-12-11',
+    });
+    assert(
+      'activiteit-dag wordt tot ma–zo week (7/12–13/12) — dat veroorzaakte de spookplanning',
+      toIsoDate(singleDayExpanded.from) === '2026-12-07' &&
+        toIsoDate(singleDayExpanded.to) === '2026-12-13' &&
+        singleDayExpanded.days === 7,
+    );
+    assert(
+      'week met klaverjas-activiteit lijkt op accidental sync',
+      looksLikeActivitySyncWeek(draftWeek, [new Date('2026-12-11T00:00:00.000Z')]) === true,
+    );
+    assert(
+      'week zonder activiteit niet opruimen',
+      looksLikeActivitySyncWeek(draftWeek, [new Date('2026-11-01T00:00:00.000Z')]) === false,
+    );
+    assert(
+      'lange conceptperiode niet als sync-week zien',
+      looksLikeActivitySyncWeek(
+        {
+          ...draftWeek,
+          fromDate: new Date('2026-10-11T00:00:00.000Z'),
+          toDate: new Date('2027-01-03T00:00:00.000Z'),
+        },
+        [new Date('2026-12-11T00:00:00.000Z')],
+      ) === false,
+    );
+    assert('alleen AUTO-inschrijvingen wissen', shouldRemoveAutoEnrollment({ source: 'AUTO' }) === true);
+    assert(
+      'handmatige/admin-inschrijvingen blijven',
+      shouldRemoveAutoEnrollment({ source: 'ADMIN' }) === false &&
+        shouldRemoveAutoEnrollment({ source: 'SELF' }) === false,
+    );
+  }
   const renderYamlSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../render.yaml'),
     'utf8',
