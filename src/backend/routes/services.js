@@ -4,7 +4,11 @@ import { endOfDay, endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { mapService, serviceInclude, serviceLocation } from '../lib/serviceHelpers.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES, isAdminRole } from '../lib/roles.js';
-import { clampServiceDateFilter, enrollableServiceRange } from '../lib/planningPeriod.js';
+import {
+  clampServiceDateFilter,
+  enrollableServiceRange,
+  volunteerMayAccessService,
+} from '../lib/planningPeriod.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 
 const router = Router();
@@ -54,11 +58,28 @@ router.get(
       if (req.query.includeDraft === 'true' && !isAdminRole(req.person.role)) {
         where.draft = false;
       }
-      // Vrijwilligers en teamcoördinatoren plannen alleen binnen de ronde.
-      // "Mijn diensten" blijft ongefilterd zodat bestaande inschrijvingen zichtbaar blijven.
+      // Vrijwilligers: alleen gepubliceerde planning of jaarplanning met open inschrijving.
+      // "Mijn diensten" blijft zichtbaar voor bestaande inschrijvingen.
+      let enrollablePeriod = null;
       if (!isAdminRole(req.person.role) && filter !== 'mine') {
-        const period = await enrollableServiceRange(prisma);
-        where = { ...where, date: clampServiceDateFilter(where.date, period) };
+        enrollablePeriod = await enrollableServiceRange(prisma);
+        if (enrollablePeriod.empty) {
+          // Geen gepubliceerde ronde: alleen expliciet open activiteiten uit de jaarplanning.
+          where = {
+            ...where,
+            draft: false,
+            activity: { openForEnrollment: true },
+          };
+        } else {
+          where = {
+            ...where,
+            draft: false,
+            OR: [
+              { activity: { openForEnrollment: true } },
+              { date: clampServiceDateFilter(where.date, enrollablePeriod) },
+            ],
+          };
+        }
       }
 
       let services = await prisma.service.findMany({
@@ -73,7 +94,7 @@ router.get(
         services = services.filter((s) => s.status !== 'full');
       }
       if (!isAdminRole(req.person.role) && filter !== 'mine') {
-        services = services.filter((s) => s.activity?.openForEnrollment !== false);
+        services = services.filter((s) => volunteerMayAccessService(s, enrollablePeriod));
       }
       if (filter === 'mine') {
         const pid = personId || req.person.id;

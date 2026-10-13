@@ -18,7 +18,7 @@ import { personTeamIds } from '../lib/teamFunctions.js';
 import { serviceInclude } from '../lib/serviceHelpers.js';
 import { trySendScheduledConfirmation } from '../lib/mail.js';
 import { getActiveRound } from '../lib/planningRounds.js';
-import { enrollableServiceRange, isWithinPlanningPeriod } from '../lib/planningPeriod.js';
+import { enrollableServiceRange, volunteerMayAccessService } from '../lib/planningPeriod.js';
 import { blockedByMorningBarOrKitchenOnly } from '../lib/dutyRestrictions.js';
 
 const router = Router();
@@ -165,14 +165,11 @@ router.post(
           });
         }
         const enrollable = await enrollableServiceRange(prisma);
-        if (!isWithinPlanningPeriod(servicePreview.date, enrollable)) {
+        if (!volunteerMayAccessService(servicePreview, enrollable)) {
           return res.status(403).json({
-            error: 'Deze dienst valt buiten de planningperiode.',
-          });
-        }
-        if (servicePreview.activity && servicePreview.activity.openForEnrollment === false) {
-          return res.status(403).json({
-            error: 'Op deze extra dienst schrijft de barcommissie vooraf in. Zelf inschrijven kan niet.',
+            error: servicePreview.activity && servicePreview.activity.openForEnrollment === false
+              ? 'Op deze extra dienst schrijft de barcommissie vooraf in. Zelf inschrijven kan niet.'
+              : 'Deze dienst is nog niet vrijgegeven. De barcommissie publiceert eerst de planning.',
           });
         }
       }

@@ -33,6 +33,7 @@ import {
   deactivateOrphanAutoServices,
 } from '../src/backend/lib/liveRepairs.js';
 import { repairAccidentalActivityPlanningSync } from '../src/backend/lib/activityPlanningRepair.js';
+import { repairUnpublishedAutoServices } from '../src/backend/lib/unpublishedAutoRepair.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -164,6 +165,14 @@ try {
   console.warn('[render-start] Jaarplanning-sync opruimen:', err.message);
 }
 
+let unpublishedAutoRepair = { already: false };
+try {
+  unpublishedAutoRepair = await repairUnpublishedAutoServices(prisma, { stateDir });
+  console.log('[render-start] Ongepubliceerde AUTO-diensten opruimen:', JSON.stringify(unpublishedAutoRepair));
+} catch (err) {
+  console.warn('[render-start] Ongepubliceerde AUTO-diensten opruimen:', err.message);
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -268,6 +277,7 @@ const statusFile = writeDeployStatus(stateDir, {
     duplicateServices: duplicateRepair,
     orphanAutoServices: orphanRepair,
     activityPlanningSync: activityPlanningRepair,
+    unpublishedAutoServices: unpublishedAutoRepair,
   },
   flags,
   mail: {

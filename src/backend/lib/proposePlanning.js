@@ -3,6 +3,7 @@ import prisma from './prisma.js';
 import { addWeeks, endOfDay } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import { getActiveRound } from './planningRounds.js';
+// getActiveRound: skip auto-sync wanneer er nog geen planningsperiode is.
 
 /**
  * Maak/bijwerken van diensten op basis van configureerbare dienstregels,
@@ -12,8 +13,24 @@ export async function syncServicesFromHomeMatches(options = {}) {
   return generateServicesFromRules(options);
 }
 
-export async function trySyncPlanningFromMatches(options) {
+export async function trySyncPlanningFromMatches(options = {}) {
   try {
+    const hasExplicitPeriod = Boolean(options.from || options.to || options.weeks);
+    if (!hasExplicitPeriod) {
+      const round = await getActiveRound(prisma);
+      // Geen automatische 6-weken-sync zolang de barcommissie nog geen periode heeft gezet.
+      if (!round?.fromDate || !round?.toDate) {
+        return {
+          created: 0,
+          skipped: 0,
+          updated: 0,
+          removed: 0,
+          slots: 0,
+          services: [],
+          skippedNoPeriod: true,
+        };
+      }
+    }
     return await generateServicesFromRules(options);
   } catch (err) {
     console.error('[planning] sync from rules failed:', err);

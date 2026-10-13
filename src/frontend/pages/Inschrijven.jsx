@@ -39,7 +39,8 @@ export default function Inschrijven({ mode = 'open' }) {
 
   const visibleServices = useMemo(() => {
     if (mode === 'mine' || can('beheer')) return services;
-    return services.filter((s) => s.activity?.openForEnrollment !== false);
+    // Backend laat alleen gepubliceerde planning of open jaarplanning door.
+    return services.filter((s) => !s.draft);
   }, [services, mode, can]);
 
   const load = useCallback(() => {
