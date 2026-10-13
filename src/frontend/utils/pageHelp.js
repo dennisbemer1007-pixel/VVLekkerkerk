@@ -115,11 +115,11 @@ export const PAGE_HELP = {
   },
   beheerActiviteiten: {
     purpose:
-      'Jaarplanning: klaverjasavonden, toernooien en andere activiteiten die diensten kunnen activeren.',
+      'Jaarplanning: klaverjasavonden, toernooien en andere clubactiviteiten. Maakt geen weekplanning aan.',
     actions: [
       'Activiteit met datum en type vastleggen',
-      'Personen vooraf inplannen; die namen blijven staan bij het bijwerken',
-      'Valt de activiteit in de planningsperiode, dan ontstaan bijbehorende diensten',
+      'Optioneel “bardiensten nodig” voor een losse dienst (zelf inschrijven of vooraf inplannen)',
+      'De barplanning maak je apart onder Planning → Diensten aanmaken',
     ],
   },
   beheerTeams: {

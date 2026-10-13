@@ -4,10 +4,8 @@ import { requireAuth, requireRole } from '../lib/auth.js';
 import { ADMIN_ROLES } from '../lib/roles.js';
 import { writeAudit } from '../lib/audit.js';
 import { parseMatchDateInput } from '../lib/authz.js';
-import { trySyncPlanningFromMatches } from '../lib/proposePlanning.js';
 import { ACTIVITY_TYPES as ACTIVITY_TYPE_DEFS } from '../lib/defaultServiceRules.js';
 import { mapService, serviceInclude } from '../lib/serviceHelpers.js';
-import { endOfDay, startOfDay } from '../lib/dates.js';
 import { serviceCapacity } from '../lib/teamDutyPlanning.js';
 
 const router = Router();
@@ -34,13 +32,29 @@ function parseActivity(body) {
   };
 }
 
+/**
+ * Optionele bardienst gekoppeld aan de activiteit (voor zelf-inschrijven of vooraf inplannen).
+ * Geen planning-sync: maakt geen PlanningRound en geen AUTO-weekdiensten.
+ */
 async function ensureActivityBarShift(activity) {
   const needed = Number(activity.barRequired) || 0;
-  if (needed < 1) return null;
-  const time = `${activity.startTime} - ${activity.endTime}`;
   const existing = await prisma.service.findFirst({
     where: { activityId: activity.id, origin: 'MANUAL', type: 'BAR' },
+    include: { enrollments: { select: { id: true } } },
   });
+  if (needed < 1) {
+    if (existing && !(existing.enrollments || []).length) {
+      await prisma.serviceTeamDuty.deleteMany({ where: { serviceId: existing.id } });
+      await prisma.service.delete({ where: { id: existing.id } });
+    } else if (existing) {
+      await prisma.service.update({
+        where: { id: existing.id },
+        data: { active: false },
+      });
+    }
+    return null;
+  }
+  const time = `${activity.startTime} - ${activity.endTime}`;
   if (existing) {
     return prisma.service.update({
       where: { id: existing.id },
@@ -58,6 +72,7 @@ async function ensureActivityBarShift(activity) {
       slot: 'EXTRA',
       activityId: activity.id,
       active: true,
+      draft: false,
     },
   });
 }
@@ -75,6 +90,7 @@ async function enrollPeopleOnActivity(activityId, personIds, actorId, { onlyServ
     where: {
       activityId,
       active: true,
+      origin: 'MANUAL',
       ...(onlyServiceId ? { id: onlyServiceId } : {}),
     },
     include: serviceInclude,
@@ -152,17 +168,12 @@ router.post(
         entityId: activity.id,
         detail: `${activity.name} ${activity.type}`,
       });
-      const planning = await trySyncPlanningFromMatches({
-        from: startOfDay(activity.date),
-        to: endOfDay(activity.date),
-      });
       const quota = await ensureActivityBarShift(activity);
       const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id, {
         onlyServiceId: quota?.id || null,
       });
       res.status(201).json({
         ...activity,
-        planningCreated: planning.created ?? 0,
         peopleAssigned: people.assigned,
       });
     } catch (err) {
@@ -189,10 +200,6 @@ router.put(
         entityId: activity.id,
         detail: activity.name,
       });
-      await trySyncPlanningFromMatches({
-        from: startOfDay(activity.date),
-        to: endOfDay(activity.date),
-      });
       const quota = await ensureActivityBarShift(activity);
       const people = await enrollPeopleOnActivity(activity.id, parsePersonIds(req.body), req.person.id, {
         onlyServiceId: quota?.id || null,
@@ -209,6 +216,21 @@ router.delete(
   admin(async (req, res, next) => {
     try {
       const id = Number(req.params.id);
+      const linked = await prisma.service.findMany({
+        where: { activityId: id, origin: 'MANUAL' },
+        include: { enrollments: { select: { id: true } } },
+      });
+      for (const service of linked) {
+        if ((service.enrollments || []).length) {
+          await prisma.service.update({
+            where: { id: service.id },
+            data: { activityId: null },
+          });
+        } else {
+          await prisma.serviceTeamDuty.deleteMany({ where: { serviceId: service.id } });
+          await prisma.service.delete({ where: { id: service.id } });
+        }
+      }
       await prisma.service.updateMany({ where: { activityId: id }, data: { activityId: null } });
       await prisma.activity.delete({ where: { id } });
       await writeAudit({
@@ -217,7 +239,6 @@ router.delete(
         entity: 'Activity',
         entityId: id,
       });
-      await trySyncPlanningFromMatches();
       res.status(204).end();
     } catch (err) {
       next(err);
