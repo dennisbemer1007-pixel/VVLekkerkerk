@@ -37,6 +37,7 @@ import {
   repairUnpublishedAutoDraftFlags,
   repairUnpublishedAutoServices,
 } from '../src/backend/lib/unpublishedAutoRepair.js';
+import { repairOrphanNoShows } from '../src/backend/lib/orphanNoShowRepair.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -187,6 +188,14 @@ try {
   console.warn('[render-start] Ongepubliceerde AUTO-conceptflag:', err.message);
 }
 
+let orphanNoShowRepair = { already: false };
+try {
+  orphanNoShowRepair = await repairOrphanNoShows(prisma, { stateDir });
+  console.log('[render-start] Wees-no-shows opruimen:', JSON.stringify(orphanNoShowRepair));
+} catch (err) {
+  console.warn('[render-start] Wees-no-shows opruimen:', err.message);
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -293,6 +302,7 @@ const statusFile = writeDeployStatus(stateDir, {
     activityPlanningSync: activityPlanningRepair,
     unpublishedAutoServices: unpublishedAutoRepair,
     unpublishedAutoDraftFlags: unpublishedAutoDraftRepair,
+    orphanNoShows: orphanNoShowRepair,
   },
   flags,
   mail: {

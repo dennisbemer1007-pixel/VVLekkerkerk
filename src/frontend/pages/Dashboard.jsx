@@ -17,11 +17,21 @@ function serviceStatus(s) {
   return s.status ?? occupancyStatus(s.enrolled ?? s.enrollments?.length ?? 0, s.required ?? 2);
 }
 
+function countPublishedTiles(services) {
+  const list = (services || []).filter((s) => s.active !== false && !s.draft);
+  return {
+    full: list.filter((s) => serviceStatus(s) === 'full').length,
+    almost: list.filter((s) => serviceStatus(s) === 'almost').length,
+    open: list.filter((s) => serviceStatus(s) === 'open').length,
+  };
+}
+
 export default function Dashboard({ focus = 'week' }) {
   const { can } = useAuth();
   const [stats, setStats] = useState(null);
   const [periodServices, setPeriodServices] = useState([]);
   const [period, setPeriod] = useState(null);
+  const [published, setPublished] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ person: '' });
 
@@ -32,6 +42,7 @@ export default function Dashboard({ focus = 'week' }) {
       .then((planning) => {
         setPeriodServices(planning?.services || []);
         setPeriod(planning?.period ?? null);
+        setPublished(planning?.published === true);
       })
       .catch((e) => setError(e.message));
   };
@@ -39,12 +50,13 @@ export default function Dashboard({ focus = 'week' }) {
   useEffect(() => {
     Promise.all([
       api.getStats(),
-      can('beheer') ? api.getPlanning({}) : Promise.resolve({ services: [] }),
+      can('beheer') ? api.getPlanning({}) : Promise.resolve({ services: [], published: false }),
     ])
       .then(([s, planning]) => {
         setStats(s);
         setPeriodServices(planning?.services || []);
         setPeriod(planning?.period ?? null);
+        setPublished(planning?.published === true || s?.published === true);
       })
       .catch((e) => setError(e.message));
   }, [can]);
@@ -59,20 +71,16 @@ export default function Dashboard({ focus = 'week' }) {
   }, [focus, stats]);
 
   const counts = useMemo(() => {
-    const list = periodServices.filter((s) => s.active !== false && !s.draft);
-    return {
-      full: list.filter((s) => serviceStatus(s) === 'full').length,
-      almost: list.filter((s) => serviceStatus(s) === 'almost').length,
-      open: list.filter((s) => serviceStatus(s) === 'open').length,
-    };
-  }, [periodServices]);
+    if (!published) return { full: 0, almost: 0, open: 0 };
+    return countPublishedTiles(periodServices);
+  }, [periodServices, published]);
 
-  const notSelf = (stats?.notSelfEnrolled || []).filter(
-    (p) => p.obligation === 'FULL' || p.obligation === 'VR18',
-  );
-  const noShows = (stats?.noShowPeople || []).filter(
-    (p) => p.obligation === 'FULL' || p.obligation === 'VR18',
-  );
+  const notSelf = published
+    ? (stats?.notSelfEnrolled || []).filter((p) => p.obligation === 'FULL' || p.obligation === 'VR18')
+    : [];
+  const noShows = published
+    ? (stats?.noShowPeople || []).filter((p) => p.obligation === 'FULL' || p.obligation === 'VR18')
+    : [];
 
   const byQuery = (people) =>
     people.filter((p) => {
@@ -135,6 +143,16 @@ export default function Dashboard({ focus = 'week' }) {
       <div className="flex flex-wrap items-center gap-2">
         <DownloadPlanningButtons period={period} />
       </div>
+
+      {can('beheer') && !published ? (
+        <p
+          className="rounded-sm border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950"
+          data-testid="dashboard-geen-publicatie"
+        >
+          Er is nog geen planning gepubliceerd. De tegels blijven leeg tot je onder{' '}
+          <strong>Planning → Publiceren</strong> de diensten openzet voor vrijwilligers.
+        </p>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[

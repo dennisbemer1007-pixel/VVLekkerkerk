@@ -20,7 +20,13 @@ import { buildPlanningControls } from '../lib/planningControls.js';
 import { writeAudit } from '../lib/audit.js';
 import { markPlanningOfficial, unmarkPlanningOfficial } from '../lib/official.js';
 import { runDutyReminders } from '../lib/reminders.js';
-import { periodFromRound, periodJson, previousPlanningPeriod, resolvePlanningPeriod } from '../lib/planningPeriod.js';
+import {
+  isRoundPublishedForVolunteers,
+  periodFromRound,
+  periodJson,
+  previousPlanningPeriod,
+  resolvePlanningPeriod,
+} from '../lib/planningPeriod.js';
 import {
   activatePlanningRound,
   createPlanningRound,
@@ -29,6 +35,10 @@ import {
   publicRound,
   updatePlanningRound,
 } from '../lib/planningRounds.js';
+import {
+  dashboardAttentionEnabled,
+  filterCommitteeNoShowPeople,
+} from '../lib/dashboardStats.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { personShiftRows } from '../lib/planningExport.js';
 import { displayEnrollmentReason } from '../lib/teamDutyPlanning.js';
@@ -137,7 +147,9 @@ router.get(
 
     let notSelfEnrolled = [];
     let noShowPeople = [];
-    if (round?.fromDate && round?.toDate) {
+    const published = dashboardAttentionEnabled(round);
+    // Aandacht-tegels alleen bij een echt gepubliceerde planning.
+    if (published && round?.fromDate && round?.toDate) {
       const roundServices = await prisma.service.findMany({
         where: {
           active: true,
@@ -173,32 +185,20 @@ router.get(
       const noShowRows = await prisma.enrollment.findMany({
         where: { noShow: true },
         select: {
+          id: true,
           personId: true,
           service: { select: { date: true } },
         },
         orderBy: { service: { date: 'desc' } },
       });
-      const noShowByPerson = new Map();
-      for (const row of noShowRows) {
-        const cur = noShowByPerson.get(row.personId) || { count: 0, dates: [] };
-        cur.count += 1;
-        if (row.service?.date) cur.dates.push(row.service.date);
-        noShowByPerson.set(row.personId, cur);
-      }
-      noShowPeople = people
-        .filter((p) => noShowByPerson.has(p.id) && (p.obligation === 'FULL' || p.obligation === 'VR18'))
-        .map((p) => {
-          const info = noShowByPerson.get(p.id);
-          return {
-            id: p.id,
-            name: p.name,
-            role: p.role,
-            team: p.team?.name ?? null,
-            obligation: p.obligation,
-            noShowCount: info.count,
-            lastNoShowDate: info.dates[0] || null,
-          };
-        });
+      const audited = await prisma.auditLog.findMany({
+        where: { action: 'enrollment.noshow', entity: 'Enrollment' },
+        select: { entityId: true },
+      });
+      const auditedNoshowIds = new Set(
+        audited.map((row) => Number(row.entityId)).filter((id) => Number.isFinite(id) && id > 0),
+      );
+      noShowPeople = filterCommitteeNoShowPeople(people, noShowRows, auditedNoshowIds);
     }
 
     res.json({
@@ -208,10 +208,11 @@ router.get(
       teamCount,
       matchCount,
       ...(isAdminRole(req.person.role) ? { draftCount } : {}),
-      full,
-      almost,
-      open,
-      occupancyRate,
+      full: published ? full : 0,
+      almost: published ? almost : 0,
+      open: published ? open : 0,
+      occupancyRate: published ? occupancyRate : 0,
+      published,
       ...(isAdminRole(req.person.role)
         ? {
             dutyStats,
@@ -324,13 +325,16 @@ router.get(
     const { from, to, filter, personId, includeDraft, type } = req.query;
     const where = { active: true };
     if (type === 'BAR' || type === 'KITCHEN') where.type = type;
-    if (includeDraft === 'true') {
+    const wantDrafts = includeDraft === 'true';
+    if (wantDrafts) {
       // admin mag drafts zien
     } else {
       where.draft = false;
     }
 
     const now = new Date();
+    const round = await getActiveRound(prisma);
+    const published = isRoundPublishedForVolunteers(round);
 
     if (filter === 'today') {
       where.date = { gte: startOfDay(now), lte: endOfDay(now) };
@@ -339,6 +343,20 @@ router.get(
     } else if (!from && !to) {
       const roundPeriod = await periodFromRound(prisma);
       where.date = { gte: roundPeriod.from, lte: roundPeriod.to };
+      // Dashboard / gepubliceerde lijst: zonder publicatie geen “open” diensten tellen.
+      // Concepten blijven beschikbaar via includeDraft=true (Planning-stappen).
+      if (!published && !wantDrafts) {
+        const periodStart = where.date.gte;
+        const periodEnd = where.date.lte;
+        return res.json({
+          services: [],
+          published: false,
+          period: {
+            from: toIsoDate(periodStart),
+            to: toIsoDate(periodEnd),
+          },
+        });
+      }
     } else {
       where.date = {};
       if (from) where.date.gte = startOfDay(new Date(from));
@@ -377,6 +395,7 @@ router.get(
     const periodEnd = where.date?.lte ?? endOfDay(addWeeks(now, 6));
     res.json({
       services,
+      published,
       period: {
         from: from || toIsoDate(periodStart),
         to: to || toIsoDate(periodEnd),
