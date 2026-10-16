@@ -34,6 +34,7 @@ import {
   unlinkGuardianCopiedTeam,
   deactivateDuplicateServices,
   deactivateOrphanAutoServices,
+  removeStrayMidnightBarServices,
 } from '../src/backend/lib/liveRepairs.js';
 import { repairAccidentalActivityPlanningSync } from '../src/backend/lib/activityPlanningRepair.js';
 import {
@@ -46,7 +47,7 @@ import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.j
 import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
 import { getActiveRound } from '../src/backend/lib/planningRounds.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
-import { ensureSaturdayKitchenLateRule } from '../src/backend/lib/clubDefaults.js';
+import { ensureSaturdayKitchenLateRule, ensureStandardSaturdayBarRules } from '../src/backend/lib/clubDefaults.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -167,6 +168,14 @@ try {
 } catch (err) {
   console.warn('[render-start] JO/O-jeugddubbels herstel:', err.message);
 }
+let saturdayBarRules = { updated: 0, created: 0, retired: 0 };
+try {
+  // Avondbar hoort 16:30–19:30 te zijn. 19:30–00:00 is geen dienstregel.
+  saturdayBarRules = await ensureStandardSaturdayBarRules();
+  console.log('[render-start] Zaterdag-barregels:', JSON.stringify(saturdayBarRules));
+} catch (err) {
+  console.warn('[render-start] Zaterdag-barregels:', err.message);
+}
 let kitchenLateRuleEnsure = { updated: 0, created: 0 };
 try {
   // Vóór senior-repair + backfill: keuken-laat-regel herstellen (kickoffAfter leeg,
@@ -282,6 +291,18 @@ try {
   publishedPeriodBackfill = { error: err.message };
 }
 
+let strayMidnightBars = { removed: 0 };
+try {
+  strayMidnightBars = await removeStrayMidnightBarServices(prisma);
+  console.log(
+    '[render-start] Losse bar 19:30–00:00 verwijderd:',
+    JSON.stringify(strayMidnightBars),
+  );
+} catch (err) {
+  console.warn('[render-start] Losse bar 19:30–00:00:', err.message);
+  strayMidnightBars = { error: err.message };
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -384,7 +405,9 @@ const statusFile = writeDeployStatus(stateDir, {
     weekendTeams: weekendRepair,
     moOWrongMerges: moOWrongMergeRepair,
     joOYouthTeams: joOYouthRepair,
+    saturdayBarRules,
     kitchenLateRule: kitchenLateRuleEnsure,
+    strayMidnightBars,
     seniorConditionTeams: seniorConditionRepair,
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,

@@ -20,18 +20,63 @@ export function inferSlotFromTime(service) {
   return 'EVENING';
 }
 
-/** Handmatige dienst dekt deze AUTO-spec (zelfde type/dag/tijd of zelfde dagdeel). */
-export function manualCoversSpec(existingList, spec) {
-  const wantedSlot = spec.slot || inferSlotFromTime({ time: spec.time, slot: spec.slot });
+function clockMinutes(value) {
+  const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/** [start, end) in minuten; 00:00 na een latere start telt als de volgende dag. */
+function clockWindow(start, end) {
+  const from = clockMinutes(start);
+  let to = clockMinutes(end);
+  if (from == null || to == null) return null;
+  if (to <= from) to += 24 * 60;
+  return [from, to];
+}
+
+function windowsOverlap(a, b) {
+  if (!a || !b) return false;
+  return a[0] < b[1] && b[0] < a[1];
+}
+
+function serviceWindow(service) {
+  const match = String(service?.time || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  if (!match) return null;
+  return clockWindow(match[1], match[2]);
+}
+
+function specWindow(spec) {
+  const start = spec?.rule?.startTime || String(spec?.time || '').match(/(\d{1,2}:\d{2})/)?.[1];
+  const end =
+    spec?.rule?.endTime ||
+    String(spec?.time || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/)?.[2];
+  return clockWindow(start, end);
+}
+
+/**
+ * Handmatige dienst die deze AUTO-spec al dekt.
+ * Zelfde begintijd, of overlappende tijden (08:00–13:00 dekt 09:00–13:00).
+ * Een latere dienst (19:30–00:00) dekt de avondbar 16:30–19:30 niet.
+ */
+export function manualCoveringService(existingList, spec) {
   const wantedStart = String(spec.rule?.startTime || '').padStart(5, '0');
-  return (existingList || []).some((service) => {
-    if (!service || service.origin !== 'MANUAL' || service.active === false) return false;
-    if (service.type !== spec.type) return false;
-    if (!sameCalendarDay(service.date, spec.date)) return false;
-    const start = startTimeFromService(service);
-    if (wantedStart && start === wantedStart) return true;
-    return inferSlotFromTime(service) === wantedSlot;
-  });
+  const wantedWindow = specWindow(spec);
+  return (
+    (existingList || []).find((service) => {
+      if (!service || service.origin !== 'MANUAL' || service.active === false) return false;
+      if (service.type !== spec.type) return false;
+      if (!sameCalendarDay(service.date, spec.date)) return false;
+      const start = startTimeFromService(service);
+      if (wantedStart && start === wantedStart) return true;
+      return windowsOverlap(serviceWindow(service), wantedWindow);
+    }) || null
+  );
+}
+
+/** Handmatige dienst dekt deze AUTO-spec (zelfde type/dag en overlappende tijd). */
+export function manualCoversSpec(existingList, spec) {
+  return Boolean(manualCoveringService(existingList, spec));
 }
 
 export function serviceKey(date, type, startTime) {
