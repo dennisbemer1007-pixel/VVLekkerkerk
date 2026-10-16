@@ -44,10 +44,7 @@ export default function Inschrijven({ mode = 'open' }) {
   }, [services, mode, can]);
 
   const conceptCount = useMemo(
-    () =>
-      can('beheer')
-        ? visibleServices.filter((s) => s.draft || s.visibleToVolunteers === false).length
-        : 0,
+    () => (can('beheer') ? visibleServices.filter((s) => s.draft).length : 0),
     [visibleServices, can],
   );
 
@@ -170,7 +167,7 @@ export default function Inschrijven({ mode = 'open' }) {
           <p className="text-sm text-gray-700">Ook de diensten van je kinderen.</p>
         </div>
       ) : null}
-      {mode === 'open' && can('beheer') ? (
+      {mode === 'open' && can('beheer') && conceptCount > 0 ? (
         <div
           className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950"
           data-testid="beheer-diensten-uitleg"
@@ -179,8 +176,8 @@ export default function Inschrijven({ mode = 'open' }) {
           <p className="mt-1">
             Vrijwilligers zien diensten pas na <strong>Planning → Publiceren</strong> (of bij een
             jaarplanning-activiteit die openstaat voor inschrijving). Concepten hebben het label
-            “Concept – nog niet zichtbaar voor vrijwilligers”.
-            {conceptCount > 0 ? ` Nu: ${conceptCount} concept-dienst(en).` : ''}
+            “Concept – nog niet zichtbaar voor vrijwilligers”. Nu: {conceptCount}{' '}
+            concept-dienst(en).
           </p>
         </div>
       ) : null}

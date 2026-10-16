@@ -96,6 +96,7 @@ import {
   serviceWindowForKickoff,
 } from '../src/backend/lib/matchPlanning.js';
 import {
+  canReassignEmptyTeamDuties,
   eligibleTeamDutyCandidates,
   friendlyEnrollmentReason,
   displayEnrollmentReason,
@@ -146,6 +147,7 @@ import {
 import {
   SLOT_ROWS,
   WEEKDAY_SLOT_ROWS,
+  SUNDAY_SLOT_ROWS,
   inferSlot,
   isExtraRosterService,
   additionalRosterServices,
@@ -160,6 +162,11 @@ import {
   sixWeekRosterWindow,
   weekStartsInRange,
 } from '../src/backend/lib/pdfRoster.js';
+import { manualCoversSpec } from '../src/backend/lib/serviceRuleLogic.js';
+import {
+  isInsideAnyPeriod,
+  publishedPeriodsFromRounds,
+} from '../src/backend/lib/publishedDraftRepair.js';
 import { defaultPlanningEndInput, toDateInputValue } from '../src/frontend/utils/formatDate.js';
 import { obligationMark } from '../src/frontend/utils/obligationMark.js';
 import {
@@ -333,11 +340,20 @@ assert('kitchen and evening bar are unmatched', picked.remove.map((s) => s.id).s
 const pdfDays = rosterDaySections();
 assert('pdf has 7 days', pdfDays.length === 7);
 assert(
-  'weekdays only bar evening; weekend full slots',
+  'weekdays only bar evening; zaterdag jeugdslots; zondag clubtijden',
   pdfDays[0].rows === WEEKDAY_SLOT_ROWS &&
     pdfDays[0].rows.length === 1 &&
     pdfDays[5].rows === SLOT_ROWS &&
+    pdfDays[6].rows === SUNDAY_SLOT_ROWS &&
     pdfDays[6].rows.length === 6,
+);
+assert(
+  'zondag-rooster toont ochtendtijd 09:00',
+  SUNDAY_SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'MORNING')?.time === '09:00 - 13:00',
+);
+assert(
+  'rowLabelTime kiest echte diensttijd',
+  rowLabelTime(SUNDAY_SLOT_ROWS[0], [{ time: '08:00 - 13:00' }]) === '08:00 - 13:00',
 );
 assert('pdf includes kitchen rows', SLOT_ROWS.some((row) => row.type === 'KITCHEN'));
 assert(
@@ -373,6 +389,18 @@ assert(
       ],
       SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'EVENING'),
     ).map((s) => s.id).join(',') === '1',
+);
+assert(
+  'handmatige bar met slot EXTRA hoort in bar-kolom',
+  isExtraRosterService({ type: 'BAR', slot: 'EXTRA', time: '09:00 - 13:00' }) === false &&
+    servicesForSlotRow(
+      [{ id: 9, type: 'BAR', slot: 'EXTRA', time: '09:00 - 13:00', required: 1, enrollments: [] }],
+      { slot: 'MORNING', type: 'BAR', time: '09:00 - 13:00' },
+    ).map((s) => s.id).join(',') === '9',
+);
+assert(
+  'handmatige keuken met slot EXTRA hoort in keuken-kolom',
+  isExtraRosterService({ type: 'KITCHEN', slot: 'EXTRA', time: '12:00 - 15:00' }) === false,
 );
 assert(
   'dubbele ochtenddienst telt één keer in de pdf-cel',
@@ -968,8 +996,35 @@ assert(
 assert(
   'officiële lege dienst mag teamplekken krijgen',
   shouldAttachTeamDutiesToLocked({ origin: 'AUTO', locked: true, teamDuties: [] }, [{ team: { id: 1 } }]) === true &&
-    shouldAttachTeamDutiesToLocked({ origin: 'MANUAL', teamDuties: [] }, [{ team: { id: 1 } }]) === false &&
-    shouldAttachTeamDutiesToLocked({ origin: 'AUTO', teamDuties: [{ id: 1 }] }, [{ team: { id: 1 } }]) === false,
+    shouldAttachTeamDutiesToLocked({ origin: 'MANUAL', teamDuties: [] }, [{ team: { id: 1 } }]) === false,
+);
+assert(
+  'lege teamplekken op locked mogen herverdeeld (geen TEAM-inschrijving)',
+  canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    teamDuties: [{ id: 1, teamId: 15 }],
+    enrollments: [],
+  }) === true &&
+    shouldAttachTeamDutiesToLocked(
+      { origin: 'AUTO', teamDuties: [{ id: 1, teamId: 15 }], enrollments: [] },
+      [{ team: { id: 16 } }],
+    ) === true,
+);
+assert(
+  'ingevulde teamplekken blijven staan na publiceren',
+  canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    teamDuties: [{ id: 1, teamId: 15 }],
+    enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
+  }) === false &&
+    shouldAttachTeamDutiesToLocked(
+      {
+        origin: 'AUTO',
+        teamDuties: [{ id: 1, teamId: 15 }],
+        enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
+      },
+      [{ team: { id: 16 } }],
+    ) === false,
 );
 assert(
   '7x7 mag op teamdienst via gekozen team-id',
@@ -1181,6 +1236,63 @@ const secondSat = teamDutyAssignments(morningRule, fiveMorningHomes, fairness);
 assert(
   'volgende zaterdag een ander team',
   firstSat[0].team.id !== secondSat[0].team.id,
+);
+
+// P7: O15/O16 eerlijke middag-rotatie — O16/O15-2 mogen niet structureel overgeslagen worden
+const o15_1 = { id: 151, name: 'O15-1', teamDutyUse: true, teamDutySlots: JSON.stringify(['SECOND', 'LAST']) };
+const o15_2 = { id: 152, name: 'O15-2', teamDutyUse: true, teamDutySlots: JSON.stringify(['SECOND', 'LAST']) };
+const o15_3jm = {
+  id: 153,
+  name: 'O15-3JM',
+  teamDutyUse: true,
+  teamDutySlots: JSON.stringify(['SECOND', 'LAST']),
+};
+const o16_1 = { id: 161, name: 'O16-1', teamDutyUse: true, teamDutySlots: JSON.stringify(['SECOND', 'LAST']) };
+assert(
+  'O15-2 en O16 zijn kandidaten voor middagregel',
+  teamFitsDutyRule(o15_2, secondRule) === true &&
+    teamFitsDutyRule(o16_1, secondRule) === true &&
+    teamFitsDutyRule(o15_3jm, secondRule) === true,
+);
+const oldYouthFairness = { counts: new Map() };
+const satHomes = [
+  [o15_1, o16_1],
+  [o15_3jm, o15_2],
+  [o15_1, o15_2],
+  [o16_1, o15_3jm],
+  [o15_1, o16_1],
+  [o15_2, o15_3jm],
+];
+const pickedOldYouth = [];
+for (const teams of satHomes) {
+  const homes = teams.map((team) => ({
+    team,
+    home: true,
+    time: '14:00',
+    date: new Date('2026-09-19T12:00:00'),
+  }));
+  const assign = teamDutyAssignments(secondRule, homes, oldYouthFairness);
+  assert('middag kiest precies één O13–O17 team', assign.length === 1);
+  pickedOldYouth.push(assign[0].team.id);
+  recordTeamDutyStand(oldYouthFairness, assign[0].team.id, new Date('2026-09-19'), assign[0].reserved);
+}
+const uniqueOldYouth = new Set(pickedOldYouth);
+assert(
+  'O15/O16-rotatie deelt uit over meerdere teams (niet alleen O15-1/O15-3JM)',
+  uniqueOldYouth.size >= 3 &&
+    pickedOldYouth.includes(152) &&
+    pickedOldYouth.includes(161),
+);
+assert(
+  'O16 wint van O15-1 als O15-1 al vaker stond',
+  teamDutyAssignments(
+    secondRule,
+    [
+      { team: o15_1, home: true, time: '14:00', date: new Date('2026-10-10T12:00:00') },
+      { team: o16_1, home: true, time: '14:00', date: new Date('2026-10-10T12:00:00') },
+    ],
+    { counts: new Map([[151, 6], [161, 0]]) },
+  )[0]?.team?.id === 161,
 );
 const kept = teamDutyAssignments(morningRule, fiveMorningHomes, {
   counts: new Map([[8, 9], [9, 0]]),
@@ -3559,6 +3671,81 @@ assert(
     'vaste persoon alleen zonder thuiswedstrijd',
     evaluateFixedPersonCondition(noMatchRule, sundayCtx).ok === true &&
       evaluateFixedPersonCondition(noMatchRule, sundayHomeCtx).ok === false,
+  );
+  assert(
+    'handmatige ochtendbar dekt AUTO-spec (geen dubbele dienst)',
+    manualCoversSpec(
+      [
+        {
+          origin: 'MANUAL',
+          active: true,
+          type: 'BAR',
+          date: new Date('2026-11-01T12:00:00.000Z'),
+          time: '08:00 - 13:00',
+          slot: 'EXTRA',
+        },
+      ],
+      {
+        type: 'BAR',
+        date: new Date('2026-11-01T12:00:00.000Z'),
+        time: '09:00 - 13:00',
+        slot: 'MORNING',
+        rule: { startTime: '09:00' },
+      },
+    ) === true,
+  );
+  assert(
+    'andere type handmatig dekt niet',
+    manualCoversSpec(
+      [
+        {
+          origin: 'MANUAL',
+          active: true,
+          type: 'KITCHEN',
+          date: new Date('2026-11-01T12:00:00.000Z'),
+          time: '09:00 - 13:00',
+          slot: 'MORNING',
+        },
+      ],
+      {
+        type: 'BAR',
+        date: new Date('2026-11-01T12:00:00.000Z'),
+        time: '09:00 - 13:00',
+        slot: 'MORNING',
+        rule: { startTime: '09:00' },
+      },
+    ) === false,
+  );
+  const publishedPeriods = publishedPeriodsFromRounds([
+    {
+      publishedAt: new Date('2026-10-16'),
+      fromDate: new Date('2026-10-12T00:00:00.000Z'),
+      toDate: new Date('2026-11-22T23:59:59.999Z'),
+    },
+  ]);
+  assert(
+    'gepubliceerde periode herkent dienstdatum',
+    isInsideAnyPeriod(new Date('2026-11-01T12:00:00.000Z'), publishedPeriods) === true &&
+      isInsideAnyPeriod(new Date('2026-12-01T12:00:00.000Z'), publishedPeriods) === false,
+  );
+  const inschrijvenSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Inschrijven.jsx'),
+    'utf8',
+  );
+  assert(
+    'inschrijven telt alleen draft als concept na publiceren',
+    inschrijvenSrc.includes('visibleServices.filter((s) => s.draft)') &&
+      !inschrijvenSrc.includes('s.draft || s.visibleToVolunteers === false'),
+  );
+  const renderStartForPublish = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/render-start.js'),
+    'utf8',
+  );
+  assert(
+    'render-start undraft + backfill gepubliceerde periode',
+    renderStartForPublish.includes('repairPublishedPeriodDrafts') &&
+      renderStartForPublish.includes('publishedPeriodBackfill') &&
+      renderStartForPublish.includes('Gepubliceerde periode bijwerken'),
   );
   assert(
     'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',

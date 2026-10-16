@@ -10,6 +10,7 @@ import {
   volunteerMayAccessService,
 } from '../lib/planningPeriod.js';
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
+import { inferSlot } from '../lib/pdfRoster.js';
 
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
@@ -151,11 +152,17 @@ router.post(
       }
       const serviceType = type === 'KITCHEN' ? 'KITCHEN' : 'BAR';
       const serviceKind = kind === 'TEAM' || assignedTeamId ? 'TEAM' : 'PERSONAL';
+      const timeTrimmed = time.trim();
+      const rawSlot = slot?.trim() || '';
+      const resolvedSlot =
+        rawSlot && rawSlot !== 'EXTRA'
+          ? rawSlot
+          : inferSlot({ type: serviceType, time: timeTrimmed, slot: rawSlot || 'EXTRA' });
       const service = await prisma.service.create({
         data: {
           type: serviceType,
           date: new Date(date),
-          time: time.trim(),
+          time: timeTrimmed,
           note: note?.trim() || null,
           required: Math.max(1, Number(required) || 2),
           location: location?.trim() || serviceLocation(serviceType),
@@ -164,7 +171,7 @@ router.post(
           locked: Boolean(locked),
           kind: serviceKind,
           origin: 'MANUAL',
-          slot: slot?.trim() || 'EXTRA',
+          slot: resolvedSlot,
           assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
           matchId: matchId ? Number(matchId) : null,
         },
@@ -183,12 +190,32 @@ router.put(
     try {
       const { type, date, time, note, required, location, active, draft, slot, assignedTeamId, locked, kind, matchId } =
         req.body;
+      const nextType =
+        type !== undefined ? (type === 'KITCHEN' ? 'KITCHEN' : 'BAR') : undefined;
+      const nextTime = time !== undefined ? time.trim() : undefined;
+      let nextSlot;
+      if (slot !== undefined || nextTime !== undefined || nextType !== undefined) {
+        const rawSlot = slot !== undefined ? slot?.trim() || '' : undefined;
+        if (rawSlot && rawSlot !== 'EXTRA') {
+          nextSlot = rawSlot;
+        } else if (nextTime || rawSlot === 'EXTRA' || rawSlot === '') {
+          const existing = await prisma.service.findUnique({
+            where: { id: Number(req.params.id) },
+            select: { type: true, time: true, slot: true },
+          });
+          nextSlot = inferSlot({
+            type: nextType || existing?.type,
+            time: nextTime || existing?.time,
+            slot: rawSlot || existing?.slot || 'EXTRA',
+          });
+        }
+      }
       const service = await prisma.service.update({
         where: { id: Number(req.params.id) },
         data: {
-          ...(type !== undefined && { type: type === 'KITCHEN' ? 'KITCHEN' : 'BAR' }),
+          ...(nextType !== undefined && { type: nextType }),
           ...(date !== undefined && { date: new Date(date) }),
-          ...(time !== undefined && { time: time.trim() }),
+          ...(nextTime !== undefined && { time: nextTime }),
           ...(note !== undefined && { note: note?.trim() || null }),
           ...(required !== undefined && { required: Math.max(1, Number(required) || 1) }),
           ...(location !== undefined && { location: location.trim() }),
@@ -196,7 +223,7 @@ router.put(
           ...(draft !== undefined && { draft: Boolean(draft) }),
           ...(locked !== undefined && { locked: Boolean(locked) }),
           ...(kind !== undefined && { kind: kind === 'TEAM' ? 'TEAM' : 'PERSONAL' }),
-          ...(slot !== undefined && { slot: slot?.trim() || null }),
+          ...(nextSlot !== undefined && { slot: nextSlot }),
           ...(assignedTeamId !== undefined && {
             assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
           }),

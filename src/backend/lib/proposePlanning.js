@@ -68,15 +68,6 @@ export async function publishDraftServices({ volunteerDeadline, from, to, weeks 
     ? resolvePlanningPeriod({ from, to, weeks })
     : await periodFromRound(prisma);
 
-  const result = await prisma.service.updateMany({
-    where: {
-      draft: true,
-      active: true,
-      date: { gte: period.from, lte: period.to },
-    },
-    data: { draft: false },
-  });
-
   const deadline = volunteerDeadline
     ? endOfDay(new Date(volunteerDeadline))
     : endOfDay(addWeeks(period.from, 1));
@@ -88,6 +79,7 @@ export async function publishDraftServices({ volunteerDeadline, from, to, weeks 
   }
 
   const round = await getActiveRound(prisma);
+  // Eerst publiceren, daarna concepten openzetten — zodat createAsDraft daarna false blijft.
   await prisma.planningRound.update({
     where: { id: round.id },
     data: {
@@ -97,6 +89,15 @@ export async function publishDraftServices({ volunteerDeadline, from, to, weeks 
       volunteerDeadline: deadline,
       publishedAt: new Date(),
     },
+  });
+
+  const result = await prisma.service.updateMany({
+    where: {
+      draft: true,
+      active: true,
+      date: { gte: period.from, lte: period.to },
+    },
+    data: { draft: false },
   });
 
   return { published: result.count, volunteerDeadline: deadline, period };

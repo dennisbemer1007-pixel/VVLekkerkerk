@@ -363,10 +363,28 @@ export function displayEnrollmentReason(reason) {
   return cleaned;
 }
 
-/** Officiële lege auto-dienst mag alsnog teamplekken krijgen als er nu thuisjeugd is. */
+/**
+ * Lege teamplekken (geen TEAM-inschrijving met naam) mogen opnieuw worden
+ * toegewezen voor eerlijke rotatie — ook na publiceren (locked).
+ */
+export function canReassignEmptyTeamDuties(service) {
+  if (!service || service.origin === 'MANUAL') return false;
+  const teamEnrolled = (service.enrollments || []).some(
+    (e) => e.kind === 'TEAM' && e.forTeamId && !e.noShow,
+  );
+  return !teamEnrolled;
+}
+
+/**
+ * Officiële auto-dienst mag teamplekken krijgen of lege teamplekken herverdelen
+ * als er thuisjeugd is. Ingevulde teamplekken (ouders) blijven staan.
+ */
 export function shouldAttachTeamDutiesToLocked(service, assignments) {
-  if (!assignments?.length) return false;
   if (service?.origin === 'MANUAL') return false;
-  if ((service?.teamDuties || []).length) return false;
-  return true;
+  if (!canReassignEmptyTeamDuties(service) && (service?.teamDuties || []).length > 0) {
+    return false;
+  }
+  if ((assignments || []).length > 0) return true;
+  // Geen kandidaten: lege teamplekken alsnog opruimen bij sync.
+  return (service?.teamDuties || []).length > 0 && canReassignEmptyTeamDuties(service);
 }

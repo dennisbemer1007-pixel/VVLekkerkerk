@@ -38,6 +38,11 @@ import {
   repairUnpublishedAutoServices,
 } from '../src/backend/lib/unpublishedAutoRepair.js';
 import { repairOrphanNoShows } from '../src/backend/lib/orphanNoShowRepair.js';
+import { repairPublishedPeriodDrafts } from '../src/backend/lib/publishedDraftRepair.js';
+import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.js';
+import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
+import { getActiveRound } from '../src/backend/lib/planningRounds.js';
+import { toIsoDate } from '../src/backend/lib/dates.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -196,6 +201,45 @@ try {
   console.warn('[render-start] Wees-no-shows opruimen:', err.message);
 }
 
+let publishedDraftRepair = { already: false };
+try {
+  publishedDraftRepair = await repairPublishedPeriodDrafts(prisma, { stateDir });
+  console.log(
+    '[render-start] Gepubliceerde diensten uit concept:',
+    JSON.stringify(publishedDraftRepair),
+  );
+} catch (err) {
+  console.warn('[render-start] Gepubliceerde diensten uit concept:', err.message);
+}
+
+let publishedPeriodBackfill = { skipped: true };
+try {
+  const round = await getActiveRound(prisma);
+  if (isRoundPublishedForVolunteers(round)) {
+    // Expliciete from/to: maakt ontbrekende AUTO-diensten aan; MANUAL/inschrijvingen blijven.
+    publishedPeriodBackfill = await trySyncPlanningFromMatches({
+      from: toIsoDate(round.fromDate),
+      to: toIsoDate(round.toDate),
+    });
+    console.log(
+      '[render-start] Gepubliceerde periode bijwerken:',
+      JSON.stringify({
+        created: publishedPeriodBackfill.created,
+        updated: publishedPeriodBackfill.updated,
+        removed: publishedPeriodBackfill.removed,
+        fixedEnrolled: publishedPeriodBackfill.fixedEnrolled,
+        skipped: publishedPeriodBackfill.skipped,
+        skippedNotPublished: publishedPeriodBackfill.skippedNotPublished,
+      }),
+    );
+  } else {
+    console.log('[render-start] Geen gepubliceerde periode — geen backfill-sync');
+  }
+} catch (err) {
+  console.warn('[render-start] Gepubliceerde periode bijwerken:', err.message);
+  publishedPeriodBackfill = { error: err.message };
+}
+
 const personsAfter = await prisma.person.count();
 const servicesAfter = await prisma.service.count();
 const enrollmentsAfter = await prisma.enrollment.count();
@@ -303,6 +347,15 @@ const statusFile = writeDeployStatus(stateDir, {
     unpublishedAutoServices: unpublishedAutoRepair,
     unpublishedAutoDraftFlags: unpublishedAutoDraftRepair,
     orphanNoShows: orphanNoShowRepair,
+    publishedPeriodDrafts: publishedDraftRepair,
+    publishedPeriodBackfill: {
+      created: publishedPeriodBackfill?.created ?? 0,
+      updated: publishedPeriodBackfill?.updated ?? 0,
+      removed: publishedPeriodBackfill?.removed ?? 0,
+      fixedEnrolled: publishedPeriodBackfill?.fixedEnrolled ?? 0,
+      skipped: publishedPeriodBackfill?.skipped ?? 0,
+      error: publishedPeriodBackfill?.error || null,
+    },
   },
   flags,
   mail: {

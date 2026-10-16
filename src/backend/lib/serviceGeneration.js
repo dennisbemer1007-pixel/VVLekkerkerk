@@ -5,6 +5,8 @@ import {
   datesInRange,
   evaluateFixedPersonCondition,
   evaluateRule,
+  inferSlotFromTime,
+  manualCoversSpec,
   sameCalendarDay,
   serviceKey,
   startTimeFromService,
@@ -19,12 +21,15 @@ import {
   pickTeamDutyAssignment,
   recordTeamDutyStand,
   requiredForTeamDuties,
+  canReassignEmptyTeamDuties,
   shouldAttachTeamDutiesToLocked,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
 import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
+
+export { manualCoversSpec };
 
 export const FIXED_PERSON_REASON = 'Vaste persoon volgens dienstregel';
 
@@ -158,7 +163,7 @@ async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceId
         ...(excludeServiceIds.length ? { id: { notIn: excludeServiceIds } } : {}),
       },
     },
-    select: { teamId: true, service: { select: { date: true } } },
+    select: { teamId: true, reserved: true, service: { select: { date: true } } },
   });
   return standsFromDutyRows(duties);
 }
@@ -251,10 +256,13 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     }
   }
 
+  // Diensten die we (her)verdelen niet meetellen in seizoensstand — anders blijven
+  // oude oneerlijke toewijzingen O15-1/O15-3JM "plakken" na publiceren.
   const excludeServiceIds = [];
   for (const spec of needed.values()) {
     for (const service of existingByKey.get(spec.key) || []) {
-      if (service.origin === 'MANUAL' || service.locked) continue;
+      if (service.origin === 'MANUAL') continue;
+      if (service.locked && !canReassignEmptyTeamDuties(service)) continue;
       excludeServiceIds.push(service.id);
     }
   }
@@ -322,9 +330,28 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     if (fix.removed) fixedRemoved += 1;
   }
 
+  // Alle bestaande diensten per kalenderdag (voor handmatige dekking over tijdverschil heen).
+  const existingByDay = new Map();
+  for (const service of existing) {
+    const dayKey = toIsoDate(service.date);
+    if (!existingByDay.has(dayKey)) existingByDay.set(dayKey, []);
+    existingByDay.get(dayKey).push(service);
+  }
+
   for (const spec of needed.values()) {
     const list = existingByKey.get(spec.key) || [];
+    const dayList = existingByDay.get(toIsoDate(spec.date)) || [];
     const target = pickExistingTarget(list);
+    const manualCover =
+      (target?.origin === 'MANUAL' ? target : null) ||
+      dayList.find(
+        (service) =>
+          service.origin === 'MANUAL' &&
+          service.active !== false &&
+          service.type === spec.type &&
+          (startTimeFromService(service) === String(spec.rule?.startTime || '').padStart(5, '0') ||
+            inferSlotFromTime(service) === (spec.slot || inferSlotFromTime({ time: spec.time }))),
+      );
 
     const enrolled = target?.enrollments?.length || 0;
     const payload = {
@@ -346,9 +373,17 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
 
     let serviceId = null;
 
+    if (manualCover) {
+      // Handmatig gaat voor: geen tweede AUTO-dienst, wél vaste persoon bijschrijven.
+      skipped += 1;
+      await applyFixedPerson(manualCover.id, spec);
+      continue;
+    }
+
     if (target) {
       if (target.origin === 'MANUAL') {
         skipped += 1;
+        await applyFixedPerson(target.id, spec);
         continue;
       }
       if (target.locked) {
@@ -402,9 +437,17 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     if (service.origin === 'MANUAL') continue;
     if (service.activityId) continue;
     if (service.enrollments?.length) continue;
-    const key = serviceKey(service.date, service.type, startTimeFromService(service));
-    if (needed.has(key)) continue;
     if (service.origin !== 'AUTO') continue;
+    const key = serviceKey(service.date, service.type, startTimeFromService(service));
+    const dayList = existingByDay.get(toIsoDate(service.date)) || [];
+    const supersededByManual = manualCoversSpec(dayList, {
+      type: service.type,
+      date: service.date,
+      time: service.time,
+      slot: service.slot || inferSlotFromTime(service),
+      rule: { startTime: startTimeFromService(service) },
+    });
+    if (needed.has(key) && !supersededByManual) continue;
     if (service.locked || service.active === false) {
       if (service.active !== false) {
         await prisma.service.update({ where: { id: service.id }, data: { active: false } });

@@ -23,7 +23,17 @@ export const SLOT_ROWS = [
   { slot: 'EVENING', type: 'KITCHEN', label: 'Keuken laat', time: '16:00 - 19:00' },
 ];
 
-export const WEEKDAY_SLOT_ROWS = [{ slot: 'EVENING', type: 'BAR', label: 'Bar avond', time: SLOT_TIMES.EVENING.BAR }];
+export const WEEKDAY_SLOT_ROWS = [{ slot: 'EVENING', type: 'BAR', label: 'Bar avond', time: '18:30 - 22:00' }];
+
+/** Zondag: echte standaardtijden uit de dienstregels (niet de zaterdag-jeugdslots). */
+export const SUNDAY_SLOT_ROWS = [
+  { slot: 'MORNING', type: 'BAR', label: 'Bar ochtend', time: '09:00 - 13:00' },
+  { slot: 'AFTERNOON', type: 'BAR', label: 'Bar middag', time: '13:00 - 16:00' },
+  { slot: 'EVENING', type: 'BAR', label: 'Bar avond', time: '16:30 - 19:30' },
+  { slot: 'MORNING', type: 'KITCHEN', label: 'Keuken ochtend', time: '10:00 - 13:00' },
+  { slot: 'AFTERNOON', type: 'KITCHEN', label: 'Keuken middag', time: '12:00 - 15:00' },
+  { slot: 'EVENING', type: 'KITCHEN', label: 'Keuken laat', time: '16:00 - 19:00' },
+];
 
 export function dayIndex(d) {
   const day = new Date(d).getDay();
@@ -41,12 +51,15 @@ export function inferSlot(service) {
   return 'EVENING';
 }
 
-/** Jaarplanning / handmatige extra dienst: niet in de vaste ochtend/middag/avond-rij. */
+/**
+ * Jaarplanning-activiteit blijft in de extra-rij.
+ * Handmatige bar/keuken (ook met slot EXTRA) horen in de vaste kolom op type + tijd.
+ */
 export function isExtraRosterService(service) {
   if (!service) return false;
-  if (service.slot === 'EXTRA') return true;
   if (service.activityId || service.activity?.id) return true;
-  return false;
+  if (service.type === 'BAR' || service.type === 'KITCHEN') return false;
+  return service.slot === 'EXTRA';
 }
 
 export function serviceEventLabel(service) {
@@ -211,12 +224,12 @@ export function rowLabelTime(row, services) {
   return real || row.time;
 }
 
-/** Doordeweeks alleen bar avond; weekend alle rijen. */
+/** Doordeweeks alleen bar avond; zaterdag jeugdslots; zondag clubtijden. */
 export function rosterDaySections() {
   return DAY_LABELS.map((label, day) => ({
     day,
     label,
-    rows: day <= 4 ? WEEKDAY_SLOT_ROWS : SLOT_ROWS,
+    rows: day <= 4 ? WEEKDAY_SLOT_ROWS : day === 6 ? SUNDAY_SLOT_ROWS : SLOT_ROWS,
   }));
 }
 
@@ -416,10 +429,10 @@ export function renderPlanningRoster(doc, {
       y += sectionH;
 
       for (const row of section.rows) {
-        // Eerste weekkolom voor voorbeeldtijd in label; cellen gebruiken echte tijden via tekst
-        const sampleList = weekStarts.length
-          ? servicesForSlotRow(byWeekDay.get(`${toIsoDate(weekStarts[0])}|${section.day}`) || [], row)
-          : [];
+        // Labeltijd: echte diensttijden over alle weken (zondag ≠ zaterdag-slots).
+        const sampleList = weekStarts.flatMap((ws) =>
+          servicesForSlotRow(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], row),
+        );
         const labelTime = rowLabelTime(row, sampleList);
         drawCell(doc, left, y, labelW, rowH, `${row.label}\n${labelTime}`, {
           bold: true,
