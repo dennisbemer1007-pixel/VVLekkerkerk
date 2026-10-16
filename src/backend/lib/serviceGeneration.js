@@ -28,7 +28,11 @@ import {
 } from './teamDutyPlanning.js';
 import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
-import { repairJoOYouthDuplicates, repairMoOWrongMerges } from './liveRepairs.js';
+import {
+  repairJoOYouthDuplicates,
+  repairMoOWrongMerges,
+  repairSeniorConditionTeamRules,
+} from './liveRepairs.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
 export { manualCoversSpec };
@@ -175,6 +179,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   // Eerst foute MO↔O-merges (#59) terugzetten, daarna alleen JO↔O samenvoegen.
   await repairMoOWrongMerges(prisma);
   await repairJoOYouthDuplicates(prisma);
+  await repairSeniorConditionTeamRules(prisma);
   await deactivateDuplicateServices(prisma);
   await deactivateOrphanAutoServices(prisma);
 

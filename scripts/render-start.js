@@ -30,6 +30,7 @@ import {
   repairAccidentalWeekendTeams,
   repairJoOYouthDuplicates,
   repairMoOWrongMerges,
+  repairSeniorConditionTeamRules,
   unlinkGuardianCopiedTeam,
   deactivateDuplicateServices,
   deactivateOrphanAutoServices,
@@ -164,6 +165,16 @@ try {
   console.log('[render-start] JO/O-jeugddubbels hersteld:', JSON.stringify(joOYouthRepair));
 } catch (err) {
   console.warn('[render-start] JO/O-jeugddubbels herstel:', err.message);
+}
+let seniorConditionRepair = { updated: 0 };
+try {
+  seniorConditionRepair = await repairSeniorConditionTeamRules(prisma);
+  console.log(
+    '[render-start] Senior-voorwaardeteams hersteld:',
+    JSON.stringify(seniorConditionRepair),
+  );
+} catch (err) {
+  console.warn('[render-start] Senior-voorwaardeteams herstel:', err.message);
 }
 try {
   childRepair = await unlinkGuardianCopiedTeam(prisma);
@@ -360,6 +371,7 @@ const statusFile = writeDeployStatus(stateDir, {
     weekendTeams: weekendRepair,
     moOWrongMerges: moOWrongMergeRepair,
     joOYouthTeams: joOYouthRepair,
+    seniorConditionTeams: seniorConditionRepair,
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,
     orphanAutoServices: orphanRepair,
