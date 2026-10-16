@@ -60,25 +60,28 @@ export function sameCalendarDay(a, b) {
 
 /**
  * Voorwaardeteam van een dienstregel. Na za/zo-split: "Lekkerkerk 1" vindt
- * "Lekkerkerk 1 (za)" op zaterdag. Inactieve conditionTeamId valt terug op naam.
+ * "Lekkerkerk 1 (za)" op zaterdag. Datum gaat vóór een vast conditionTeamId
+ * (anders blijft een (zo)-id op zaterdag hangen).
  */
 export function resolveConditionTeam(rule, teams, opts = {}) {
   const activeTeams = (teams || []).filter((t) => t && t.active !== false);
-  if (rule.conditionTeamId) {
-    const byId = activeTeams.find((t) => t.id === rule.conditionTeamId);
-    if (byId) return byId;
-  }
   let name = rule.conditionTeamName?.trim() || null;
   if (!name && rule.conditionTeamId) {
-    const inactive = (teams || []).find((t) => t.id === rule.conditionTeamId);
-    name = String(inactive?.name || '')
+    const linked = (teams || []).find((t) => t.id === rule.conditionTeamId);
+    name = String(linked?.name || '')
       .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
       .trim() || null;
   }
-  if (!name) return null;
-  name = name.replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '').trim();
-  const index = buildTeamIndex(activeTeams);
-  return findTeamInIndex(index, name, opts);
+  if (name) {
+    name = name.replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '').trim();
+    const index = buildTeamIndex(activeTeams);
+    const byName = findTeamInIndex(index, name, opts);
+    if (byName) return byName;
+  }
+  if (rule.conditionTeamId) {
+    return activeTeams.find((t) => t.id === rule.conditionTeamId) || null;
+  }
+  return null;
 }
 
 function baseScheduleOk(rule, ctx) {

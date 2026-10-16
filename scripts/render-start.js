@@ -46,6 +46,7 @@ import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.j
 import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
 import { getActiveRound } from '../src/backend/lib/planningRounds.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
+import { ensureSaturdayKitchenLateRule } from '../src/backend/lib/clubDefaults.js';
 import {
   compareBackupToLive,
   incidentBackupPath,
@@ -165,6 +166,18 @@ try {
   console.log('[render-start] JO/O-jeugddubbels hersteld:', JSON.stringify(joOYouthRepair));
 } catch (err) {
   console.warn('[render-start] JO/O-jeugddubbels herstel:', err.message);
+}
+let kitchenLateRuleEnsure = { updated: 0, created: 0 };
+try {
+  // Vóór senior-repair + backfill: keuken-laat-regel herstellen (kickoffAfter leeg,
+  // HOME_MATCH_TEAM Lekkerkerk 1 (za)). Anders mist za 24/10 de avondkeuken.
+  kitchenLateRuleEnsure = await ensureSaturdayKitchenLateRule();
+  console.log(
+    '[render-start] Zaterdag keuken-laat-regel:',
+    JSON.stringify(kitchenLateRuleEnsure),
+  );
+} catch (err) {
+  console.warn('[render-start] Zaterdag keuken-laat-regel:', err.message);
 }
 let seniorConditionRepair = { updated: 0 };
 try {
@@ -371,6 +384,7 @@ const statusFile = writeDeployStatus(stateDir, {
     weekendTeams: weekendRepair,
     moOWrongMerges: moOWrongMergeRepair,
     joOYouthTeams: joOYouthRepair,
+    kitchenLateRule: kitchenLateRuleEnsure,
     seniorConditionTeams: seniorConditionRepair,
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,
