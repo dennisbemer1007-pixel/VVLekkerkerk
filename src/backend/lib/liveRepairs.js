@@ -1,6 +1,7 @@
 import {
   buildTeamIndex,
   findTeamInIndex,
+  isBareSeniorClubTeam,
   stripWeekendSuffix,
 } from './knvbTeams.js';
 import { defaultTeamFunctions } from './teamFunctions.js';
@@ -188,8 +189,9 @@ export async function repairMoOWrongMerges(prisma) {
 }
 
 /**
- * Dienstregels na za/zo-split: conditionTeamName "Lekkerkerk 1 (za/zo — controleer)"
- * of conditionTeamId op inactief team → herstel naar actieve za-ploeg.
+ * Dienstregels na za/zo-split: conditionTeamName "Lekkerkerk 1 (za/zo — controleer)",
+ * inactief team, of conditionTeamId op de verkeerde weekend-variant (zo op een
+ * zaterdagregel) → herstel naar de ploeg die bij de weekdag van de regel past.
  */
 export async function repairSeniorConditionTeamRules(prisma) {
   const rules = await prisma.serviceRule.findMany({
@@ -201,6 +203,8 @@ export async function repairSeniorConditionTeamRules(prisma) {
     },
   });
   const teams = await prisma.team.findMany();
+  const activeTeams = teams.filter((t) => t.active !== false);
+  const index = buildTeamIndex(activeTeams);
   let updated = 0;
   const details = [];
   for (const rule of rules) {
@@ -210,22 +214,36 @@ export async function repairSeniorConditionTeamRules(prisma) {
       ? teams.find((t) => t.id === rule.conditionTeamId)
       : null;
     const linkedDead = linked && linked.active === false;
-    if (!needsNameCleanup && !linkedDead && linked) continue;
 
-    const cleaned = nameRaw
-      .replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '')
-      .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
-      .trim() || String(linked?.name || '')
-      .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
-      .trim();
+    const cleaned =
+      nameRaw
+        .replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '')
+        .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
+        .trim() ||
+      String(linked?.name || '')
+        .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
+        .trim();
     if (!cleaned) continue;
 
-    // Zaterdag-keuken: koppel aan (za)-team als die bestaat.
-    const index = buildTeamIndex(teams.filter((t) => t.active !== false));
-    const sat = findTeamInIndex(index, cleaned, { date: new Date('2026-10-24T12:00:00') });
+    // Weekdag van de regel → za- of zo-variant (zaterdag-keuken mag niet op (zo) blijven).
+    const preferDate =
+      Number(rule.weekday) === 0
+        ? new Date('2026-10-25T12:00:00')
+        : new Date('2026-10-24T12:00:00');
+    const preferred = findTeamInIndex(index, cleaned, { date: preferDate });
+    const bareName = stripWeekendSuffix(cleaned);
+    const wrongWeekend =
+      preferred &&
+      linked &&
+      linked.active !== false &&
+      linked.id !== preferred.id &&
+      isBareSeniorClubTeam(bareName);
+
+    if (!needsNameCleanup && !linkedDead && linked && !wrongWeekend) continue;
+
     const data = {
-      conditionTeamName: cleaned,
-      ...(sat ? { conditionTeamId: sat.id } : { conditionTeamId: null }),
+      conditionTeamName: bareName || cleaned,
+      ...(preferred ? { conditionTeamId: preferred.id } : { conditionTeamId: null }),
     };
     if (
       data.conditionTeamName === rule.conditionTeamName &&
@@ -241,6 +259,7 @@ export async function repairSeniorConditionTeamRules(prisma) {
       from: rule.conditionTeamName,
       to: data.conditionTeamName,
       teamId: data.conditionTeamId,
+      wrongWeekend: Boolean(wrongWeekend),
     });
   }
   return { updated, details };

@@ -78,6 +78,7 @@ import {
 import {
   pickCanonicalYouthDuplicate,
   repairMoOWrongMerges,
+  repairSeniorConditionTeamRules,
 } from '../src/backend/lib/liveRepairs.js';
 import {
   underQuota,
@@ -1228,6 +1229,70 @@ assert(
       zoTeam,
       { id: 30, name: 'Lekkerkerk 1', active: false },
     ]).sort().join(',') === '30,31,32',
+  );
+  assert(
+    'punt9b: sticky (zo)-id wijkt voor naam+zaterdag',
+    resolveConditionTeam(
+      { conditionTeamName: 'Lekkerkerk 1', conditionTeamId: 32 },
+      [zaTeam, zoTeam],
+      { date: satDate },
+    )?.id === 31,
+  );
+  assert(
+    'punt9b: aftrap vanaf 15:00 mist Lekkerkerk 1 om 14:30',
+    evaluateRule({ ...kitchenLate, kickoffAfter: '15:00' }, kitchenCtx).ok === false,
+  );
+  assert(
+    'punt9b: zonder aftrap-filter telt 14:30 wél',
+    evaluateRule({ ...kitchenLate, kickoffAfter: null }, kitchenCtx).ok === true,
+  );
+  assert(
+    'punt9b: sticky (zo)-id + related ids dekt za-wedstrijd',
+    evaluateRule(
+      {
+        ...kitchenLate,
+        conditionTeamName: 'Lekkerkerk 1',
+        conditionTeamId: 32,
+        kickoffAfter: null,
+      },
+      kitchenCtx,
+    ).ok === true,
+  );
+}
+
+{
+  // repairSeniorConditionTeamRules: (zo)-id op zaterdagregel → (za)
+  const store = {
+    rules: [
+      {
+        id: 1,
+        name: 'Zaterdag keuken laat',
+        weekday: 6,
+        conditionType: 'HOME_MATCH_TEAM',
+        conditionTeamName: 'Lekkerkerk 1',
+        conditionTeamId: 32,
+      },
+    ],
+    teams: [
+      { id: 31, name: 'Lekkerkerk 1 (za)', active: true },
+      { id: 32, name: 'Lekkerkerk 1 (zo)', active: true },
+    ],
+  };
+  const prismaMock = {
+    serviceRule: {
+      findMany: async () => store.rules.map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const rule = store.rules.find((r) => r.id === where.id);
+        Object.assign(rule, data);
+        return rule;
+      },
+    },
+    team: { findMany: async () => store.teams.map((t) => ({ ...t })) },
+  };
+  const repaired = await repairSeniorConditionTeamRules(prismaMock);
+  assert(
+    'senior-repair zet zaterdagregel van (zo) naar (za)',
+    repaired.updated === 1 && store.rules[0].conditionTeamId === 31,
   );
 }
 
@@ -4073,6 +4138,25 @@ assert(
       renderStartForPublish.includes('repairMoOWrongMerges(prisma)') &&
       renderStartForPublish.indexOf('repairMoOWrongMerges(prisma)') <
         renderStartForPublish.indexOf('repairJoOYouthDuplicates(prisma)'),
+  );
+  assert(
+    'render-start herstelt keuken-laat-regel vóór senior-repair en backfill',
+    renderStartForPublish.includes('ensureSaturdayKitchenLateRule') &&
+      renderStartForPublish.includes('Zaterdag keuken-laat-regel') &&
+      renderStartForPublish.indexOf('ensureSaturdayKitchenLateRule') <
+        renderStartForPublish.indexOf('repairSeniorConditionTeamRules') &&
+      renderStartForPublish.indexOf('ensureSaturdayKitchenLateRule') <
+        renderStartForPublish.indexOf('publishedPeriodBackfill'),
+  );
+  const clubDefaultsSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/clubDefaults.js'),
+    'utf8',
+  );
+  assert(
+    'clubDefaults wist kickoffAfter op zaterdag keuken laat',
+    clubDefaultsSrc.includes('ensureSaturdayKitchenLateRule') &&
+      clubDefaultsSrc.includes('kickoffAfter: null') &&
+      clubDefaultsSrc.includes("conditionTeamName: 'Lekkerkerk 1'"),
   );
   assert(
     'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',
