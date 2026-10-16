@@ -51,6 +51,10 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
     });
 
     const official = await planningIsOfficial();
+    const rules = await prisma.serviceRule.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
     const filename = clubhouse ? 'vvl-rooster-clubhuis.pdf' : 'vvl-rooster.pdf';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -64,6 +68,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
       official,
       clubhouse,
       maxWeeks,
+      rules,
     });
     doc.end();
   } catch (err) {
