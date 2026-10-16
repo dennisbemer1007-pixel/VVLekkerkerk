@@ -77,6 +77,7 @@ import {
 } from '../src/backend/lib/youthTeams.js';
 import {
   pickCanonicalYouthDuplicate,
+  removeStrayMidnightBarServices,
   repairMoOWrongMerges,
   repairSeniorConditionTeamRules,
 } from '../src/backend/lib/liveRepairs.js';
@@ -132,6 +133,10 @@ import {
   seniorWeekendSuffix,
 } from '../src/backend/lib/knvbTeams.js';
 import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
+import {
+  isStrayMidnightBarService,
+  planStandardSaturdayBarRules,
+} from '../src/backend/lib/clubDefaults.js';
 import {
   clampServiceDateFilter,
   inferPrecedingPeriod,
@@ -1293,6 +1298,156 @@ assert(
   assert(
     'senior-repair zet zaterdagregel van (zo) naar (za)',
     repaired.updated === 1 && store.rules[0].conditionTeamId === 31,
+  );
+}
+
+{
+  const kitchen = {
+    id: 50,
+    weekday: 6,
+    type: 'KITCHEN',
+    slot: 'EVENING',
+    name: 'Zaterdag keuken laat (Lekkerkerk 1 thuis)',
+    startTime: '16:00',
+    endTime: '19:00',
+    active: true,
+    conditionType: 'HOME_MATCH_TEAM',
+  };
+  const stray = {
+    id: 3,
+    weekday: 6,
+    type: 'BAR',
+    name: 'Losse avond',
+    startTime: '19:30',
+    endTime: '00:00',
+    slot: null,
+    active: true,
+    required: 2,
+    teamDuty: false,
+  };
+  const restored = planStandardSaturdayBarRules([kitchen, stray]);
+  assert(
+    'zaterdagbar 19:30–00:00 wordt de dienstregel 16:30–19:30',
+    restored.creates.length === 0 &&
+      restored.updates.length === 1 &&
+      restored.updates[0].id === 3 &&
+      restored.updates[0].data.startTime === '16:30' &&
+      restored.updates[0].data.endTime === '19:30' &&
+      restored.updates[0].data.slot === 'EVENING' &&
+      restored.updates.every((row) => row.id !== 50),
+  );
+  const created = planStandardSaturdayBarRules([kitchen]);
+  assert(
+    'ontbrekende avondbar wordt aangemaakt, keukenregel niet',
+    created.updates.length === 0 &&
+      created.creates.length === 1 &&
+      created.creates[0].type === 'BAR' &&
+      created.creates[0].startTime === '16:30' &&
+      created.creates[0].endTime === '19:30',
+  );
+  const proper = {
+    id: 1,
+    weekday: 6,
+    type: 'BAR',
+    name: 'Zaterdag bar laatste shift',
+    slot: 'EVENING',
+    teamDutySlotRole: 'LAST',
+    startTime: '16:30',
+    endTime: '19:30',
+    required: 2,
+    teamDuty: true,
+    teamDutyReserved: 1,
+    teamDutyAgeFrom: 13,
+    teamDutyAgeTo: 17,
+    active: true,
+  };
+  const extra = { ...stray, id: 8, name: 'Nacht' };
+  const both = planStandardSaturdayBarRules([proper, extra]);
+  assert(
+    'extra 19:30-regel gaat uit als de avondbar al klopt',
+    both.updates.length === 0 && both.creates.length === 0 && both.retireIds.join(',') === '8',
+  );
+  assert(
+    'lege AUTO 19:30 is losse bardienst, ingevuld of handmatig niet',
+    isStrayMidnightBarService({
+      type: 'BAR',
+      origin: 'AUTO',
+      time: '19:30 - 00:00',
+      enrollments: [],
+    }) === true &&
+      isStrayMidnightBarService({
+        type: 'BAR',
+        origin: 'AUTO',
+        time: '19:30 - 00:00',
+        enrollments: [{ id: 1 }],
+      }) === false &&
+      isStrayMidnightBarService({
+        type: 'BAR',
+        origin: 'MANUAL',
+        time: '19:30 - 00:00',
+        enrollments: [],
+      }) === false &&
+      isStrayMidnightBarService({
+        type: 'KITCHEN',
+        origin: 'AUTO',
+        time: '16:00 - 19:00',
+        enrollments: [],
+      }) === false,
+  );
+
+  const barStore = {
+    services: [
+      {
+        id: 1,
+        type: 'BAR',
+        origin: 'AUTO',
+        time: '19:30 - 00:00',
+        date: '2026-10-24T00:00:00.000Z',
+        enrollments: [],
+        locked: true,
+      },
+      {
+        id: 2,
+        type: 'BAR',
+        origin: 'AUTO',
+        time: '19:30 - 00:00',
+        date: '2026-10-24T00:00:00.000Z',
+        enrollments: [{ id: 9 }],
+        locked: true,
+      },
+      {
+        id: 3,
+        type: 'BAR',
+        origin: 'MANUAL',
+        time: '19:30 - 00:00',
+        date: '2026-10-24T00:00:00.000Z',
+        enrollments: [],
+      },
+      {
+        id: 4,
+        type: 'BAR',
+        origin: 'AUTO',
+        time: '16:30 - 19:30',
+        date: '2026-10-24T00:00:00.000Z',
+        enrollments: [],
+      },
+    ],
+  };
+  const deleted = [];
+  const barPrisma = {
+    serviceRule: { findMany: async () => [] },
+    service: {
+      findMany: async () => barStore.services.filter((row) => row.origin === 'AUTO'),
+      delete: async ({ where }) => {
+        deleted.push(where.id);
+        barStore.services = barStore.services.filter((row) => row.id !== where.id);
+      },
+    },
+  };
+  const cleaned = await removeStrayMidnightBarServices(barPrisma);
+  assert(
+    'lege AUTO-bar 19:30–00:00 op za 24/10 wordt verwijderd',
+    cleaned.removed === 1 && deleted.join(',') === '1' && barStore.services.some((row) => row.id === 2),
   );
 }
 
@@ -4075,6 +4230,28 @@ assert(
     ) === true,
   );
   assert(
+    'bar 19:30–00:00 dekt de avondbar 16:30–19:30 niet',
+    manualCoversSpec(
+      [
+        {
+          origin: 'MANUAL',
+          active: true,
+          type: 'BAR',
+          date: new Date('2026-10-24T12:00:00.000Z'),
+          time: '19:30 - 00:00',
+          slot: 'EVENING',
+        },
+      ],
+      {
+        type: 'BAR',
+        date: new Date('2026-10-24T12:00:00.000Z'),
+        time: '16:30 - 19:30',
+        slot: 'EVENING',
+        rule: { startTime: '16:30', endTime: '19:30' },
+      },
+    ) === false,
+  );
+  assert(
     'andere type handmatig dekt niet',
     manualCoversSpec(
       [
@@ -4140,12 +4317,21 @@ assert(
         renderStartForPublish.indexOf('repairJoOYouthDuplicates(prisma)'),
   );
   assert(
+    'render-start zet avondbar op de dienstregeltijd en haalt 19:30–00:00 weg',
+    renderStartForPublish.includes('ensureStandardSaturdayBarRules') &&
+      renderStartForPublish.includes('removeStrayMidnightBarServices') &&
+      renderStartForPublish.indexOf('await ensureStandardSaturdayBarRules') <
+        renderStartForPublish.indexOf('publishedPeriodBackfill') &&
+      renderStartForPublish.indexOf('publishedPeriodBackfill') <
+        renderStartForPublish.indexOf('await removeStrayMidnightBarServices'),
+  );
+  assert(
     'render-start herstelt keuken-laat-regel vóór senior-repair en backfill',
     renderStartForPublish.includes('ensureSaturdayKitchenLateRule') &&
       renderStartForPublish.includes('Zaterdag keuken-laat-regel') &&
-      renderStartForPublish.indexOf('ensureSaturdayKitchenLateRule') <
-        renderStartForPublish.indexOf('repairSeniorConditionTeamRules') &&
-      renderStartForPublish.indexOf('ensureSaturdayKitchenLateRule') <
+      renderStartForPublish.indexOf('await ensureSaturdayKitchenLateRule') <
+        renderStartForPublish.indexOf('await repairSeniorConditionTeamRules') &&
+      renderStartForPublish.indexOf('await ensureSaturdayKitchenLateRule') <
         renderStartForPublish.indexOf('publishedPeriodBackfill'),
   );
   const clubDefaultsSrc = fs.readFileSync(

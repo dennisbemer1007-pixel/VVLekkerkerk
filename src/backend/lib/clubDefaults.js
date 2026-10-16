@@ -88,39 +88,102 @@ export async function ensureSaturdayKitchenLateRule() {
   return { updated: 1, created: 0, teamId: zaTeam?.id ?? null, ruleId: existing.id };
 }
 
-/** Bestaande zaterdag-barregels gelijk trekken met de standaard teamdienst-tijden. */
-export async function ensureStandardSaturdayBarRules() {
-  const specs = defaultServiceRuleSeed().filter(
+export function normClock(value) {
+  const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+  return match ? `${String(Number(match[1])).padStart(2, '0')}:${match[2]}` : '';
+}
+
+/** Zaterdagbar 19:30–00:00 staat niet in de dienstregel (avondbar is 16:30–19:30). */
+export function isStrayMidnightBarRule(rule) {
+  return (
+    Number(rule?.weekday) === 6 &&
+    rule?.type === 'BAR' &&
+    normClock(rule.startTime) === '19:30' &&
+    normClock(rule.endTime) === '00:00'
+  );
+}
+
+/** Lege AUTO-bardienst 19:30–00:00. Handmatig, met inschrijvingen of aan een activiteit: laten staan. */
+export function isStrayMidnightBarService(service) {
+  if (!service || service.type !== 'BAR' || service.origin !== 'AUTO') return false;
+  if (service.activityId || service.activity?.id) return false;
+  if ((service.enrollments || []).length > 0) return false;
+  const match = String(service.time || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  if (!match) return false;
+  return normClock(match[1]) === '19:30' && normClock(match[2]) === '00:00';
+}
+
+function saturdayBarSpecs() {
+  return defaultServiceRuleSeed().filter(
     (rule) => rule.weekday === 6 && rule.type === 'BAR' && rule.teamDuty,
   );
-  let updated = 0;
-  for (const spec of specs) {
-    const existing = await prisma.serviceRule.findFirst({
-      where: {
-        weekday: 6,
-        type: 'BAR',
-        OR: [{ slot: spec.slot }, { teamDutySlotRole: spec.teamDutySlotRole }],
-      },
-    });
-    if (!existing) continue;
+}
+
+function findSaturdayBarRule(rules, spec, used) {
+  const pool = (rules || []).filter(
+    (rule) => !used.has(rule.id) && Number(rule.weekday) === 6 && rule.type === 'BAR',
+  );
+  const bySlotOrRole = pool.find(
+    (rule) =>
+      (spec.slot && rule.slot === spec.slot) ||
+      (spec.teamDutySlotRole && rule.teamDutySlotRole === spec.teamDutySlotRole),
+  );
+  if (bySlotOrRole) return bySlotOrRole;
+  const nameHit = pool.find((rule) => {
+    const name = String(rule.name || '').toLowerCase();
+    if (spec.teamDutySlotRole === 'LAST') return /laatste/.test(name);
+    if (spec.teamDutySlotRole === 'SECOND') return /tweede/.test(name);
+    if (spec.teamDutySlotRole === 'MORNING') return /ochtend/.test(name);
+    return false;
+  });
+  if (nameHit) return nameHit;
+  // Avondbar waarvan slot/rol is weggehaald en de tijden naar 19:30–00:00 zijn gezet.
+  if (spec.teamDutySlotRole === 'LAST') return pool.find((rule) => isStrayMidnightBarRule(rule)) || null;
+  return null;
+}
+
+/**
+ * Zet de drie zaterdag-teambardiensten op de tijden uit de standaard dienstregel.
+ * Ontbreekt de laatste shift, dan wordt die aangemaakt (16:30–19:30).
+ * Een extra regel 19:30–00:00 wordt uitgezet, zodat de backfill die dienst niet terugzet.
+ * Keukenregels worden niet aangeraakt.
+ */
+export function planStandardSaturdayBarRules(rules) {
+  const list = [...(rules || [])].sort((a, b) => Number(a.id) - Number(b.id));
+  const used = new Set();
+  const updates = [];
+  const creates = [];
+
+  for (const spec of saturdayBarSpecs()) {
+    const existing = findSaturdayBarRule(list, spec, used);
+    if (!existing) {
+      if (spec.teamDutySlotRole === 'LAST') {
+        creates.push({ ...spec, active: true });
+      }
+      continue;
+    }
+    used.add(existing.id);
     const missingTeamDutyConfig =
       Number(existing.teamDutyReserved || 0) === 0 ||
       existing.teamDutyAgeFrom == null ||
       existing.teamDutyAgeTo == null;
     const same =
-      existing.startTime === spec.startTime &&
-      existing.endTime === spec.endTime &&
+      normClock(existing.startTime) === spec.startTime &&
+      normClock(existing.endTime) === spec.endTime &&
       existing.required === spec.required &&
       existing.teamDuty === true &&
       existing.teamDutySlotRole === spec.teamDutySlotRole &&
+      existing.slot === spec.slot &&
+      existing.active !== false &&
       !missingTeamDutyConfig;
     if (same) continue;
-    await prisma.serviceRule.update({
-      where: { id: existing.id },
+    updates.push({
+      id: existing.id,
       data: {
         startTime: spec.startTime,
         endTime: spec.endTime,
         required: spec.required,
+        slot: spec.slot,
         teamDuty: true,
         teamDutySlotRole: spec.teamDutySlotRole,
         ...(missingTeamDutyConfig
@@ -134,9 +197,33 @@ export async function ensureStandardSaturdayBarRules() {
         active: true,
       },
     });
-    updated += 1;
   }
-  return { updated };
+
+  const retireIds = list
+    .filter((rule) => rule.active !== false && isStrayMidnightBarRule(rule) && !used.has(rule.id))
+    .map((rule) => rule.id);
+
+  return { updates, creates, retireIds };
+}
+
+/** Bestaande zaterdag-barregels gelijk trekken met de standaard teamdienst-tijden. */
+export async function ensureStandardSaturdayBarRules() {
+  const rules = await prisma.serviceRule.findMany({ where: { weekday: 6, type: 'BAR' } });
+  const plan = planStandardSaturdayBarRules(rules);
+  for (const data of plan.creates) {
+    await prisma.serviceRule.create({ data });
+  }
+  for (const update of plan.updates) {
+    await prisma.serviceRule.update({ where: { id: update.id }, data: update.data });
+  }
+  for (const id of plan.retireIds) {
+    await prisma.serviceRule.update({ where: { id }, data: { active: false } });
+  }
+  return {
+    updated: plan.updates.length,
+    created: plan.creates.length,
+    retired: plan.retireIds.length,
+  };
 }
 
 function isYouthTeamName(name) {

@@ -6,6 +6,7 @@ import {
   evaluateFixedPersonCondition,
   evaluateRule,
   inferSlotFromTime,
+  manualCoveringService,
   manualCoversSpec,
   sameCalendarDay,
   serviceKey,
@@ -31,6 +32,7 @@ import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './ser
 import {
   repairJoOYouthDuplicates,
   repairMoOWrongMerges,
+  removeStrayMidnightBarServices,
   repairSeniorConditionTeamRules,
 } from './liveRepairs.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
@@ -364,15 +366,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     const dayList = existingByDay.get(toIsoDate(spec.date)) || [];
     const target = pickExistingTarget(list);
     const manualCover =
-      (target?.origin === 'MANUAL' ? target : null) ||
-      dayList.find(
-        (service) =>
-          service.origin === 'MANUAL' &&
-          service.active !== false &&
-          service.type === spec.type &&
-          (startTimeFromService(service) === String(spec.rule?.startTime || '').padStart(5, '0') ||
-            inferSlotFromTime(service) === (spec.slot || inferSlotFromTime({ time: spec.time }))),
-      );
+      (target?.origin === 'MANUAL' ? target : null) || manualCoveringService(dayList, spec);
 
     const enrolled = target?.enrollments?.length || 0;
     const payload = {
@@ -479,6 +473,10 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     await prisma.service.delete({ where: { id: service.id } });
     removed += 1;
   }
+
+  // 19:30–00:00 hoort bij geen dienstregel. Lege AUTO weg, ook als de dienst officieel/gelocked was.
+  const strayBars = await removeStrayMidnightBarServices(prisma);
+  removed += strayBars.removed;
 
   // Lege automatische diensten buiten de nieuwe periode blijven anders inschrijfbaar.
   const outside = await prisma.service.findMany({

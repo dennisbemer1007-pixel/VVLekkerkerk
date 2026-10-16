@@ -6,6 +6,8 @@ import {
 } from './knvbTeams.js';
 import { defaultTeamFunctions } from './teamFunctions.js';
 import { youthGender, youthTeamAliasKey } from './youthTeams.js';
+import { toIsoDate } from './dates.js';
+import { isStrayMidnightBarRule, isStrayMidnightBarService } from './clubDefaults.js';
 
 /**
  * Kies welk JO/O-dubbelteam blijft: meeste leden, dan teamdienst aan, dan JO-naam, dan laagste id.
@@ -538,6 +540,40 @@ export async function unlinkGuardianCopiedTeam(prisma) {
     });
   }
   return { unlinked: changed.length, people: changed };
+}
+
+function isUtcSaturday(date) {
+  const iso = toIsoDate(date);
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return false;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12)).getUTCDay() === 6;
+}
+
+/**
+ * Verwijdert AUTO-bardiensten 19:30–00:00 zonder inschrijvingen.
+ * Alleen als geen actieve zaterdagregel die tijden nog voorschrijft
+ * (anders zet de backfill ze meteen terug). Handmatig en ingevuld blijven.
+ */
+export async function removeStrayMidnightBarServices(prisma) {
+  const rules = await prisma.serviceRule.findMany({
+    where: { active: true, type: 'BAR', weekday: 6 },
+  });
+  if (rules.some((rule) => isStrayMidnightBarRule(rule))) {
+    return { removed: 0, skippedRuleActive: true };
+  }
+
+  const services = await prisma.service.findMany({
+    where: { type: 'BAR', origin: 'AUTO' },
+    include: { enrollments: { select: { id: true } } },
+  });
+  const removed = [];
+  for (const service of services) {
+    if (!isStrayMidnightBarService(service)) continue;
+    if (!isUtcSaturday(service.date)) continue;
+    await prisma.service.delete({ where: { id: service.id } });
+    removed.push({ id: service.id, date: toIsoDate(service.date), time: service.time });
+  }
+  return { removed: removed.length, services: removed, skippedRuleActive: false };
 }
 
 export { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
