@@ -22,11 +22,13 @@ import {
   recordTeamDutyStand,
   requiredForTeamDuties,
   canReassignEmptyTeamDuties,
+  frozenTeamDutyFromService,
   shouldAttachTeamDutiesToLocked,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
 import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
+import { repairJoOYouthDuplicates } from './liveRepairs.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
 export { manualCoversSpec };
@@ -170,6 +172,8 @@ async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceId
 
 export async function generateServicesFromRules({ from, to, weeks } = {}) {
   await ensureClubDefaults();
+  // JO15 ↔ O15 samenvoegen vóór kandidaten/thuiswedstrijden worden gelezen.
+  await repairJoOYouthDuplicates(prisma);
   await deactivateDuplicateServices(prisma);
   await deactivateOrphanAutoServices(prisma);
 
@@ -286,16 +290,27 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
 
   for (const spec of specsOrdered) {
     const target = pickExistingTarget(existingByKey.get(spec.key) || []);
-    const keepTeamId = keepTeamIdFromExisting(target, spec.candidates);
     const dateKey = toIsoDate(spec.date);
-    const preferTeamId =
-      spec.rule.teamDutySlotRole === 'LAST' ? afternoonTeamByDate.get(dateKey) || null : null;
-    const assignments = pickTeamDutyAssignment(spec.rule, spec.candidates, {
-      counts: fairness.counts,
-      lastAt: fairness.lastAt,
-      keepTeamId,
-      preferTeamId,
-    });
+    // Ingevulde of handmatige diensten: bestaande teamplekken bevriezen (tellen wél mee
+    // voor rotatie), zodat we geen phantom-stands boeken voor teams die de plek niet krijgen.
+    const frozen = frozenTeamDutyFromService(target, spec.candidates);
+    const manualFrozen = target?.origin === 'MANUAL';
+    let assignments;
+    if (frozen) {
+      assignments = [frozen];
+    } else if (manualFrozen) {
+      assignments = [];
+    } else {
+      const keepTeamId = keepTeamIdFromExisting(target, spec.candidates);
+      const preferTeamId =
+        spec.rule.teamDutySlotRole === 'LAST' ? afternoonTeamByDate.get(dateKey) || null : null;
+      assignments = pickTeamDutyAssignment(spec.rule, spec.candidates, {
+        counts: fairness.counts,
+        lastAt: fairness.lastAt,
+        keepTeamId,
+        preferTeamId,
+      });
+    }
     const required = requiredForTeamDuties(spec.rule.required, spec.rule.teamDutySlotRole, assignments);
     spec.assignments = assignments;
     spec.required = required;

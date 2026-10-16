@@ -375,11 +375,13 @@ export default function DienstregelsBeheer() {
               />
             </div>
             <p className="sm:col-span-2 lg:col-span-3 text-xs text-gray-600">
-              Speelt er jeugd thuis, dan vult <strong>één team</strong> uit deze groep de
-              teamplekken: het team dat dit seizoen het minst heeft gestaan. De overige plekken
-              blijven open voor vrijwilligers. Voorbeeld: ochtend O8 t/m O12 met 2 teamplekken,
-              middag O13 t/m O17 met 2, avond O13 t/m O17 met 1. Voor 7x7 of senioren vink je
-              hieronder het team aan.
+              Speelt er jeugd thuis, dan vult <strong>één team</strong> uit deze
+              leeftijdsgroep de teamplekken: het team dat dit seizoen het minst heeft gestaan
+              (alleen teams met <strong>Teamdienst</strong> aan in Beheer → Teams). De overige
+              plekken blijven open voor vrijwilligers. Voorbeeld: ochtend O8–O12 met 2
+              teamplekken, middag O13–O17 met 2, avond O13–O17 met 1. De checklist hieronder is
+              alleen voor extra teams (7x7, senioren) — leeg laten na een reset is goed; jeugd
+              komt via leeftijd + Teamdienst-vinkje.
             </p>
             <fieldset className="sm:col-span-2 lg:col-span-3 space-y-2">
               <legend className="vvl-label">Ook deze teams (7x7, senioren, …)</legend>

@@ -28,6 +28,7 @@ import {
 } from '../src/backend/lib/liveDeploy.js';
 import {
   repairAccidentalWeekendTeams,
+  repairJoOYouthDuplicates,
   unlinkGuardianCopiedTeam,
   deactivateDuplicateServices,
   deactivateOrphanAutoServices,
@@ -146,6 +147,14 @@ try {
   console.log('[render-start] Weekend-teams hersteld:', JSON.stringify(weekendRepair));
 } catch (err) {
   console.warn('[render-start] Weekend-teams herstel:', err.message);
+}
+let joOYouthRepair = { merged: 0, teams: [] };
+try {
+  // Voor backfill: KNVB O15-1 ↔ app JO15-1 samenvoegen zodat thuiswedstrijden meetellen.
+  joOYouthRepair = await repairJoOYouthDuplicates(prisma);
+  console.log('[render-start] JO/O-jeugddubbels hersteld:', JSON.stringify(joOYouthRepair));
+} catch (err) {
+  console.warn('[render-start] JO/O-jeugddubbels herstel:', err.message);
 }
 try {
   childRepair = await unlinkGuardianCopiedTeam(prisma);
@@ -340,6 +349,7 @@ const statusFile = writeDeployStatus(stateDir, {
   migrations,
   repairs: {
     weekendTeams: weekendRepair,
+    joOYouthTeams: joOYouthRepair,
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,
     orphanAutoServices: orphanRepair,

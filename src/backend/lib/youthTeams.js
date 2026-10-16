@@ -11,6 +11,20 @@ export function parseJoAge(teamName) {
   return { age, group: age <= 12 ? 'young' : 'old' };
 }
 
+/**
+ * Canonieke sleutel voor JO/O/MO-duplicaten: "JO15-1" en "O15-1" → "O15-1".
+ * Zo koppelt KNVB-import (O…) aan bestaande app-teams (JO…).
+ */
+export function youthTeamAliasKey(teamName) {
+  const compact = String(teamName || '')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, '')
+    .trim();
+  const match = compact.match(/^(?:[JM])?O(\d{1,2}(?:[-.].*)?)$/i);
+  if (!match) return null;
+  return `O${match[1]}`.toUpperCase();
+}
+
 export function isYoungYouthTeam(teamName) {
   return parseJoAge(teamName)?.group === 'young';
 }

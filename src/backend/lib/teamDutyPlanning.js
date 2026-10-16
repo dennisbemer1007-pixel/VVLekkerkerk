@@ -149,7 +149,7 @@ export function eligibleTeamDutyCandidates(rule, homeMatches) {
   const out = [];
   for (const match of homeMatches || []) {
     const team = match.team;
-    if (!team || seen.has(team.id)) continue;
+    if (!team || team.active === false || seen.has(team.id)) continue;
     if (!teamFitsDutyRule(team, rule)) continue;
     if (!slotMatchesKickoff(role, match)) continue;
     seen.add(team.id);
@@ -364,15 +364,29 @@ export function displayEnrollmentReason(reason) {
 }
 
 /**
- * Lege teamplekken (geen TEAM-inschrijving met naam) mogen opnieuw worden
- * toegewezen voor eerlijke rotatie — ook na publiceren (locked).
+ * Lege teamplekken mogen opnieuw worden toegewezen voor eerlijke rotatie —
+ * ook na publiceren (locked). Zodra er een naam op de dienst staat (team of
+ * persoonlijk), of de dienst handmatig is, blijven teamplekken onaangeroerd.
  */
 export function canReassignEmptyTeamDuties(service) {
   if (!service || service.origin === 'MANUAL') return false;
-  const teamEnrolled = (service.enrollments || []).some(
-    (e) => e.kind === 'TEAM' && e.forTeamId && !e.noShow,
-  );
-  return !teamEnrolled;
+  const named = (service.enrollments || []).some((e) => !e.noShow);
+  return !named;
+}
+
+/** Bestaande teamplekken op een dienst die we niet mogen herschrijven. */
+export function frozenTeamDutyFromService(service, candidates = []) {
+  if (!service || service.origin === 'MANUAL') return null;
+  const duties = service.teamDuties || [];
+  if (!duties.length) return null;
+  if (canReassignEmptyTeamDuties(service)) return null;
+  const duty = duties[0];
+  const fromCandidates = (candidates || []).find((c) => Number(c.team.id) === Number(duty.teamId));
+  return {
+    team: fromCandidates?.team || { id: duty.teamId, name: `#${duty.teamId}` },
+    reserved: Math.max(1, Number(duty.reserved) || 1),
+    match: fromCandidates?.match || null,
+  };
 }
 
 /**

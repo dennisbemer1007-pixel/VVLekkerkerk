@@ -882,7 +882,9 @@ function TeamsBeheer() {
         <h2 className="font-heading text-lg font-black uppercase">Teamdiensten (plekken)</h2>
         <p className="text-sm text-gray-700">
           Aantal teamplekken dit seizoen. O9 met 2 plekken telt als 2; middag +
-          avond op één dag telt op.
+          avond op één dag telt op. Bij Beheer → Teams moet <strong>Teamdienst</strong> aan
+          staan voor elk jeugdteam dat meedraait (O8–O12 ochtend, O13–O17 middag+avond),
+          inclusief O15-2 en O16.
         </p>
         {teamOverview.length === 0 ? (
           <p className="text-sm text-gray-600">Geen teams met teamdienst dit seizoen.</p>

@@ -67,7 +67,13 @@ import {
   passwordResetEmailContent,
   swapCommitteeEmailContent,
 } from '../src/backend/lib/mail.js';
-import { isYoungYouthTeam, isOldYouthTeam, parseJoAge } from '../src/backend/lib/youthTeams.js';
+import {
+  isYoungYouthTeam,
+  isOldYouthTeam,
+  parseJoAge,
+  youthTeamAliasKey,
+} from '../src/backend/lib/youthTeams.js';
+import { pickCanonicalYouthDuplicate } from '../src/backend/lib/liveRepairs.js';
 import {
   underQuota,
   isUnavailableOn,
@@ -98,6 +104,7 @@ import {
 import {
   canReassignEmptyTeamDuties,
   eligibleTeamDutyCandidates,
+  frozenTeamDutyFromService,
   friendlyEnrollmentReason,
   displayEnrollmentReason,
   occupiedSlots,
@@ -999,7 +1006,7 @@ assert(
     shouldAttachTeamDutiesToLocked({ origin: 'MANUAL', teamDuties: [] }, [{ team: { id: 1 } }]) === false,
 );
 assert(
-  'lege teamplekken op locked mogen herverdeeld (geen TEAM-inschrijving)',
+  'lege teamplekken op locked mogen herverdeeld (geen namen)',
   canReassignEmptyTeamDuties({
     origin: 'AUTO',
     teamDuties: [{ id: 1, teamId: 15 }],
@@ -1009,6 +1016,14 @@ assert(
       { origin: 'AUTO', teamDuties: [{ id: 1, teamId: 15 }], enrollments: [] },
       [{ team: { id: 16 } }],
     ) === true,
+);
+assert(
+  'persoonlijke naam blokkeert herverdeling teamplekken',
+  canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    teamDuties: [{ id: 1, teamId: 15 }],
+    enrollments: [{ kind: 'PERSONAL', noShow: false }],
+  }) === false,
 );
 assert(
   'ingevulde teamplekken blijven staan na publiceren',
@@ -1024,7 +1039,59 @@ assert(
         enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
       },
       [{ team: { id: 16 } }],
-    ) === false,
+    ) === false &&
+    frozenTeamDutyFromService(
+      {
+        origin: 'AUTO',
+        teamDuties: [{ teamId: 15, reserved: 2 }],
+        enrollments: [{ kind: 'TEAM', forTeamId: 15, noShow: false }],
+      },
+      [{ team: { id: 15, name: 'O15-1' }, match: { id: 9 } }],
+    )?.team?.id === 15,
+);
+assert(
+  'JO/O alias-sleutel koppelt KNVB O aan app JO',
+  youthTeamAliasKey('JO15-1') === 'O15-1' &&
+    youthTeamAliasKey('O15-1') === 'O15-1' &&
+    youthTeamAliasKey('O15-3JM') === 'O15-3JM' &&
+    youthTeamAliasKey('MO16-1') === 'O16-1',
+);
+assert(
+  'canonieke jeugddubbel kiest team met leden + JO-naam',
+  pickCanonicalYouthDuplicate([
+    { id: 2, name: 'O15-2', teamDutyUse: true, _count: { members: 0 } },
+    { id: 1, name: 'JO15-2', teamDutyUse: true, _count: { members: 12 } },
+  ])?.id === 1,
+);
+assert(
+  'inactief thuisteam is geen teamdienst-kandidaat',
+  eligibleTeamDutyCandidates(
+    {
+      teamDuty: true,
+      teamDutySlotRole: 'SECOND',
+      teamDutyReserved: 2,
+      teamDutyAgeFrom: 13,
+      teamDutyAgeTo: 17,
+    },
+    [
+      {
+        team: { id: 161, name: 'O16-1', teamDutyUse: true, active: false },
+        home: true,
+        time: '14:00',
+      },
+      {
+        team: {
+          id: 152,
+          name: 'O15-2',
+          teamDutyUse: true,
+          active: true,
+          teamDutySlots: JSON.stringify(['SECOND', 'LAST']),
+        },
+        home: true,
+        time: '14:00',
+      },
+    ],
+  ).map((c) => c.team.id).join(',') === '152',
 );
 assert(
   '7x7 mag op teamdienst via gekozen team-id',
@@ -3746,6 +3813,11 @@ assert(
     renderStartForPublish.includes('repairPublishedPeriodDrafts') &&
       renderStartForPublish.includes('publishedPeriodBackfill') &&
       renderStartForPublish.includes('Gepubliceerde periode bijwerken'),
+  );
+  assert(
+    'render-start herstelt JO/O-jeugddubbels vóór backfill',
+    renderStartForPublish.includes('repairJoOYouthDuplicates') &&
+      renderStartForPublish.includes('JO/O-jeugddubbels'),
   );
   assert(
     'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',
