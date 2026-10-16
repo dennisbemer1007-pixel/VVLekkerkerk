@@ -29,7 +29,12 @@ export function shouldHideUnpublishedAutoService(service, publishedPeriods) {
   if (!service || service.origin !== 'AUTO') return false;
   if (service.active === false) return false;
   if (service.activity?.openForEnrollment === true) return false;
+  // Nooit concept zetten binnen een gepubliceerde periode.
   if (isInsidePublishedPeriod(service.date, publishedPeriods)) return false;
+  if ((publishedPeriods || []).length === 0) {
+    // Zonder enige publicatie: verberg toekomstige AUTO (oude #56/#57-gedrag).
+    return true;
+  }
   return true;
 }
 

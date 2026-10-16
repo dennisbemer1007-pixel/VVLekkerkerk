@@ -40,7 +40,8 @@ export default function ServiceLine({
     .filter(Boolean);
   const spots = rosterSpotSummary(service);
   const extra = (householdNames.length ? householdNames : spots).join(', ');
-  const isConcept = Boolean(service.draft) || service.visibleToVolunteers === false;
+  // Alleen echte concepten (draft). Na publiceren verdwijnt het label.
+  const isConcept = Boolean(service.draft);
 
   return (
     <div

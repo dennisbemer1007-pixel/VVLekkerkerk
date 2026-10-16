@@ -4,6 +4,32 @@ import { parseTimeStartMinutes } from './time.js';
 import { findTeamInIndex, buildTeamIndex } from './knvbTeams.js';
 import { eligibleTeamDutyCandidates } from './teamDutyPlanning.js';
 
+/** Slot afleiden uit begintijd (zelfde drempels als rooster-PDF). */
+export function inferSlotFromTime(service) {
+  if (service?.slot && service.slot !== 'EXTRA') return service.slot;
+  const t = String(service?.time || '');
+  const start = t.match(/(\d{1,2})[:.](\d{2})/);
+  if (!start) return 'EXTRA';
+  const minutes = Number(start[1]) * 60 + Number(start[2]);
+  if (minutes < 12 * 60) return 'MORNING';
+  if (minutes < 16 * 60 + 30) return 'AFTERNOON';
+  return 'EVENING';
+}
+
+/** Handmatige dienst dekt deze AUTO-spec (zelfde type/dag/tijd of zelfde dagdeel). */
+export function manualCoversSpec(existingList, spec) {
+  const wantedSlot = spec.slot || inferSlotFromTime({ time: spec.time, slot: spec.slot });
+  const wantedStart = String(spec.rule?.startTime || '').padStart(5, '0');
+  return (existingList || []).some((service) => {
+    if (!service || service.origin !== 'MANUAL' || service.active === false) return false;
+    if (service.type !== spec.type) return false;
+    if (!sameCalendarDay(service.date, spec.date)) return false;
+    const start = startTimeFromService(service);
+    if (wantedStart && start === wantedStart) return true;
+    return inferSlotFromTime(service) === wantedSlot;
+  });
+}
+
 export function serviceKey(date, type, startTime) {
   return `${toIsoDate(startOfDay(date))}|${type}|${startTime}`;
 }

@@ -149,7 +149,7 @@ export function eligibleTeamDutyCandidates(rule, homeMatches) {
   const out = [];
   for (const match of homeMatches || []) {
     const team = match.team;
-    if (!team || seen.has(team.id)) continue;
+    if (!team || team.active === false || seen.has(team.id)) continue;
     if (!teamFitsDutyRule(team, rule)) continue;
     if (!slotMatchesKickoff(role, match)) continue;
     seen.add(team.id);
@@ -363,10 +363,42 @@ export function displayEnrollmentReason(reason) {
   return cleaned;
 }
 
-/** Officiële lege auto-dienst mag alsnog teamplekken krijgen als er nu thuisjeugd is. */
+/**
+ * Lege teamplekken mogen opnieuw worden toegewezen voor eerlijke rotatie —
+ * ook na publiceren (locked). Zodra er een naam op de dienst staat (team of
+ * persoonlijk), of de dienst handmatig is, blijven teamplekken onaangeroerd.
+ */
+export function canReassignEmptyTeamDuties(service) {
+  if (!service || service.origin === 'MANUAL') return false;
+  const named = (service.enrollments || []).some((e) => !e.noShow);
+  return !named;
+}
+
+/** Bestaande teamplekken op een dienst die we niet mogen herschrijven. */
+export function frozenTeamDutyFromService(service, candidates = []) {
+  if (!service || service.origin === 'MANUAL') return null;
+  const duties = service.teamDuties || [];
+  if (!duties.length) return null;
+  if (canReassignEmptyTeamDuties(service)) return null;
+  const duty = duties[0];
+  const fromCandidates = (candidates || []).find((c) => Number(c.team.id) === Number(duty.teamId));
+  return {
+    team: fromCandidates?.team || { id: duty.teamId, name: `#${duty.teamId}` },
+    reserved: Math.max(1, Number(duty.reserved) || 1),
+    match: fromCandidates?.match || null,
+  };
+}
+
+/**
+ * Officiële auto-dienst mag teamplekken krijgen of lege teamplekken herverdelen
+ * als er thuisjeugd is. Ingevulde teamplekken (ouders) blijven staan.
+ */
 export function shouldAttachTeamDutiesToLocked(service, assignments) {
-  if (!assignments?.length) return false;
   if (service?.origin === 'MANUAL') return false;
-  if ((service?.teamDuties || []).length) return false;
-  return true;
+  if (!canReassignEmptyTeamDuties(service) && (service?.teamDuties || []).length > 0) {
+    return false;
+  }
+  if ((assignments || []).length > 0) return true;
+  // Geen kandidaten: lege teamplekken alsnog opruimen bij sync.
+  return (service?.teamDuties || []).length > 0 && canReassignEmptyTeamDuties(service);
 }
