@@ -240,29 +240,55 @@ export function slotCellHasOpen(services) {
     slotCellText(services) === 'nog open';
 }
 
-export function rowLabelTime(row, services) {
+function hhmm(value) {
+  const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+  return match ? `${String(Number(match[1])).padStart(2, '0')}:${match[2]}` : '';
+}
+
+/** Tijd van de dienstregel voor deze roosterrij (weekdag + type + slot). */
+export function ruleTimeForRow(row, weekday, rules) {
+  const matches = (rules || []).filter((rule) => {
+    if (!rule || rule.active === false) return false;
+    if (Number(rule.weekday) !== Number(weekday)) return false;
+    if (rule.type !== row.type) return false;
+    const slot = rule.slot && rule.slot !== 'EXTRA'
+      ? rule.slot
+      : inferSlot({ time: `${rule.startTime} - ${rule.endTime}`, slot: rule.slot });
+    return slot === row.slot;
+  });
+  if (!matches.length) return String(row.time || '').trim();
+  const best = [...matches].sort(
+    (a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) || (Number(a.id) || 0) - (Number(b.id) || 0),
+  )[0];
+  const start = hhmm(best.startTime);
+  const end = hhmm(best.endTime);
+  if (!start || !end) return String(row.time || '').trim();
+  return `${start} - ${end}`;
+}
+
+/**
+ * Labeltijd is de dienstregel van de rij.
+ * Eén afwijkende dienst (ook als die overlapt) bepaalt de rij niet.
+ */
+export function rowLabelTime(row, _services) {
   const regel = String(row?.time || '').trim();
-  const fitting = (services || [])
-    .map((s) => String(s.time || '').trim())
-    .filter((time) => time && timeOverlapsRow(time, regel));
-  if (!fitting.length) return regel;
-  const counts = new Map();
-  for (const time of fitting) counts.set(time, (counts.get(time) || 0) + 1);
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const [topTime, topCount] = ranked[0];
-  const second = ranked[1]?.[1] || 0;
-  // Eén afwijkende tijd mag de rij niet bepalen als een andere tijd vaker voorkomt.
-  if (topCount > second) return topTime;
-  return regel || topTime;
+  if (regel) return regel;
+  const fitting = (_services || []).map((s) => String(s.time || '').trim()).filter(Boolean);
+  return fitting[0] || '';
 }
 
 /** Doordeweeks alleen bar avond; zaterdag jeugdslots; zondag clubtijden. */
-export function rosterDaySections() {
-  return DAY_LABELS.map((label, day) => ({
-    day,
-    label,
-    rows: day <= 4 ? WEEKDAY_SLOT_ROWS : day === 6 ? SUNDAY_SLOT_ROWS : SLOT_ROWS,
-  }));
+export function rosterDaySections(rules) {
+  return DAY_LABELS.map((label, day) => {
+    const base = day <= 4 ? WEEKDAY_SLOT_ROWS : day === 6 ? SUNDAY_SLOT_ROWS : SLOT_ROWS;
+    if (!rules?.length) return { day, label, rows: base };
+    const weekday = day === 6 ? 0 : day + 1;
+    return {
+      day,
+      label,
+      rows: base.map((row) => ({ ...row, time: ruleTimeForRow(row, weekday, rules) })),
+    };
+  });
 }
 
 /** Rooster-PDF: altijd 6 weken vanaf de download-dag, niet de hele planning. */
@@ -351,10 +377,11 @@ export function renderPlanningRoster(doc, {
   official = false,
   clubhouse = false,
   maxWeeks = 60,
+  rules = null,
 }) {
   const allWeeks = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
   const byWeekDay = groupServicesByWeekDay(services || []);
-  const daySections = rosterDaySections();
+  const daySections = rosterDaySections(rules);
   const chunkSize = clubhouse ? 1 : 6;
   const chunks = [];
   for (let i = 0; i < Math.max(allWeeks.length, 1); i += chunkSize) {

@@ -170,7 +170,7 @@ try {
 }
 let saturdayBarRules = { updated: 0, created: 0, retired: 0 };
 try {
-  // Avondbar hoort 16:30–19:30 te zijn. 19:30–00:00 is geen dienstregel.
+  // Alleen een ontbrekende zaterdagbar aanvullen. Bestaande clubregels blijven staan.
   saturdayBarRules = await ensureStandardSaturdayBarRules();
   console.log('[render-start] Zaterdag-barregels:', JSON.stringify(saturdayBarRules));
 } catch (err) {
@@ -178,8 +178,7 @@ try {
 }
 let kitchenLateRuleEnsure = { updated: 0, created: 0 };
 try {
-  // Vóór senior-repair + backfill: keuken-laat-regel herstellen (kickoffAfter leeg,
-  // HOME_MATCH_TEAM Lekkerkerk 1 (za)). Anders mist za 24/10 de avondkeuken.
+  // Alleen aanmaken als de keuken-laat-regel ontbreekt. Een bestaande regel niet overschrijven.
   kitchenLateRuleEnsure = await ensureSaturdayKitchenLateRule();
   console.log(
     '[render-start] Zaterdag keuken-laat-regel:',

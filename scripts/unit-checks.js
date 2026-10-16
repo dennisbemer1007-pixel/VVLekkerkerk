@@ -373,9 +373,29 @@ assert(
   SUNDAY_SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'MORNING')?.time === '09:00 - 13:00',
 );
 assert(
-  'rowLabelTime kiest echte diensttijd',
-  rowLabelTime(SUNDAY_SLOT_ROWS[0], [{ time: '08:00 - 13:00' }]) === '08:00 - 13:00',
+  'één overlappende afwijkende tijd wint niet van de dienstregel',
+  rowLabelTime(SUNDAY_SLOT_ROWS[0], [{ time: '08:00 - 13:00' }]) === '09:00 - 13:00',
 );
+{
+  const withSundayRule = rosterDaySections([
+    {
+      id: 1,
+      weekday: 0,
+      type: 'BAR',
+      slot: 'MORNING',
+      startTime: '08:15',
+      endTime: '12:45',
+      active: true,
+      sortOrder: 1,
+    },
+  ]);
+  const morning = withSundayRule[6].rows.find((r) => r.type === 'BAR' && r.slot === 'MORNING');
+  assert(
+    'zondagrij neemt de tijd uit de dienstregel',
+    morning?.time === '08:15 - 12:45' &&
+      rowLabelTime(morning, [{ time: '09:00 - 13:00' }, { time: '08:15 - 12:45' }]) === '08:15 - 12:45',
+  );
+}
 assert(
   'één afwijkende 19:30-bar bepaalt de avondrij niet',
   rowLabelTime(
@@ -684,10 +704,24 @@ assert(
       },
     ]) === 'Denise de Groot, O8-1JM, O8-1JM',
 );
-assert(
-  'pdf gebruikt echte diensttijd in label',
-  rowLabelTime(WEEKDAY_SLOT_ROWS[0], [{ time: '19:00 - 22:00' }]) === '19:00 - 22:00',
-);
+{
+  const tuesday = rosterDaySections([
+    {
+      id: 2,
+      weekday: 2,
+      type: 'BAR',
+      slot: 'EVENING',
+      startTime: '19:00',
+      endTime: '22:00',
+      active: true,
+    },
+  ]);
+  assert(
+    'pdf gebruikt de dienstregeltijd in het label, niet één afwijkende dienst',
+    tuesday[1].rows[0].time === '19:00 - 22:00' &&
+      rowLabelTime(tuesday[1].rows[0], [{ time: '18:30 - 22:00' }]) === '19:00 - 22:00',
+  );
+}
 assert(
   'knvb senior za/zo label',
   clubTeamLabel('Lekkerkerk 2', { date: '2026-10-10' }) === 'Lekkerkerk 2 (za)' &&
@@ -1360,23 +1394,21 @@ assert(
   };
   const restored = planStandardSaturdayBarRules([kitchen, stray]);
   assert(
-    'zaterdagbar 19:30–00:00 wordt de dienstregel 16:30–19:30',
-    restored.creates.length === 0 &&
-      restored.updates.length === 1 &&
-      restored.updates[0].id === 3 &&
-      restored.updates[0].data.startTime === '16:30' &&
-      restored.updates[0].data.endTime === '19:30' &&
-      restored.updates[0].data.slot === 'EVENING' &&
-      restored.updates.every((row) => row.id !== 50),
+    '19:30-regel wordt niet overschreven; ontbrekende avondbar komt erbij',
+    restored.updates.length === 0 &&
+      restored.retireIds.length === 0 &&
+      restored.creates.some(
+        (rule) => rule.type === 'BAR' && rule.startTime === '16:30' && rule.endTime === '19:30',
+      ) &&
+      restored.creates.every((rule) => rule.type !== 'KITCHEN'),
   );
   const created = planStandardSaturdayBarRules([kitchen]);
   assert(
-    'ontbrekende avondbar wordt aangemaakt, keukenregel niet',
+    'ontbrekende zaterdag-bars worden aangemaakt, keukenregel niet',
     created.updates.length === 0 &&
-      created.creates.length === 1 &&
-      created.creates[0].type === 'BAR' &&
-      created.creates[0].startTime === '16:30' &&
-      created.creates[0].endTime === '19:30',
+      created.creates.length === 3 &&
+      created.creates.every((rule) => rule.type === 'BAR') &&
+      created.creates.some((rule) => rule.startTime === '16:30' && rule.endTime === '19:30'),
   );
   const proper = {
     id: 1,
@@ -1397,8 +1429,11 @@ assert(
   const extra = { ...stray, id: 8, name: 'Nacht' };
   const both = planStandardSaturdayBarRules([proper, extra]);
   assert(
-    'extra 19:30-regel gaat uit als de avondbar al klopt',
-    both.updates.length === 0 && both.creates.length === 0 && both.retireIds.join(',') === '8',
+    'extra 19:30-regel blijft staan en de bestaande avondbar wordt niet herschreven',
+    both.updates.length === 0 &&
+      both.retireIds.length === 0 &&
+      both.creates.every((rule) => rule.teamDutySlotRole !== 'LAST') &&
+      both.creates.some((rule) => rule.teamDutySlotRole === 'MORNING'),
   );
   assert(
     'lege AUTO 19:30 is losse bardienst, ingevuld of handmatig niet',
@@ -4372,10 +4407,12 @@ assert(
     'utf8',
   );
   assert(
-    'clubDefaults wist kickoffAfter op zaterdag keuken laat',
+    'clubDefaults overschrijft een bestaande keuken-laat-regel niet',
     clubDefaultsSrc.includes('ensureSaturdayKitchenLateRule') &&
+      clubDefaultsSrc.includes('preserved: true') &&
       clubDefaultsSrc.includes('kickoffAfter: null') &&
-      clubDefaultsSrc.includes("conditionTeamName: 'Lekkerkerk 1'"),
+      clubDefaultsSrc.includes("conditionTeamName: 'Lekkerkerk 1'") &&
+      !clubDefaultsSrc.includes('needsFix'),
   );
   assert(
     'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',
@@ -4465,6 +4502,13 @@ const calendarApi = spawnSync(process.execPath, ['scripts/calendar-api-check.js'
   stdio: 'inherit',
 });
 assert('agenda-API: 404 uit, ICS en limiet', calendarApi.status === 0);
+
+const chantalPlanning = spawnSync(process.execPath, ['scripts/chantal-planning-regression.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+  env: { ...process.env, TZ: 'UTC', NODE_ENV: 'production' },
+});
+assert('volledige planning met Chantal-csv en dienstregels', chantalPlanning.status === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

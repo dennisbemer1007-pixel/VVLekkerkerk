@@ -178,6 +178,7 @@ async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceId
 }
 
 export async function generateServicesFromRules({ from, to, weeks } = {}) {
+  // Ontbrekende standaardregels aanvullen. Bewaarde tijden en voorwaarden blijven staan.
   await ensureClubDefaults();
   // Eerst foute MO↔O-merges (#59) terugzetten, daarna alleen JO↔O samenvoegen.
   await repairMoOWrongMerges(prisma);
