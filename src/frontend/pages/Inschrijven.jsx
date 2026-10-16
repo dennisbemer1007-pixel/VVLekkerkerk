@@ -8,7 +8,8 @@ import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { ScheidsMijn, ScheidsOpen } from '../scheids/ScheidsVrijwilliger.jsx';
-import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
+import { voorWieChoices } from '../utils/voorWie.js';
+import { householdIdsStillOpen } from '../../backend/lib/enrollmentAccess.js';
 
 function formatEnrollConfirm(service) {
   const when = new Date(service.date).toLocaleDateString('nl-NL', {
@@ -29,7 +30,7 @@ export default function Inschrijven({ mode = 'open' }) {
   const [msg, setMsg] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [children, setChildren] = useState([]);
-  const [pendingId, setPendingId] = useState(null);
+  const [pendingChoices, setPendingChoices] = useState(null);
   const [onlyOpen, setOnlyOpen] = useState(mode === 'open');
   const [confirmText, setConfirmText] = useState('');
   const [matchBlock, setMatchBlock] = useState(null);
@@ -133,12 +134,19 @@ export default function Inschrijven({ mode = 'open' }) {
       }
       return;
     }
-    if (needsVoorWiePopup(choices)) {
-      setPendingId(serviceId);
-      selectService(serviceId);
+    const service = services.find((row) => row.id === serviceId);
+    const openIds = new Set(householdIdsStillOpen(choices.map((choice) => choice.id), service?.enrollments));
+    const openChoices = choices.filter((choice) => openIds.has(Number(choice.id)));
+    if (openChoices.length === 0) {
+      setError('Iedereen van je huishouden staat al op deze dienst.');
       return;
     }
-    await enroll(serviceId, personId);
+    if (openChoices.length === 1) {
+      await enroll(serviceId, openChoices[0].id);
+      return;
+    }
+    setPendingChoices({ serviceId, choices: openChoices });
+    selectService(serviceId);
   };
 
   const handleUitschrijven = async (enrollmentId) => {
@@ -249,6 +257,7 @@ export default function Inschrijven({ mode = 'open' }) {
                   committeeOverride={can('beheer')}
                   onInschrijven={handleInschrijven}
                   onUitschrijven={handleUitschrijven}
+                  onAdminRemoveEnrollment={can('beheer') ? handleUitschrijven : undefined}
                 />
               </div>
             ))
@@ -256,13 +265,13 @@ export default function Inschrijven({ mode = 'open' }) {
       />
 
       <VoorWieDialog
-        open={Boolean(pendingId)}
-        choices={choices}
-        onClose={() => setPendingId(null)}
+        open={Boolean(pendingChoices)}
+        choices={pendingChoices?.choices || []}
+        onClose={() => setPendingChoices(null)}
         onChoose={async (choice) => {
-          const id = pendingId;
-          setPendingId(null);
-          await enroll(id, choice.id);
+          const serviceId = pendingChoices?.serviceId;
+          setPendingChoices(null);
+          if (serviceId) await enroll(serviceId, choice.id);
         }}
       />
 

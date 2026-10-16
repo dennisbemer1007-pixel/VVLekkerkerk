@@ -5,6 +5,7 @@ import {
   occupancyStatus,
 } from '../utils/formatDate.js';
 import { unenrollActions } from '../utils/uitschrijven.js';
+import { householdIdsStillOpen, withinRecentUnenrollWindow } from '../../backend/lib/enrollmentAccess.js';
 import { enrollmentNameWithTeam, occupancyFraction, teamSpotLines } from '../utils/teamLines.js';
 import { obligationMark } from '../utils/obligationMark.js';
 
@@ -41,8 +42,6 @@ export default function DienstCard({
   myPersonId,
   /** Zichzelf plus gekoppelde kinderen: elk van hen kan worden uitgeschreven. */
   householdIds = null,
-  /** Gekozen persoon bij "Wie schrijf je in?". Leeg = de ingelogde gebruiker. */
-  enrollTargetId = null,
   showActions = false,
   headerActions = null,
   adminMode = false,
@@ -64,10 +63,6 @@ export default function DienstCard({
   const myEnrollment = myPersonId
     ? dienst.enrollments?.find((e) => Number(e.personId) === Number(myPersonId))
     : null;
-  const actingId = enrollTargetId || myPersonId;
-  const actingEnrollment = actingId
-    ? dienst.enrollments?.find((e) => Number(e.personId) === Number(actingId))
-    : null;
   const inactive = dienst.active === false;
   const isDraft = Boolean(dienst.draft);
   const isLocked = Boolean(dienst.locked);
@@ -85,15 +80,19 @@ export default function DienstCard({
   const servicePast = startOfDay(new Date(dienst.date)) < startOfDay(new Date());
   const showNoShow = Boolean(allowNoShow && servicePast);
   const canOverride = adminMode || committeeOverride;
+  const householdOpen = householdIdsStillOpen(managedIds, dienst.enrollments);
   const canSelfEnroll =
     showActions &&
     !inactive &&
     !isDraft &&
-    !actingEnrollment &&
+    householdOpen.length > 0 &&
     !servicePast &&
     status !== 'full' &&
     !teamOnlyLeft;
-  const canUnenroll = !isLocked || canOverride;
+  const mayRemoveEnrollment = (enrollment) =>
+    !isLocked ||
+    canOverride ||
+    withinRecentUnenrollWindow(enrollment?.createdAt);
 
   if (compact) {
     return (
@@ -209,7 +208,7 @@ export default function DienstCard({
                   </span>
                 ) : null}
               </span>
-              {adminMode && line.enrollment && onAdminRemoveEnrollment ? (
+              {(adminMode || committeeOverride) && line.enrollment && onAdminRemoveEnrollment ? (
                 <button
                   type="button"
                   className="min-h-[44px] text-xs font-bold uppercase text-red-700 hover:underline"
@@ -236,7 +235,7 @@ export default function DienstCard({
                     <span className="block text-xs font-normal text-gray-600">{reason}</span>
                   ) : null}
                 </span>
-                {adminMode && onAdminRemoveEnrollment ? (
+                {(adminMode || committeeOverride) && onAdminRemoveEnrollment ? (
                   <span className="flex flex-wrap gap-2">
                     {showNoShow ? (
                       e.noShow ? (
@@ -280,18 +279,22 @@ export default function DienstCard({
             <p className="text-sm text-gray-600">Je moet ingelogd zijn om in te schrijven.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {canUnenroll
-                ? unenroll.map((action) => (
-                    <button
-                      key={action.enrollmentId}
-                      type="button"
-                      className="vvl-btn-outline min-h-11 w-full whitespace-normal text-center text-xs"
-                      onClick={() => onUitschrijven?.(action.enrollmentId)}
-                    >
-                      {action.label}
-                    </button>
-                  ))
-                : null}
+              {unenroll
+                .filter((action) =>
+                  mayRemoveEnrollment(
+                    dienst.enrollments?.find((row) => row.id === action.enrollmentId),
+                  ),
+                )
+                .map((action) => (
+                  <button
+                    key={action.enrollmentId}
+                    type="button"
+                    className="vvl-btn-outline min-h-11 w-full whitespace-normal text-center text-xs"
+                    onClick={() => onUitschrijven?.(action.enrollmentId)}
+                  >
+                    {action.label}
+                  </button>
+                ))}
               {canSelfEnroll ? (
                 <button
                   type="button"
@@ -320,7 +323,9 @@ export default function DienstCard({
 
       {isLocked && showActions && !canOverride ? (
         <p className="text-xs text-gray-600">
-          Officieel rooster: inschrijven op een open plek mag nog. Uitschrijven niet meer. Ruilen mag wel.
+          Officieel rooster: inschrijven op een open plek mag nog. Uitschrijven niet meer, behalve
+          binnen 2 uur na het inschrijven. Ruilen mag wel. De barcommissie kan een naam altijd
+          weghalen.
         </p>
       ) : null}
     </article>

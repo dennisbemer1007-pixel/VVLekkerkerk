@@ -20,6 +20,7 @@ import { trySendScheduledConfirmation } from '../lib/mail.js';
 import { getActiveRound } from '../lib/planningRounds.js';
 import { enrollableServiceRange, volunteerMayAccessService } from '../lib/planningPeriod.js';
 import { blockedByMorningBarOrKitchenOnly } from '../lib/dutyRestrictions.js';
+import { mayAddDespiteTeamOnlySpots, mayUnenroll } from '../lib/enrollmentAccess.js';
 
 const router = Router();
 
@@ -229,12 +230,17 @@ router.post(
         const blocks = blocksForPerson(person, matches);
         const overlap = overlappingMatchBlocks(servicePreview, blocks);
         const selfEnroll = Number(req.person.id) === targetId;
-        const mayOverrideMatch = isAdminRole(req.person.role) || selfEnroll;
+        const guardianEnrollingChild =
+          Boolean(person.guardianId) && Number(person.guardianId) === Number(req.person.id);
+        const mayOverrideMatch =
+          isAdminRole(req.person.role) || selfEnroll || guardianEnrollingChild;
         if (overlap.length && !(ignoreMatchBlock && mayOverrideMatch)) {
           return res.status(409).json({
             error: isAdminRole(req.person.role)
               ? 'Let op: deze persoon heeft een wedstrijd en valt binnen de ingestelde blokkeertijd. Toch inplannen?'
-              : 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
+              : guardianEnrollingChild
+                ? `${person.name} heeft een wedstrijd die overlap heeft met deze dienst.`
+                : 'Je hebt een wedstrijd die overlap heeft met deze dienst.',
             code: 'MATCH_BLOCK',
             canOverride: mayOverrideMatch,
           });
@@ -259,11 +265,6 @@ router.post(
             err.status = 403;
             throw err;
           }
-          if (service.enrollments.length >= service.required) {
-            const err = new Error('Deze dienst is al vol');
-            err.status = 409;
-            throw err;
-          }
 
           const existing = await tx.enrollment.findUnique({
             where: {
@@ -277,6 +278,20 @@ router.post(
             const err = new Error('Je staat al ingeschreven voor deze dienst');
             err.status = 409;
             throw err;
+          }
+
+          if (service.enrollments.length >= service.required) {
+            if (!isAdminRole(req.person.role)) {
+              const err = new Error('Deze dienst is al vol');
+              err.status = 409;
+              throw err;
+            }
+            const required = service.enrollments.length + 1;
+            await tx.service.update({
+              where: { id: service.id },
+              data: { required },
+            });
+            service.required = required;
           }
 
           let source = enrollmentSource(req.person, targetId);
@@ -334,16 +349,22 @@ router.post(
               err.status = 403;
               throw err;
             }
-          } else {
-            if (capacity.personalOpen <= 0) {
-              const err = new Error(
-                capacity.teamOpen > 0
-                  ? 'De open plekken op deze dienst zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.'
-                  : 'Deze dienst is al vol',
-              );
-              err.status = 409;
-              throw err;
-            }
+          } else if (
+            capacity.personalOpen <= 0 &&
+            !mayAddDespiteTeamOnlySpots({
+              isAdmin: isAdminRole(req.person.role),
+              personalOpen: capacity.personalOpen,
+              enrolledCount: service.enrollments.length,
+              required: service.required,
+            })
+          ) {
+            const err = new Error(
+              capacity.teamOpen > 0
+                ? 'De open plekken op deze dienst zijn voor het jeugdteam. De bardienstcoördinator vult de ouders in.'
+                : 'Deze dienst is al vol',
+            );
+            err.status = 409;
+            throw err;
           }
 
           const isMakeup = kind === 'PERSONAL' && (person.makeupDue ?? 0) > 0;
@@ -366,7 +387,7 @@ router.post(
           });
         });
 
-        if (ignoreMatchBlock && (isAdminRole(req.person.role) || Number(req.person.id) === targetId)) {
+        if (ignoreMatchBlock && mayOverrideMatch) {
           await writeAudit({
             actorId: req.person.id,
             action: 'enrollment.match_block_override',
@@ -494,19 +515,26 @@ router.delete(
           error: 'Deze dienst zit in een openstaand ruilverzoek. Trek dat eerst in.',
         });
       }
-      if (enrollment.service?.locked && !isAdminRole(req.person.role)) {
-        return res.status(403).json({
-          error:
-            'Het rooster is officieel. Je kunt je niet meer uitschrijven. Ruilen met iemand anders mag wel.',
-        });
-      }
-
       const enrolledPerson = await prisma.person.findUnique({
         where: { id: enrollment.personId },
         select: { guardianId: true },
       });
       const guardianActing =
         enrolledPerson?.guardianId === req.person.id && req.person.id !== enrollment.personId;
+      const selfOrGuardian = req.person.id === enrollment.personId || guardianActing;
+      if (
+        !mayUnenroll({
+          isAdmin: isAdminRole(req.person.role),
+          locked: Boolean(enrollment.service?.locked),
+          selfOrGuardian,
+          createdAt: enrollment.createdAt,
+        })
+      ) {
+        return res.status(403).json({
+          error:
+            'Het rooster is officieel. Je kunt je niet meer uitschrijven. Ruilen met iemand anders mag wel. Net per ongeluk ingeschreven? Dat kan nog binnen 2 uur, of de barcommissie haalt de naam weg.',
+        });
+      }
 
       // Beheer mag altijd omgooien; vrijwilligers niet na deadline / CLOSED / verplichte fase
       if (!isAdminRole(req.person.role) && (req.person.id === enrollment.personId || guardianActing)) {

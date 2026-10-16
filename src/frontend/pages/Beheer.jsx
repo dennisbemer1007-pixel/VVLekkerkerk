@@ -230,7 +230,7 @@ function DienstenBeheer() {
   const load = () =>
     Promise.all([
       api.getServices({ activeOnly: 'false', allDates: 'true', includeDraft: 'true' }),
-      api.getPersons(true),
+      api.getPersons(true, { includeNameless: true }),
       api.getMatches().catch(() => []),
       api.getTeams().catch(() => []),
       api.getPlanningRound().catch(() => null),
@@ -601,7 +601,7 @@ function DienstenBeheer() {
                       <option value="">— Kies —</option>
                       {personOptions.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name}
+                          {p.guardianName ? `${p.name} (kind van ${p.guardianName})` : p.name}
                         </option>
                       ))}
                     </select>

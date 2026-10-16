@@ -9,7 +9,8 @@ import ServiceLine from '../components/ServiceLine.jsx';
 import VoorWieDialog from '../components/VoorWieDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
-import { needsVoorWiePopup, voorWieChoices } from '../utils/voorWie.js';
+import { voorWieChoices } from '../utils/voorWie.js';
+import { householdIdsStillOpen } from '../../backend/lib/enrollmentAccess.js';
 import { serviceTileStatus, tileGroups } from '../utils/tiles.js';
 import { compareServicesByDateThenTime } from '../utils/formatDate.js';
 
@@ -93,7 +94,7 @@ export default function Planning({ variant = 'rooster' }) {
 
   useEffect(() => {
     if (variant !== 'open' || !isCommittee) return undefined;
-    api.getPersons(true).then(setPeople).catch(() => setPeople([]));
+    api.getPersons(true, { includeNameless: true }).then(setPeople).catch(() => setPeople([]));
     api
       .getStats()
       .then((stats) => {
@@ -178,12 +179,21 @@ export default function Planning({ variant = 'rooster' }) {
       setSelectedId(serviceId);
       return;
     }
-    if (needsVoorWiePopup(choices)) {
-      setPendingId(serviceId);
-      setSelectedId(serviceId);
+    const service = services.find((row) => row.id === serviceId);
+    const openIds = new Set(
+      householdIdsStillOpen(choices.map((choice) => choice.id), service?.enrollments),
+    );
+    const openChoices = choices.filter((choice) => openIds.has(Number(choice.id)));
+    if (openChoices.length === 0) {
+      setError('Iedereen van je huishouden staat al op deze dienst.');
       return;
     }
-    await enrollAs(serviceId, personId);
+    if (openChoices.length === 1) {
+      await enrollAs(serviceId, openChoices[0].id);
+      return;
+    }
+    setPendingId({ serviceId, choices: openChoices });
+    setSelectedId(serviceId);
   };
 
   const handleUitschrijven = async (enrollmentId) => {
@@ -444,6 +454,7 @@ export default function Planning({ variant = 'rooster' }) {
                 key={s.id}
                 dienst={s}
                 myPersonId={personId}
+                householdIds={choices.map((choice) => choice.id)}
                 showActions={isCommittee}
                 committeeOverride={isCommittee}
                 onInschrijven={isCommittee ? handleInschrijven : undefined}
@@ -454,12 +465,12 @@ export default function Planning({ variant = 'rooster' }) {
       />
       <VoorWieDialog
         open={Boolean(pendingId)}
-        choices={choices}
+        choices={pendingId?.choices || []}
         onClose={() => setPendingId(null)}
         onChoose={async (choice) => {
-          const id = pendingId;
+          const id = pendingId?.serviceId;
           setPendingId(null);
-          await enrollAs(id, choice.id);
+          if (id) await enrollAs(id, choice.id);
         }}
       />
     </div>
@@ -560,7 +571,7 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           {options.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-sm">
-                {p.name}{' '}
+                {p.guardianName ? `${p.name} (kind van ${p.guardianName})` : p.name}{' '}
                 <span className="text-gray-500">{seasonCounts[p.id] ?? 0}×</span>
               </span>
               <button
