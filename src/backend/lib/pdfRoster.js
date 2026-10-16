@@ -73,13 +73,34 @@ function minutesClosest(service, rowTime) {
   return Math.abs(a - b);
 }
 
+function clockWindow(time) {
+  const match = String(time || '').match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const start = Number(match[1]) * 60 + Number(match[2]);
+  let end = Number(match[3]) * 60 + Number(match[4]);
+  if (end <= start) end += 24 * 60;
+  return [start, end];
+}
+
+/** 19:30–00:00 overlapt de avondbar 16:30–19:30 niet; 08:00–13:00 overlapt 09:00–13:00 wel. */
+export function timeOverlapsRow(serviceTime, rowTime) {
+  const service = clockWindow(serviceTime);
+  const row = clockWindow(rowTime);
+  if (!service || !row) return true;
+  return service[0] < row[1] && row[0] < service[1];
+}
+
 /**
  * Eén dienst per vaste roosterrij. Dubbele records (zelfde tijd) worden samengevoegd;
  * extra jaarplanning-diensten horen hier niet.
  */
 export function servicesForSlotRow(services, row) {
   const matching = (services || []).filter(
-    (s) => s.type === row.type && !isExtraRosterService(s) && inferSlot(s) === row.slot,
+    (s) =>
+      s.type === row.type &&
+      !isExtraRosterService(s) &&
+      inferSlot(s) === row.slot &&
+      timeOverlapsRow(s.time, row.time),
   );
   if (!matching.length) return [];
   const byKey = new Map();
@@ -220,8 +241,19 @@ export function slotCellHasOpen(services) {
 }
 
 export function rowLabelTime(row, services) {
-  const real = (services || []).map((s) => String(s.time || '').trim()).find(Boolean);
-  return real || row.time;
+  const regel = String(row?.time || '').trim();
+  const fitting = (services || [])
+    .map((s) => String(s.time || '').trim())
+    .filter((time) => time && timeOverlapsRow(time, regel));
+  if (!fitting.length) return regel;
+  const counts = new Map();
+  for (const time of fitting) counts.set(time, (counts.get(time) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const [topTime, topCount] = ranked[0];
+  const second = ranked[1]?.[1] || 0;
+  // Eén afwijkende tijd mag de rij niet bepalen als een andere tijd vaker voorkomt.
+  if (topCount > second) return topTime;
+  return regel || topTime;
 }
 
 /** Doordeweeks alleen bar avond; zaterdag jeugdslots; zondag clubtijden. */

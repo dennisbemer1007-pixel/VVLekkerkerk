@@ -393,6 +393,17 @@ export function frozenTeamDutyFromService(service, candidates = []) {
  * Officiële auto-dienst mag teamplekken krijgen of lege teamplekken herverdelen
  * als er thuisjeugd is. Ingevulde teamplekken (ouders) blijven staan.
  */
+/**
+ * Lege officiële AUTO-dienst die eerder verborgen is (active=false) terwijl de
+ * regel hem weer nodig heeft. Eerste gepubliceerde week (zoals za 24/10) blijft
+ * anders leeg: locked blokkeert een nieuwe dienst. Handmatig en ingevuld niet.
+ */
+export function shouldReviveEmptyLockedAuto(service) {
+  if (!service || service.origin === 'MANUAL') return false;
+  if (!service.locked || service.active !== false) return false;
+  return !(service.enrollments || []).length;
+}
+
 export function shouldAttachTeamDutiesToLocked(service, assignments) {
   if (service?.origin === 'MANUAL') return false;
   if (!canReassignEmptyTeamDuties(service) && (service?.teamDuties || []).length > 0) {

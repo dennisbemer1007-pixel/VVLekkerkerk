@@ -121,6 +121,7 @@ import {
   requiredForTeamDuties,
   serviceCapacity,
   shouldAttachTeamDutiesToLocked,
+  shouldReviveEmptyLockedAuto,
   teamDutyAssignments,
   teamFitsDutyRule,
 } from '../src/backend/lib/teamDutyPlanning.js';
@@ -374,6 +375,38 @@ assert(
 assert(
   'rowLabelTime kiest echte diensttijd',
   rowLabelTime(SUNDAY_SLOT_ROWS[0], [{ time: '08:00 - 13:00' }]) === '08:00 - 13:00',
+);
+assert(
+  'één afwijkende 19:30-bar bepaalt de avondrij niet',
+  rowLabelTime(
+    SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'EVENING'),
+    [{ time: '19:30 - 00:00' }, { time: '16:30 - 19:30' }, { time: '16:30 - 19:30' }],
+  ) === '16:30 - 19:30' &&
+    servicesForSlotRow(
+      [{ id: 2, type: 'BAR', slot: 'EVENING', time: '19:30 - 00:00', required: 2, enrollments: [] }],
+      SLOT_ROWS.find((r) => r.type === 'BAR' && r.slot === 'EVENING'),
+    ).length === 0,
+);
+assert(
+  'lege gelockte AUTO op 24/10 mag weer aan, handmatig en ingevuld niet',
+  shouldReviveEmptyLockedAuto({
+    origin: 'AUTO',
+    locked: true,
+    active: false,
+    enrollments: [],
+  }) === true &&
+    shouldReviveEmptyLockedAuto({
+      origin: 'MANUAL',
+      locked: true,
+      active: false,
+      enrollments: [],
+    }) === false &&
+    shouldReviveEmptyLockedAuto({
+      origin: 'AUTO',
+      locked: true,
+      active: false,
+      enrollments: [{ id: 1 }],
+    }) === false,
 );
 assert('pdf includes kitchen rows', SLOT_ROWS.some((row) => row.type === 'KITCHEN'));
 assert(
