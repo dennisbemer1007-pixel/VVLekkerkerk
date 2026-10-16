@@ -1,4 +1,8 @@
-import { stripWeekendSuffix } from './knvbTeams.js';
+import {
+  buildTeamIndex,
+  findTeamInIndex,
+  stripWeekendSuffix,
+} from './knvbTeams.js';
 import { defaultTeamFunctions } from './teamFunctions.js';
 import { youthGender, youthTeamAliasKey } from './youthTeams.js';
 
@@ -103,7 +107,7 @@ export async function repairMoOWrongMerges(prisma) {
     });
   }
 
-  // Dubbel-marker weggegooid: MO heeft wedstrijden, O-sibling heeft er 0 → terugzetten.
+  // Wedstrijden op MO met jongens-tegenstander → terug naar O (maak O aan indien nodig).
   const active = await prisma.team.findMany({
     where: { active: { not: false } },
     include: { _count: { select: { matches: true } } },
@@ -113,15 +117,47 @@ export async function repairMoOWrongMerges(prisma) {
     const gKey = youthTeamAliasKey(girls.name);
     if (!gKey?.startsWith('MO')) continue;
     const num = gKey.slice(2);
-    const boys = active.find((t) => youthTeamAliasKey(t.name) === `O${num}`);
-    if (!boys) continue;
-    if ((girls._count?.matches || 0) === 0) continue;
-    if ((boys._count?.matches || 0) > 0) continue;
-    const matchResult = await prisma.match.updateMany({
+    const boysKey = `O${num}`;
+    let boys = active.find((t) => youthTeamAliasKey(t.name) === boysKey);
+
+    const onGirls = await prisma.match.findMany({
       where: { teamId: girls.id },
-      data: { teamId: boys.id },
+      select: { id: true, opponent: true },
     });
-    if (!matchResult.count) continue;
+    if (!onGirls.length) continue;
+    const hasGirlsOpponent = onGirls.some((m) => /\bMO\d/i.test(String(m.opponent || '')));
+    // Jongens-tegenstander (O…) of — na foute #59-merge — alles zonder meiden-tegenstander.
+    const moveIds = onGirls
+      .filter((m) => {
+        const opp = String(m.opponent || '');
+        if (/\bMO\d/i.test(opp)) return false;
+        if (/(?:^|[^A-Za-z])(?:J)?O\d/i.test(opp)) return true;
+        return !hasGirlsOpponent;
+      })
+      .map((m) => m.id);
+    if (!moveIds.length) continue;
+
+    if (!boys) {
+      const fn = defaultTeamFunctions(boysKey);
+      boys = await prisma.team.create({
+        data: {
+          name: boysKey,
+          availabilityUse: fn.availabilityUse,
+          teamDutyUse: fn.teamDutyUse,
+          teamDutySlots: JSON.stringify(fn.teamDutySlots),
+          functionsConfigured: true,
+          active: true,
+        },
+      });
+      active.push({ ...boys, _count: { matches: 0 } });
+      moves.push({ action: 'create-boys-sibling', id: boys.id, name: boys.name, from: girls.name });
+    }
+
+    let movedMatches = 0;
+    for (const id of moveIds) {
+      await prisma.match.update({ where: { id }, data: { teamId: boys.id } });
+      movedMatches += 1;
+    }
     const duties = await prisma.serviceTeamDuty.findMany({
       where: { teamId: girls.id },
       include: {
@@ -143,12 +179,71 @@ export async function repairMoOWrongMerges(prisma) {
       from: girls.name,
       toId: boys.id,
       to: boys.name,
-      movedMatches: matchResult.count,
+      movedMatches,
       movedDuties,
     });
   }
 
   return { repaired: moves.length, teams: moves };
+}
+
+/**
+ * Dienstregels na za/zo-split: conditionTeamName "Lekkerkerk 1 (za/zo — controleer)"
+ * of conditionTeamId op inactief team → herstel naar actieve za-ploeg.
+ */
+export async function repairSeniorConditionTeamRules(prisma) {
+  const rules = await prisma.serviceRule.findMany({
+    where: {
+      OR: [
+        { conditionType: 'HOME_MATCH_TEAM' },
+        { conditionType: 'NO_HOME_MATCH_TEAM' },
+      ],
+    },
+  });
+  const teams = await prisma.team.findMany();
+  let updated = 0;
+  const details = [];
+  for (const rule of rules) {
+    const nameRaw = rule.conditionTeamName || '';
+    const needsNameCleanup = /\(za\/zo/i.test(nameRaw);
+    const linked = rule.conditionTeamId
+      ? teams.find((t) => t.id === rule.conditionTeamId)
+      : null;
+    const linkedDead = linked && linked.active === false;
+    if (!needsNameCleanup && !linkedDead && linked) continue;
+
+    const cleaned = nameRaw
+      .replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '')
+      .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
+      .trim() || String(linked?.name || '')
+      .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
+      .trim();
+    if (!cleaned) continue;
+
+    // Zaterdag-keuken: koppel aan (za)-team als die bestaat.
+    const index = buildTeamIndex(teams.filter((t) => t.active !== false));
+    const sat = findTeamInIndex(index, cleaned, { date: new Date('2026-10-24T12:00:00') });
+    const data = {
+      conditionTeamName: cleaned,
+      ...(sat ? { conditionTeamId: sat.id } : { conditionTeamId: null }),
+    };
+    if (
+      data.conditionTeamName === rule.conditionTeamName &&
+      data.conditionTeamId === rule.conditionTeamId
+    ) {
+      continue;
+    }
+    await prisma.serviceRule.update({ where: { id: rule.id }, data });
+    updated += 1;
+    details.push({
+      id: rule.id,
+      name: rule.name,
+      from: rule.conditionTeamName,
+      to: data.conditionTeamName,
+      teamId: data.conditionTeamId,
+    });
+  }
+  return { updated, details };
 }
 
 /**

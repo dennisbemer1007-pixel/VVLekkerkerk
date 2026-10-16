@@ -1,7 +1,11 @@
 import { addWeeks, endOfDay, startOfDay, toIsoDate } from './dates.js';
 import { kickoffTimeFromMatch } from './matchPlanning.js';
 import { parseTimeStartMinutes } from './time.js';
-import { findTeamInIndex, buildTeamIndex } from './knvbTeams.js';
+import {
+  buildTeamIndex,
+  findTeamInIndex,
+  relatedSeniorTeamIds,
+} from './knvbTeams.js';
 import { eligibleTeamDutyCandidates } from './teamDutyPlanning.js';
 
 /** Slot afleiden uit begintijd (zelfde drempels als rooster-PDF). */
@@ -54,13 +58,27 @@ export function sameCalendarDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
-export function resolveConditionTeam(rule, teams) {
+/**
+ * Voorwaardeteam van een dienstregel. Na za/zo-split: "Lekkerkerk 1" vindt
+ * "Lekkerkerk 1 (za)" op zaterdag. Inactieve conditionTeamId valt terug op naam.
+ */
+export function resolveConditionTeam(rule, teams, opts = {}) {
+  const activeTeams = (teams || []).filter((t) => t && t.active !== false);
   if (rule.conditionTeamId) {
-    return (teams || []).find((t) => t.id === rule.conditionTeamId) || null;
+    const byId = activeTeams.find((t) => t.id === rule.conditionTeamId);
+    if (byId) return byId;
   }
-  if (!rule.conditionTeamName) return null;
-  const index = buildTeamIndex(teams || []);
-  return findTeamInIndex(index, rule.conditionTeamName);
+  let name = rule.conditionTeamName?.trim() || null;
+  if (!name && rule.conditionTeamId) {
+    const inactive = (teams || []).find((t) => t.id === rule.conditionTeamId);
+    name = String(inactive?.name || '')
+      .replace(/\s*\(oud-gecombineerd\)\s*$/i, '')
+      .trim() || null;
+  }
+  if (!name) return null;
+  name = name.replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '').trim();
+  const index = buildTeamIndex(activeTeams);
+  return findTeamInIndex(index, name, opts);
 }
 
 function baseScheduleOk(rule, ctx) {
@@ -80,9 +98,10 @@ function baseScheduleOk(rule, ctx) {
 /** Thuiswedstrijden van het voorwaardeteam (zonder aftrap-filter). */
 export function homeMatchesForConditionTeam(rule, ctx) {
   let matches = ctx.homeMatches || [];
-  const team = resolveConditionTeam(rule, ctx.teams);
+  const team = resolveConditionTeam(rule, ctx.teams, { date: ctx.date });
   if (!team) return { team: null, matches: [] };
-  matches = matches.filter((m) => m.teamId === team.id);
+  const ids = new Set(relatedSeniorTeamIds(team, ctx.teams));
+  matches = matches.filter((m) => ids.has(Number(m.teamId)));
   return { team, matches };
 }
 
@@ -130,9 +149,16 @@ export function evaluateRule(rule, ctx) {
   if (type === 'HOME_MATCH' || type === 'HOME_MATCH_TEAM') {
     let matches = ctx.homeMatches || [];
     if (type === 'HOME_MATCH_TEAM') {
-      const team = resolveConditionTeam(rule, ctx.teams);
-      if (!team) return { ok: false, reason: 'unknown-team', unknownTeam: rule.conditionTeamName };
-      matches = matches.filter((m) => m.teamId === team.id);
+      const team = resolveConditionTeam(rule, ctx.teams, { date: ctx.date });
+      if (!team) {
+        return {
+          ok: false,
+          reason: 'unknown-team',
+          unknownTeam: rule.conditionTeamName || rule.conditionTeamId,
+        };
+      }
+      const ids = new Set(relatedSeniorTeamIds(team, ctx.teams));
+      matches = matches.filter((m) => ids.has(Number(m.teamId)));
     }
     if (rule.kickoffAfter) {
       const min = parseTimeStartMinutes(rule.kickoffAfter);

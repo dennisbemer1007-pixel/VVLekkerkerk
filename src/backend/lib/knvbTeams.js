@@ -119,7 +119,11 @@ function findInIndexWithKeys(index, name, keySets) {
   return null;
 }
 
-export function findTeamInIndex(index, name) {
+/**
+ * Zoek team op naam. opts.date: bij bare senior ("Lekkerkerk 1") verkies
+ * de za/zo-variant van die dag — nodig na weekend-split voor dienstregels.
+ */
+export function findTeamInIndex(index, name, opts = {}) {
   const primary = findInIndexWithKeys(index, name, [teamLookupKeys(name)]);
   if (primary) return primary;
 
@@ -140,9 +144,36 @@ export function findTeamInIndex(index, name) {
 
   const unsuffixed = stripWeekendSuffix(name);
   if (unsuffixed && unsuffixed.toLowerCase() !== String(name || '').trim().toLowerCase()) {
-    return findInIndexWithKeys(index, unsuffixed, [teamLookupKeys(unsuffixed)]);
+    const viaBare = findInIndexWithKeys(index, unsuffixed, [teamLookupKeys(unsuffixed)]);
+    if (viaBare) return viaBare;
+  }
+
+  // "Lekkerkerk 1" → "Lekkerkerk 1 (za)" / "(zo)" na senior-weekend-split.
+  const cleaned = String(name || '')
+    .replace(/\s*\(za\/zo\s*[—–-]\s*controleer\)\s*$/i, '')
+    .trim();
+  const bareSenior = stripWeekendSuffix(cleaned);
+  if (isBareSeniorClubTeam(bareSenior) || isBareSeniorClubTeam(cleaned)) {
+    const base = isBareSeniorClubTeam(cleaned) ? stripWeekendSuffix(cleaned) : bareSenior;
+    const labels = [];
+    if (opts.date) labels.push(`${base}${seniorWeekendSuffix(opts.date)}`);
+    labels.push(`${base} (za)`, `${base} (zo)`, base);
+    for (const label of labels) {
+      const found = findInIndexWithKeys(index, label, [teamLookupKeys(label)]);
+      if (found) return found;
+    }
   }
   return null;
+}
+
+/** Alle team-ids van dezelfde seniorenploeg (bare + za + zo). */
+export function relatedSeniorTeamIds(team, teams) {
+  if (!team) return [];
+  const bare = stripWeekendSuffix(team.name);
+  if (!isBareSeniorClubTeam(bare)) return [team.id];
+  return (teams || [])
+    .filter((t) => t && stripWeekendSuffix(t.name) === bare)
+    .map((t) => t.id);
 }
 
 export function addTeamToIndex(index, team) {

@@ -98,6 +98,7 @@ import { canAccess, canonicalAccessRole } from '../src/backend/lib/roles.js';
 import {
   evaluateFixedPersonCondition,
   evaluateRule,
+  resolveConditionTeam,
 } from '../src/backend/lib/serviceRuleLogic.js';
 import { matchBlockRange, serviceOutsideMatchBlocks } from '../src/backend/lib/matchBlocks.js';
 import { defaultTeamFunctions, isO13FirstTeam } from '../src/backend/lib/teamFunctions.js';
@@ -126,6 +127,7 @@ import {
   clubTeamLabel,
   findTeamInIndex,
   isBareSeniorClubTeam,
+  relatedSeniorTeamIds,
   seniorWeekendSuffix,
 } from '../src/backend/lib/knvbTeams.js';
 import { defaultServiceRuleSeed } from '../src/backend/lib/defaultServiceRules.js';
@@ -674,6 +676,14 @@ assert(
     findTeamInIndex(split, 'Lekkerkerk 1 (za)')?.id === 3 &&
       findTeamInIndex(split, 'Lekkerkerk 1 (zo)')?.id === 4,
   );
+  assert(
+    'bare Lekkerkerk 1 vindt za-team op zaterdag',
+    findTeamInIndex(split, 'Lekkerkerk 1', { date: new Date('2026-10-24T12:00:00') })?.id === 3,
+  );
+  assert(
+    'bare Lekkerkerk 1 vindt zo-team op zondag',
+    findTeamInIndex(split, 'Lekkerkerk 1', { date: new Date('2026-10-25T12:00:00') })?.id === 4,
+  );
 }
 {
   const rule = { required: 2, teamDutyReserved: 2 };
@@ -1169,6 +1179,56 @@ assert(
     'O15-3JM krijgt teamdienst bij eerlijke rotatie met O16',
     picks.includes(12) && picks.includes(13),
   );
+
+  // Punt 9: za 24/10 Lekkerkerk 1 thuis → keuken laat moet aanmaken (ook na za-split)
+  const kitchenLate = defaultServiceRuleSeed().find((r) =>
+    String(r.name).includes('keuken laat'),
+  );
+  const zaTeam = { id: 31, name: 'Lekkerkerk 1 (za)', active: true };
+  const zoTeam = { id: 32, name: 'Lekkerkerk 1 (zo)', active: true };
+  const satDate = new Date('2026-10-24T12:00:00');
+  const homeL1 = {
+    id: 501,
+    teamId: 31,
+    team: zaTeam,
+    home: true,
+    time: '14:30',
+    date: satDate,
+  };
+  const kitchenCtx = {
+    date: satDate,
+    weekday: 6,
+    homeMatches: [homeL1],
+    teams: [zaTeam, zoTeam],
+    activities: [],
+  };
+  assert(
+    'punt9: regel Lekkerkerk 1 vindt za-team',
+    resolveConditionTeam(
+      { conditionTeamName: 'Lekkerkerk 1' },
+      [zaTeam, zoTeam],
+      { date: satDate },
+    )?.id === 31,
+  );
+  assert(
+    'punt9: keuken laat bij Lekkerkerk 1 (za) thuis 14:30',
+    kitchenLate && evaluateRule(kitchenLate, kitchenCtx).ok === true,
+  );
+  assert(
+    'punt9: keuken laat ook bij naam (za/zo — controleer)',
+    evaluateRule(
+      { ...kitchenLate, conditionTeamName: 'Lekkerkerk 1 (za/zo — controleer)' },
+      kitchenCtx,
+    ).ok === true,
+  );
+  assert(
+    'punt9: relatedSeniorTeamIds dekt bare+za+zo',
+    relatedSeniorTeamIds(zaTeam, [
+      zaTeam,
+      zoTeam,
+      { id: 30, name: 'Lekkerkerk 1', active: false },
+    ]).sort().join(',') === '30,31,32',
+  );
 }
 
 {
@@ -1220,6 +1280,15 @@ assert(
           n += 1;
         }
         return { count: n };
+      },
+      findMany: async ({ where }) =>
+        store.matches
+          .filter((m) => m.teamId === where.teamId)
+          .map((m) => ({ id: m.id, opponent: m.opponent || 'XerxesDZB O15-1' })),
+      update: async ({ where, data }) => {
+        const m = store.matches.find((x) => x.id === where.id);
+        if (m) Object.assign(m, data);
+        return m;
       },
     },
     serviceTeamDuty: {
