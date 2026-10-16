@@ -25,6 +25,7 @@ import {
   canReassignEmptyTeamDuties,
   frozenTeamDutyFromService,
   shouldAttachTeamDutiesToLocked,
+  shouldReviveEmptyLockedAuto,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
 import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
@@ -402,7 +403,16 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
         continue;
       }
       if (target.locked) {
-        if (shouldAttachTeamDutiesToLocked(target, spec.assignments)) {
+        if (shouldReviveEmptyLockedAuto(target)) {
+          // Verborgen AUTO van een al gepubliceerde week weer volgens de regel tonen.
+          await prisma.service.update({
+            where: { id: target.id },
+            data: payload,
+          });
+          await syncTeamDuties(target.id, spec.assignments);
+          updated += 1;
+          serviceId = target.id;
+        } else if (shouldAttachTeamDutiesToLocked(target, spec.assignments)) {
           await prisma.service.update({
             where: { id: target.id },
             data: {
