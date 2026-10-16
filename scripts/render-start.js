@@ -29,6 +29,7 @@ import {
 import {
   repairAccidentalWeekendTeams,
   repairJoOYouthDuplicates,
+  repairMoOWrongMerges,
   unlinkGuardianCopiedTeam,
   deactivateDuplicateServices,
   deactivateOrphanAutoServices,
@@ -148,9 +149,17 @@ try {
 } catch (err) {
   console.warn('[render-start] Weekend-teams herstel:', err.message);
 }
+let moOWrongMergeRepair = { repaired: 0, teams: [] };
+try {
+  // #59 aliaste MO per ongeluk naar O — eerst terugzetten vóór JO/O-merge.
+  moOWrongMergeRepair = await repairMoOWrongMerges(prisma);
+  console.log('[render-start] MO/O-foutmerge hersteld:', JSON.stringify(moOWrongMergeRepair));
+} catch (err) {
+  console.warn('[render-start] MO/O-foutmerge herstel:', err.message);
+}
 let joOYouthRepair = { merged: 0, teams: [] };
 try {
-  // Voor backfill: KNVB O15-1 ↔ app JO15-1 samenvoegen zodat thuiswedstrijden meetellen.
+  // Voor backfill: KNVB O15-1 ↔ app JO15-1 samenvoegen (nooit MO).
   joOYouthRepair = await repairJoOYouthDuplicates(prisma);
   console.log('[render-start] JO/O-jeugddubbels hersteld:', JSON.stringify(joOYouthRepair));
 } catch (err) {
@@ -349,6 +358,7 @@ const statusFile = writeDeployStatus(stateDir, {
   migrations,
   repairs: {
     weekendTeams: weekendRepair,
+    moOWrongMerges: moOWrongMergeRepair,
     joOYouthTeams: joOYouthRepair,
     guardianChildren: childRepair,
     duplicateServices: duplicateRepair,

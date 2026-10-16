@@ -11,18 +11,60 @@ export function parseJoAge(teamName) {
   return { age, group: age <= 12 ? 'young' : 'old' };
 }
 
-/**
- * Canonieke sleutel voor JO/O/MO-duplicaten: "JO15-1" en "O15-1" → "O15-1".
- * Zo koppelt KNVB-import (O…) aan bestaande app-teams (JO…).
- */
-export function youthTeamAliasKey(teamName) {
-  const compact = String(teamName || '')
+/** Compacte teamnaam zonder spaties, voor matching. */
+export function compactYouthName(teamName) {
+  return String(teamName || '')
     .replace(/,/g, ' ')
     .replace(/\s+/g, '')
     .trim();
-  const match = compact.match(/^(?:[JM])?O(\d{1,2}(?:[-.].*)?)$/i);
-  if (!match) return null;
-  return `O${match[1]}`.toUpperCase();
+}
+
+/**
+ * Meiden (MO…) vs jongens (O…/JO…). Nooit door elkaar halen.
+ * @returns {'girls'|'boys'|null}
+ */
+export function youthGender(teamName) {
+  const compact = compactYouthName(teamName);
+  if (/^MO\d/i.test(compact)) return 'girls';
+  if (/^(?:J)?O\d/i.test(compact)) return 'boys';
+  return null;
+}
+
+export function gendersCompatible(a, b) {
+  const ga = youthGender(a);
+  const gb = youthGender(b);
+  if (!ga || !gb) return true;
+  return ga === gb;
+}
+
+/**
+ * Canonieke sleutel voor JO/O-duplicaten: "JO15-1" en "O15-1" → "O15-1".
+ * Meiden blijven apart: "MO15-1" → "MO15-1" (nooit gelijk aan O15-1).
+ */
+export function youthTeamAliasKey(teamName) {
+  const compact = compactYouthName(teamName);
+  const girls = compact.match(/^MO(\d{1,2}(?:[-.].*)?)$/i);
+  if (girls) return `MO${girls[1]}`.toUpperCase();
+  // Alleen optionele J (JO↔O), nooit M.
+  const boys = compact.match(/^(?:J)?O(\d{1,2}(?:[-.].*)?)$/i);
+  if (!boys) return null;
+  return `O${boys[1]}`.toUpperCase();
+}
+
+/**
+ * Zelfde nummer met/zonder JM-suffix (KNVB hernoemde O15-1JM → O15-1).
+ * Alleen binnen hetzelfde geslacht; O15-3JM wordt niet O15-3 als die apart bestaat
+ * — dat is alleen een lookup-fallback als exacte naam ontbreekt.
+ */
+export function jmAlternateAliasKeys(teamName) {
+  const key = youthTeamAliasKey(teamName);
+  if (!key) return [];
+  const m = key.match(/^(MO|O)(\d{1,2}-\d+)(JM)?$/i);
+  if (!m) return [];
+  const prefix = m[1].toUpperCase();
+  const num = m[2];
+  if (m[3]) return [`${prefix}${num}`];
+  return [`${prefix}${num}JM`];
 }
 
 export function isYoungYouthTeam(teamName) {

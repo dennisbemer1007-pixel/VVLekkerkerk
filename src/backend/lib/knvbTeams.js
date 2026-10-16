@@ -1,3 +1,5 @@
+import { gendersCompatible, jmAlternateAliasKeys, youthTeamAliasKey } from './youthTeams.js';
+
 /** Clubnaam in KNVB-export (Thuis / Uit). */
 const CLUB_RE = /\blekkerkerk\b/i;
 const SENIOR_BARE_RE = /^lekkerkerk\s+\d+[a-z]?$/i;
@@ -82,7 +84,13 @@ export function teamLookupKeys(name) {
     keys.add(stripped.replace(/\s+/g, ''));
   }
   for (const base of [...keys]) {
-    const m = base.match(/^(j)?o(\d{1,2}.*)$/);
+    // Meiden (MO…): nooit o…/jo…-sleutels — anders matcht O15 op MO15.
+    if (/^mo\d/i.test(base)) {
+      const girls = base.match(/^mo(\d{1,2}.*)$/i);
+      if (girls) keys.add(`mo${girls[1]}`);
+      continue;
+    }
+    const m = base.match(/^(j)?o(\d{1,2}.*)$/i);
     if (m) {
       keys.add(`o${m[2]}`);
       keys.add(`jo${m[2]}`);
@@ -101,17 +109,38 @@ export function buildTeamIndex(teams) {
   return map;
 }
 
-export function findTeamInIndex(index, name) {
-  for (const key of teamLookupKeys(name)) {
-    const found = index.get(key);
-    if (found) return found;
+function findInIndexWithKeys(index, name, keySets) {
+  for (const keys of keySets) {
+    for (const key of keys) {
+      const found = index.get(String(key).toLowerCase());
+      if (found && gendersCompatible(name, found.name)) return found;
+    }
   }
+  return null;
+}
+
+export function findTeamInIndex(index, name) {
+  const primary = findInIndexWithKeys(index, name, [teamLookupKeys(name)]);
+  if (primary) return primary;
+
+  // Fallback: O15-1JM ↔ O15-1 (KNVB-hernoeming), nooit MO↔O.
+  const alias = youthTeamAliasKey(name);
+  const jmAlts = jmAlternateAliasKeys(name);
+  if (alias || jmAlts.length) {
+    const altKeys = new Set();
+    if (alias) {
+      for (const k of teamLookupKeys(alias)) altKeys.add(k);
+    }
+    for (const alt of jmAlts) {
+      for (const k of teamLookupKeys(alt)) altKeys.add(k);
+    }
+    const viaJm = findInIndexWithKeys(index, name, [altKeys]);
+    if (viaJm) return viaJm;
+  }
+
   const unsuffixed = stripWeekendSuffix(name);
   if (unsuffixed && unsuffixed.toLowerCase() !== String(name || '').trim().toLowerCase()) {
-    for (const key of teamLookupKeys(unsuffixed)) {
-      const found = index.get(key);
-      if (found) return found;
-    }
+    return findInIndexWithKeys(index, unsuffixed, [teamLookupKeys(unsuffixed)]);
   }
   return null;
 }
