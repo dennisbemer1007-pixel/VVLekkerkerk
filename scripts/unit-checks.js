@@ -27,6 +27,13 @@ import { seasonLabelForDate, nextSeasonLabel, seasonRangeFromLabel } from '../sr
 import { parsePersonCsv, PERSON_IMPORT_EXAMPLE, validatePersonRows, personRowsFromObjects } from '../src/backend/lib/csvPersons.js';
 import { includesText, tightenDate } from '../src/backend/lib/listFilters.js';
 import { needsVoorWiePopup, voorWieChoices } from '../src/frontend/utils/voorWie.js';
+import {
+  householdIdsStillOpen,
+  mayAddDespiteTeamOnlySpots,
+  mayUnenroll,
+  RECENT_UNENROLL_MS,
+  withinRecentUnenrollWindow,
+} from '../src/backend/lib/enrollmentAccess.js';
 import { unenrollActions } from '../src/frontend/utils/uitschrijven.js';
 import { tileGroups } from '../src/frontend/utils/tiles.js';
 import { IMPORT_DESKTOP_MESSAGE, importAllowed } from '../src/frontend/utils/importGate.js';
@@ -2340,6 +2347,48 @@ assert(
   needsVoorWiePopup(voorWieChoices({ id: 1, name: 'Lisa' }, [])) === false,
 );
 
+const undoNow = new Date('2026-10-16T14:16:00.000Z');
+const freshSignup = new Date(undoNow.getTime() - 30 * 60 * 1000);
+const oldSignup = new Date(undoNow.getTime() - RECENT_UNENROLL_MS - 60 * 1000);
+assert(
+  'ouder maakt verse inschrijving ongedaan, barcommissie altijd',
+  withinRecentUnenrollWindow(freshSignup, undoNow) &&
+    !withinRecentUnenrollWindow(oldSignup, undoNow) &&
+    mayUnenroll({
+      isAdmin: false,
+      locked: true,
+      selfOrGuardian: true,
+      createdAt: freshSignup,
+      now: undoNow,
+    }) &&
+    !mayUnenroll({
+      isAdmin: false,
+      locked: true,
+      selfOrGuardian: true,
+      createdAt: oldSignup,
+      now: undoNow,
+    }) &&
+    mayUnenroll({
+      isAdmin: true,
+      locked: true,
+      selfOrGuardian: false,
+      createdAt: oldSignup,
+      now: undoNow,
+    }) &&
+    mayUnenroll({ isAdmin: false, locked: false, selfOrGuardian: false, createdAt: oldSignup, now: undoNow }),
+);
+assert(
+  'huishouden houdt een plek open voor het kind naast de ouder',
+  householdIdsStillOpen([10, 22], [{ personId: 10 }]).join(',') === '22' &&
+    householdIdsStillOpen([10, 22], [{ personId: 10 }, { personId: 22 }]).length === 0,
+);
+assert(
+  'barcommissie vult ook een gereserveerde plek zolang de dienst niet vol is',
+  mayAddDespiteTeamOnlySpots({ isAdmin: true, personalOpen: 0, enrolledCount: 1, required: 2 }) &&
+    !mayAddDespiteTeamOnlySpots({ isAdmin: false, personalOpen: 0, enrolledCount: 1, required: 2 }) &&
+    !mayAddDespiteTeamOnlySpots({ isAdmin: true, personalOpen: 0, enrolledCount: 2, required: 2 }),
+);
+
 const childOnly = unenrollActions(
   [{ id: 9, personId: 2, person: { name: 'Sem' } }],
   [1, 2],
@@ -2608,7 +2657,19 @@ assert(
       inschrijfSrc.includes("useState(null)") &&
       /onlyOpen.*mode === 'open'|mode === 'open'.*onlyOpen/.test(inschrijfSrc.replace(/\n/g, ' ')) &&
       inschrijfSrc.includes('link-inschrijven') &&
-      inschrijfSrc.includes('Ook de diensten van je kinderen'),
+      inschrijfSrc.includes('Ook de diensten van je kinderen') &&
+      inschrijfSrc.includes('householdIdsStillOpen') &&
+      inschrijfSrc.includes("onAdminRemoveEnrollment={can('beheer') ? handleUitschrijven : undefined}"),
+  );
+  const enrollRouteSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/enrollments.js'),
+    'utf8',
+  );
+  const existingAt = enrollRouteSrc.indexOf('Je staat al ingeschreven voor deze dienst');
+  const bumpAt = enrollRouteSrc.indexOf('service.enrollments.length + 1');
+  assert(
+    'dubbele inschrijving vergroot de dienst niet',
+    existingAt > 0 && bumpAt > existingAt && enrollRouteSrc.includes('mayUnenroll'),
   );
 }
 {
@@ -2772,6 +2833,13 @@ assert(
     'beheer-diensten sorteert op datum en begintijd',
     beheerDienstenSrc.includes('compareServicesByDateThenTime') &&
       beheerDienstenSrc.includes('s.active === false'),
+  );
+  assert(
+    'persoon toevoegen toont ook kinderen zonder e-mail',
+    beheerDienstenSrc.includes('includeNameless: true') &&
+      beheerDienstenSrc.includes('kind van') &&
+      planningUiSrc.includes('includeNameless: true') &&
+      planningUiSrc.includes('householdIdsStillOpen'),
   );
   const authSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/auth.js'),

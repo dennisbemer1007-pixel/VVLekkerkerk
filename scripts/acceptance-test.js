@@ -602,6 +602,7 @@ async function main() {
         !(s.enrollments || []).some((e) => e.personId === me.json?.id || e.person?.id === me.json?.id),
     );
     let lockedEnroll = null;
+    let enrolledServiceId = null;
     for (const candidate of signupTargets.slice(0, 8)) {
       const attempt = await req('/api/enrollments', {
         method: 'POST',
@@ -609,23 +610,43 @@ async function main() {
         body: { serviceId: candidate.id, personId: me.json.id },
       });
       lockedEnroll = attempt;
-      if (attempt.status === 201) break;
+      if (attempt.status === 201) {
+        enrolledServiceId = candidate.id;
+        break;
+      }
     }
-    let selfUnenroll = null;
-    if (lockedEnroll?.status === 201 && lockedEnroll.json?.id) {
-      selfUnenroll = await req(`/api/enrollments/${lockedEnroll.json.id}`, {
+    let freshUndo = null;
+    let lateUnenroll = null;
+    if (lockedEnroll?.status === 201 && lockedEnroll.json?.id && enrolledServiceId) {
+      freshUndo = await req(`/api/enrollments/${lockedEnroll.json.id}`, {
         method: 'DELETE',
         token: lisa,
       });
-      await req(`/api/enrollments/${lockedEnroll.json.id}`, { method: 'DELETE', token: admin });
+      const again = await req('/api/enrollments', {
+        method: 'POST',
+        token: lisa,
+        body: { serviceId: enrolledServiceId, personId: me.json.id },
+      });
+      if (again.status === 201 && again.json?.id) {
+        await prisma.enrollment.update({
+          where: { id: again.json.id },
+          data: { createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+        });
+        lateUnenroll = await req(`/api/enrollments/${again.json.id}`, {
+          method: 'DELETE',
+          token: lisa,
+        });
+        await req(`/api/enrollments/${again.json.id}`, { method: 'DELETE', token: admin });
+      }
     }
     mark(
       record(
-        'lisa mag inschrijven maar niet uitschrijven na officieel',
+        'lisa maakt verse inschrijving ongedaan, later niet meer',
         lockedEnroll?.status === 201 &&
-          selfUnenroll?.status === 403 &&
-          /uitschrijven/i.test(selfUnenroll?.json?.error || ''),
-        `${lockedEnroll?.status || 'geen'} ${selfUnenroll?.status || ''} ${lockedEnroll?.json?.error || selfUnenroll?.json?.error || ''}`,
+          freshUndo?.status === 204 &&
+          lateUnenroll?.status === 403 &&
+          /uitschrijven/i.test(lateUnenroll?.json?.error || ''),
+        `${lockedEnroll?.status || 'geen'} vers ${freshUndo?.status || ''} later ${lateUnenroll?.status || ''} ${lateUnenroll?.json?.error || freshUndo?.json?.error || ''}`,
       ),
     );
 
