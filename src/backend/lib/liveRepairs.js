@@ -1,8 +1,10 @@
 import { stripWeekendSuffix } from './knvbTeams.js';
-import { youthTeamAliasKey } from './youthTeams.js';
+import { defaultTeamFunctions } from './teamFunctions.js';
+import { youthGender, youthTeamAliasKey } from './youthTeams.js';
 
 /**
- * Kies welk JO/O/MO-dubbelteam blijft: meeste leden, dan teamdienst aan, dan JO-naam, dan laagste id.
+ * Kies welk JO/O-dubbelteam blijft: meeste leden, dan teamdienst aan, dan JO-naam, dan laagste id.
+ * (Meiden/MO zitten niet in dezelfde alias-groep.)
  */
 export function pickCanonicalYouthDuplicate(teams) {
   const list = (teams || []).filter((t) => t && t.active !== false);
@@ -21,9 +23,138 @@ export function pickCanonicalYouthDuplicate(teams) {
   })[0];
 }
 
+function restoreYouthTeamData(originalName) {
+  const fn = defaultTeamFunctions(originalName);
+  return {
+    active: true,
+    name: originalName,
+    teamDutyUse: fn.teamDutyUse,
+    teamDutySlots: JSON.stringify(fn.teamDutySlots),
+    functionsConfigured: true,
+  };
+}
+
+/**
+ * #59 aliaste MO15-1 per ongeluk naar O15-1 en merge-de meiden met jongens.
+ * Zet die merges terug: jongens-wedstrijden horen niet op MO-teams.
+ */
+export async function repairMoOWrongMerges(prisma) {
+  const teams = await prisma.team.findMany({
+    include: { _count: { select: { matches: true } } },
+  });
+  const moves = [];
+
+  for (const team of teams) {
+    const parsed = String(team.name).match(/^(.*?)\s*\(import-dubbel\s+([^)]+)\)\s*$/i);
+    if (!parsed) continue;
+    const originalName = parsed[1].trim();
+    const key = parsed[2].trim().toUpperCase();
+    const origGender = youthGender(originalName);
+    if (!origGender) continue;
+    // Foute alias gebruikte altijd een O…-key (MO werd als O opgeslagen).
+    if (!/^O\d/i.test(key)) continue;
+
+    const num = key.slice(1);
+
+    if (origGender === 'girls') {
+      if (team.active !== false) continue;
+      await prisma.team.update({ where: { id: team.id }, data: restoreYouthTeamData(originalName) });
+      moves.push({ action: 'restore-girls', id: team.id, name: originalName, key });
+      continue;
+    }
+
+    // Jongensteam was weggegomd onder O-key; haal wedstrijden terug van MO-twin.
+    const moTwin = teams.find(
+      (t) => t.active !== false && youthTeamAliasKey(t.name) === `MO${num}`,
+    );
+    await prisma.team.update({ where: { id: team.id }, data: restoreYouthTeamData(originalName) });
+    let movedMatches = 0;
+    let movedDuties = 0;
+    if (moTwin) {
+      const matchResult = await prisma.match.updateMany({
+        where: { teamId: moTwin.id },
+        data: { teamId: team.id },
+      });
+      movedMatches = matchResult.count;
+      const duties = await prisma.serviceTeamDuty.findMany({
+        where: { teamId: moTwin.id },
+        include: {
+          service: { include: { enrollments: { where: { noShow: false }, select: { id: true } } } },
+        },
+      });
+      for (const duty of duties) {
+        if ((duty.service?.enrollments || []).length) continue;
+        await prisma.serviceTeamDuty.update({
+          where: { id: duty.id },
+          data: { teamId: team.id },
+        });
+        movedDuties += 1;
+      }
+    }
+    moves.push({
+      action: 'restore-boys-from-mo',
+      id: team.id,
+      name: originalName,
+      moTwinId: moTwin?.id || null,
+      moTwinName: moTwin?.name || null,
+      movedMatches,
+      movedDuties,
+      key,
+    });
+  }
+
+  // Dubbel-marker weggegooid: MO heeft wedstrijden, O-sibling heeft er 0 → terugzetten.
+  const active = await prisma.team.findMany({
+    where: { active: { not: false } },
+    include: { _count: { select: { matches: true } } },
+  });
+  for (const girls of active) {
+    if (youthGender(girls.name) !== 'girls') continue;
+    const gKey = youthTeamAliasKey(girls.name);
+    if (!gKey?.startsWith('MO')) continue;
+    const num = gKey.slice(2);
+    const boys = active.find((t) => youthTeamAliasKey(t.name) === `O${num}`);
+    if (!boys) continue;
+    if ((girls._count?.matches || 0) === 0) continue;
+    if ((boys._count?.matches || 0) > 0) continue;
+    const matchResult = await prisma.match.updateMany({
+      where: { teamId: girls.id },
+      data: { teamId: boys.id },
+    });
+    if (!matchResult.count) continue;
+    const duties = await prisma.serviceTeamDuty.findMany({
+      where: { teamId: girls.id },
+      include: {
+        service: { include: { enrollments: { where: { noShow: false }, select: { id: true } } } },
+      },
+    });
+    let movedDuties = 0;
+    for (const duty of duties) {
+      if ((duty.service?.enrollments || []).length) continue;
+      await prisma.serviceTeamDuty.update({
+        where: { id: duty.id },
+        data: { teamId: boys.id },
+      });
+      movedDuties += 1;
+    }
+    moves.push({
+      action: 'relink-mo-matches-to-boys',
+      fromId: girls.id,
+      from: girls.name,
+      toId: boys.id,
+      to: boys.name,
+      movedMatches: matchResult.count,
+      movedDuties,
+    });
+  }
+
+  return { repaired: moves.length, teams: moves };
+}
+
 /**
  * KNVB exporteert "O15-1", de app heeft vaak "JO15-1". Zonder merge spelen wedstrijden
  * op een leeg O-team terwijl ouders op JO staan — dan krijgt O16/O15-2 nooit teamdienst.
+ * Meiden (MO…) worden hier nooit met jongens samengevoegd.
  */
 export async function repairJoOYouthDuplicates(prisma) {
   const teams = await prisma.team.findMany({

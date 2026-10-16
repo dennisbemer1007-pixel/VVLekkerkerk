@@ -68,12 +68,17 @@ import {
   swapCommitteeEmailContent,
 } from '../src/backend/lib/mail.js';
 import {
+  gendersCompatible,
   isYoungYouthTeam,
   isOldYouthTeam,
   parseJoAge,
+  youthGender,
   youthTeamAliasKey,
 } from '../src/backend/lib/youthTeams.js';
-import { pickCanonicalYouthDuplicate } from '../src/backend/lib/liveRepairs.js';
+import {
+  pickCanonicalYouthDuplicate,
+  repairMoOWrongMerges,
+} from '../src/backend/lib/liveRepairs.js';
 import {
   underQuota,
   isUnavailableOn,
@@ -1054,8 +1059,182 @@ assert(
   youthTeamAliasKey('JO15-1') === 'O15-1' &&
     youthTeamAliasKey('O15-1') === 'O15-1' &&
     youthTeamAliasKey('O15-3JM') === 'O15-3JM' &&
-    youthTeamAliasKey('MO16-1') === 'O16-1',
+    youthTeamAliasKey('MO16-1') === 'MO16-1',
 );
+assert(
+  'M-prefix (meiden) mag nooit matchen met O/JO',
+  youthTeamAliasKey('MO15-1') !== youthTeamAliasKey('O15-1') &&
+    youthGender('MO15-1') === 'girls' &&
+    youthGender('O15-1') === 'boys' &&
+    gendersCompatible('MO15-1', 'O15-1') === false &&
+    gendersCompatible('JO15-1', 'O15-1') === true,
+);
+{
+  const idx = buildTeamIndex([
+    { id: 1, name: 'MO15-1', teamDutyUse: true },
+    { id: 2, name: 'O15-1', teamDutyUse: true },
+    { id: 3, name: 'O15-3JM', teamDutyUse: true },
+    { id: 4, name: 'O16-1', teamDutyUse: true },
+  ]);
+  assert(
+    'findTeam: Lekkerkerk O15-1 → O15-1, niet MO15',
+    findTeamInIndex(idx, 'O15-1')?.id === 2 && findTeamInIndex(idx, 'Lekkerkerk O15-1')?.id === 2,
+  );
+  assert('findTeam: MO15-1 blijft meiden', findTeamInIndex(idx, 'MO15-1')?.id === 1);
+  assert('findTeam: O15-3JM blijft JM', findTeamInIndex(idx, 'O15-3JM')?.id === 3);
+assert(
+  'findTeam: O15-1JM valt terug op O15-1 (KNVB-hernoeming)',
+  findTeamInIndex(idx, 'O15-1JM')?.id === 2,
+);
+}
+
+// Chantal KNVB-export: O15-1 ≠ MO15, O15-3JM heeft thuiswedstrijden
+{
+  const csvPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    'fixtures/chantal-wedstrijdplanning-5.csv',
+  );
+  const csvText = fs.readFileSync(csvPath, 'utf8');
+  const parsed = parseCsv(csvText);
+  const validated = validateMatchRows(parsed.rows, {
+    headerError: parsed.headerError,
+    format: parsed.format,
+  });
+  assert(
+    'chantal-csv knvb-formaat met Lekkerkerk-rijen',
+    parsed.format === 'knvb' &&
+      validated.rows.length >= 150 &&
+      (validated.invalidRows?.length || 0) >= 0,
+  );
+  const xerxes = validated.rows.find(
+    (r) =>
+      r.date === '2026-10-31' &&
+      String(r.time || '').startsWith('10:30') &&
+      /xerxes/i.test(r.opponent || ''),
+  );
+  assert(
+    'chantal-csv 31-10 10:30 is Lekkerkerk O15-1 (niet MO)',
+    xerxes && xerxes.home === true && xerxes.team === 'O15-1',
+  );
+  const teams = [
+    { id: 10, name: 'MO15-1', teamDutyUse: true },
+    { id: 11, name: 'O15-1', teamDutyUse: true },
+    { id: 12, name: 'O15-3JM', teamDutyUse: true },
+    { id: 13, name: 'O16-1', teamDutyUse: true },
+    { id: 14, name: 'O12-3JM', teamDutyUse: true },
+    { id: 15, name: 'MO17-1', teamDutyUse: true },
+  ];
+  const idx = buildTeamIndex(teams);
+  assert(
+    'chantal-csv O15-1 koppelt niet aan MO15-1',
+    findTeamInIndex(idx, xerxes.team)?.id === 11,
+  );
+  const o153Homes = validated.rows.filter((r) => r.team === 'O15-3JM' && r.home === true);
+  assert('chantal-csv O15-3JM heeft thuiswedstrijden', o153Homes.length >= 2);
+  assert(
+    'chantal-csv O15-3JM matcht team O15-3JM',
+    o153Homes.every((r) => findTeamInIndex(idx, r.team)?.id === 12),
+  );
+  const mo15Rows = validated.rows.filter((r) => /^MO15/i.test(r.team || ''));
+  assert('chantal-csv heeft geen MO15-wedstrijden', mo15Rows.length === 0);
+  const secondRuleCsv = {
+    teamDuty: true,
+    teamDutySlotRole: 'SECOND',
+    required: 2,
+    teamDutyReserved: 2,
+    teamDutyAgeFrom: 13,
+    teamDutyAgeTo: 17,
+  };
+  const fairnessCsv = { counts: new Map() };
+  const satHomeSets = [
+    [
+      { team: teams[2], home: true, time: '11:00' }, // O15-3JM
+      { team: teams[3], home: true, time: '11:15' }, // O16-1
+    ],
+    [{ team: teams[3], home: true, time: '13:15' }],
+    [
+      { team: teams[2], home: true, time: '11:30' },
+      { team: teams[3], home: true, time: '13:15' },
+    ],
+  ];
+  const picks = [];
+  for (const homes of satHomeSets) {
+    const assign = teamDutyAssignments(secondRuleCsv, homes, fairnessCsv);
+    if (assign[0]) {
+      picks.push(assign[0].team.id);
+      recordTeamDutyStand(fairnessCsv, assign[0].team.id, new Date('2026-11-07'), assign[0].reserved);
+    }
+  }
+  assert(
+    'O15-3JM krijgt teamdienst bij eerlijke rotatie met O16',
+    picks.includes(12) && picks.includes(13),
+  );
+}
+
+{
+  // repairMoOWrongMerges: O15 (import-dubbel) + MO15 met gestolen wedstrijden
+  const store = {
+    teams: [
+      {
+        id: 1,
+        name: 'O15-1 (import-dubbel O15-1)',
+        active: false,
+        teamDutyUse: false,
+        _count: { matches: 0 },
+      },
+      { id: 2, name: 'MO15-1', active: true, teamDutyUse: true, _count: { matches: 3 } },
+    ],
+    matches: [
+      { id: 101, teamId: 2 },
+      { id: 102, teamId: 2 },
+      { id: 103, teamId: 2 },
+    ],
+    duties: [],
+  };
+  const prismaMock = {
+    team: {
+      findMany: async (args) => {
+        let list = store.teams.map((t) => ({
+          ...t,
+          _count: {
+            matches: store.matches.filter((m) => m.teamId === t.id).length,
+          },
+        }));
+        if (args?.where?.active?.not === false) {
+          list = list.filter((t) => t.active !== false);
+        }
+        return list;
+      },
+      update: async ({ where, data }) => {
+        const t = store.teams.find((x) => x.id === where.id);
+        Object.assign(t, data);
+        return t;
+      },
+    },
+    match: {
+      updateMany: async ({ where, data }) => {
+        let n = 0;
+        for (const m of store.matches) {
+          if (where.teamId != null && m.teamId !== where.teamId) continue;
+          m.teamId = data.teamId;
+          n += 1;
+        }
+        return { count: n };
+      },
+    },
+    serviceTeamDuty: {
+      findMany: async () => [],
+    },
+  };
+  const repaired = await repairMoOWrongMerges(prismaMock);
+  assert(
+    'repair zet O15 terug en haalt wedstrijden van MO15',
+    repaired.repaired >= 1 &&
+      store.teams[0].active === true &&
+      store.teams[0].name === 'O15-1' &&
+      store.matches.every((m) => m.teamId === 1),
+  );
+}
 assert(
   'canonieke jeugddubbel kiest team met leden + JO-naam',
   pickCanonicalYouthDuplicate([
@@ -3818,6 +3997,13 @@ assert(
     'render-start herstelt JO/O-jeugddubbels vóór backfill',
     renderStartForPublish.includes('repairJoOYouthDuplicates') &&
       renderStartForPublish.includes('JO/O-jeugddubbels'),
+  );
+  assert(
+    'render-start herstelt MO/O-foutmerge vóór JO/O-merge',
+    renderStartForPublish.includes('MO/O-foutmerge hersteld') &&
+      renderStartForPublish.includes('repairMoOWrongMerges(prisma)') &&
+      renderStartForPublish.indexOf('repairMoOWrongMerges(prisma)') <
+        renderStartForPublish.indexOf('repairJoOYouthDuplicates(prisma)'),
   );
   assert(
     'aftrap-filter negeert NO_HOME_MATCH vaste-persoon-check niet',

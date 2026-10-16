@@ -28,7 +28,7 @@ import {
 } from './teamDutyPlanning.js';
 import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { deactivateDuplicateServices, deactivateOrphanAutoServices } from './serviceDedup.js';
-import { repairJoOYouthDuplicates } from './liveRepairs.js';
+import { repairJoOYouthDuplicates, repairMoOWrongMerges } from './liveRepairs.js';
 import { getClubSettings, seasonRangeFromLabel } from './season.js';
 
 export { manualCoversSpec };
@@ -172,7 +172,8 @@ async function loadSeasonTeamDutyStands({ seasonFrom, seasonTo, excludeServiceId
 
 export async function generateServicesFromRules({ from, to, weeks } = {}) {
   await ensureClubDefaults();
-  // JO15 ↔ O15 samenvoegen vóór kandidaten/thuiswedstrijden worden gelezen.
+  // Eerst foute MO↔O-merges (#59) terugzetten, daarna alleen JO↔O samenvoegen.
+  await repairMoOWrongMerges(prisma);
   await repairJoOYouthDuplicates(prisma);
   await deactivateDuplicateServices(prisma);
   await deactivateOrphanAutoServices(prisma);
