@@ -24,6 +24,13 @@ import { mayAddDespiteTeamOnlySpots, mayUnenroll } from '../lib/enrollmentAccess
 
 const router = Router();
 
+/** Bevestigingsmail na een geslaagde inschrijving. Tests kunnen dit vervangen. */
+export const enrollmentFollowUp = {
+  confirm(args) {
+    return trySendScheduledConfirmation(args);
+  },
+};
+
 function mapEnrollment(enrollment) {
   if (!enrollment) return null;
   return {
@@ -217,6 +224,7 @@ router.post(
           code: 'MORNING_BAR_KITCHEN_ONLY',
         });
       }
+      let mayOverrideMatch = false;
       if (servicePreview && !fillingTeamDuty) {
         const matches = await prisma.match.findMany({
           where: {
@@ -232,7 +240,7 @@ router.post(
         const selfEnroll = Number(req.person.id) === targetId;
         const guardianEnrollingChild =
           Boolean(person.guardianId) && Number(person.guardianId) === Number(req.person.id);
-        const mayOverrideMatch =
+        mayOverrideMatch =
           isAdminRole(req.person.role) || selfEnroll || guardianEnrollingChild;
         if (overlap.length && !(ignoreMatchBlock && mayOverrideMatch)) {
           return res.status(409).json({
@@ -387,27 +395,36 @@ router.post(
           });
         });
 
-        if (ignoreMatchBlock && mayOverrideMatch) {
-          await writeAudit({
-            actorId: req.person.id,
-            action: 'enrollment.match_block_override',
-            entity: 'Enrollment',
-            entityId: enrollment.id,
-            detail: `${person.name} op dienst ${serviceId}`,
-          });
-        }
+        // De inschrijving staat al vast. Mail, audit of inhaal-telling mogen
+        // het antwoord niet meer in een 500 laten eindigen.
+        try {
+          if (ignoreMatchBlock && mayOverrideMatch) {
+            await writeAudit({
+              actorId: req.person.id,
+              action: 'enrollment.match_block_override',
+              entity: 'Enrollment',
+              entityId: enrollment.id,
+              detail: `${person.name} op dienst ${serviceId}`,
+            });
+          }
 
-        if (enrollment.makeup) {
-          await prisma.person.update({
-            where: { id: targetId },
-            data: { makeupDue: { decrement: 1 } },
-          });
-        }
+          if (enrollment.makeup) {
+            await prisma.person.update({
+              where: { id: targetId },
+              data: { makeupDue: { decrement: 1 } },
+            });
+          }
 
-        trySendScheduledConfirmation({
-          person: enrollment.person,
-          service: enrollment.service,
-        }).catch(() => {});
+          await enrollmentFollowUp.confirm({
+            person: enrollment.person,
+            service: enrollment.service,
+          });
+        } catch (sideErr) {
+          console.error(
+            '[enrollment] bijwerking na inschrijven mislukt:',
+            sideErr?.message || sideErr,
+          );
+        }
         res.status(201).json(mapEnrollment(enrollment));
       } catch (e) {
         if (e.status) {

@@ -4602,6 +4602,13 @@ assert(
 }
 
 const unitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const enrollConfirm = spawnSync(process.execPath, ['scripts/enroll-confirm-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+  env: { ...process.env, TZ: 'UTC' },
+});
+assert('inschrijven blijft 201 als de mail daarna stukgaat', enrollConfirm.status === 0);
+
 const refereeApi = spawnSync(process.execPath, ['scripts/referee-api-check.js'], {
   cwd: unitRoot,
   stdio: 'inherit',
