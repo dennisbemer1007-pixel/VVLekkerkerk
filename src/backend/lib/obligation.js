@@ -123,15 +123,24 @@ export function isExemptedOn(person, date = new Date()) {
 
 /**
  * VR18+: 1× per 2 planningen, huidige periode leidend.
- * Eerste planning ooit (geen vorige) telt als previousCount=0 → indelen.
+ * Eerste planning (geen echte vorige ronde) → deze ronde overslaan; volgende
+ * planning uiterlijk wel. Alleen een afgeleide kalenderperiode telt niet als
+ * vorige ronde.
  * Stond in de vorige → overslaan. Zelf al in de huidige → overslaan.
- * Niet in vorige én niet in huidige → indelen.
+ * Vorige ronde bestond en geen dienst daarin én niet in huidige → indelen.
  */
-export function vr18NeedsFillInCurrent({ previousCount = 0, currentCount = 0 } = {}) {
-  return Number(previousCount) === 0 && Number(currentCount) === 0;
+export function vr18NeedsFillInCurrent({
+  previousCount = 0,
+  currentCount = 0,
+  hasPreviousPeriod = true,
+} = {}) {
+  if (Number(currentCount) > 0) return false;
+  if (!hasPreviousPeriod) return false;
+  return Number(previousCount) === 0;
 }
 
 export function vr18PeriodCounts(enrollments, currentPeriod, previousPeriod = null) {
+  const realPrevious = Boolean(previousPeriod) && !previousPeriod.inferred;
   return {
     previousCount: previousPeriod
       ? personalEnrollmentCount(enrollments, previousPeriod.from, previousPeriod.to)
@@ -139,6 +148,7 @@ export function vr18PeriodCounts(enrollments, currentPeriod, previousPeriod = nu
     currentCount: currentPeriod
       ? personalEnrollmentCount(enrollments, currentPeriod.from, currentPeriod.to)
       : 0,
+    hasPreviousPeriod: realPrevious,
   };
 }
 
@@ -212,6 +222,7 @@ export function fillExecutedCount(person, counts) {
     return vr18NeedsFillInCurrent({
       previousCount: counts.countPrevious ?? 0,
       currentCount: counts.countPeriod ?? counts.count12w ?? 0,
+      hasPreviousPeriod: counts.hasPreviousPeriod,
     })
       ? 0
       : 1;

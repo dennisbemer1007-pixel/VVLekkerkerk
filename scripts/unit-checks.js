@@ -626,7 +626,14 @@ assert(
   'verplicht telt in de planningsperiode, VR18 over twee planningen',
   fillExecutedCount({ obligation: 'FULL' }, { countPeriod: 0, count6w: 1, count12w: 1 }) === 0 &&
     fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 1, countPeriod: 0 }) === 1 &&
-    fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 }) === 0,
+    fillExecutedCount(
+      { obligation: 'VR18' },
+      { countPrevious: 0, countPeriod: 0, hasPreviousPeriod: true },
+    ) === 0 &&
+    fillExecutedCount(
+      { obligation: 'VR18' },
+      { countPrevious: 0, countPeriod: 0, hasPreviousPeriod: false },
+    ) === 1,
 );
 assert(
   'empty slot cell is gesloten',
@@ -806,7 +813,22 @@ assert('FULL met', underQuota({ obligation: 'FULL' }, 1, 5) === false);
 assert('HALF normalizes to FULL', normalizeObligation('HALF') === 'FULL');
 assert('HALF uses FULL 6-week quota', underQuota({ obligation: 'HALF' }, 0, 5) === true);
 assert('HALF met after one 6w duty', underQuota({ obligation: 'HALF' }, 1, 2) === false);
-assert('VR18 under quota zonder vorige en huidige dienst', underQuota({ obligation: 'VR18' }, 1, 4, { previousCount: 0, currentCount: 0 }) === true);
+assert(
+  'VR18 under quota na gemiste vorige planning',
+  underQuota({ obligation: 'VR18' }, 1, 4, {
+    previousCount: 0,
+    currentCount: 0,
+    hasPreviousPeriod: true,
+  }) === true,
+);
+assert(
+  'VR18 eerste planning niet under quota',
+  underQuota({ obligation: 'VR18' }, 1, 4, {
+    previousCount: 0,
+    currentCount: 0,
+    hasPreviousPeriod: false,
+  }) === false,
+);
 assert('VR18 met vorige planning voldaan', underQuota({ obligation: 'VR18' }, 1, 4, { previousCount: 1, currentCount: 0 }) === false);
 assert('exempted not under quota', underQuota({ obligation: 'FULL', exempted: true }, 0, 0, 0) === false);
 assert('makeup remaining on top', remainingObligation({ obligation: 'FULL', makeupDue: 2 }, 1) === 2);
@@ -1968,13 +1990,23 @@ assert(
   defaultPlanningEndInput(new Date('2026-09-17T12:00:00')) === '2027-01-03',
 );
 
-// Dennis ronde 4 (a): VR18+ 1× per 2 planningen
+// VR18+ 1× per 2 planningen (eerste planning overslaan)
 {
-  const firstEver = vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 0 });
-  assert('VR18 eerste planning ooit: moet ingedeeld', firstEver === true);
+  const firstEver = vr18NeedsFillInCurrent({
+    previousCount: 0,
+    currentCount: 0,
+    hasPreviousPeriod: false,
+  });
+  assert('VR18 eerste planning ooit: overslaan', firstEver === false);
   assert(
-    'VR18 eerste planning: remaining 1',
-    remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 })) === 1,
+    'VR18 eerste planning: remaining 0',
+    remainingObligation(
+      { obligation: 'VR18' },
+      fillExecutedCount(
+        { obligation: 'VR18' },
+        { countPrevious: 0, countPeriod: 0, hasPreviousPeriod: false },
+      ),
+    ) === 0,
   );
 
   assert(
@@ -1985,8 +2017,14 @@ assert(
 
   assert(
     'VR18 niet in vorige en niet in huidige: moet ingedeeld',
-    vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 0 }) === true &&
-      remainingObligation({ obligation: 'VR18' }, fillExecutedCount({ obligation: 'VR18' }, { countPrevious: 0, countPeriod: 0 })) === 1,
+    vr18NeedsFillInCurrent({ previousCount: 0, currentCount: 0, hasPreviousPeriod: true }) === true &&
+      remainingObligation(
+        { obligation: 'VR18' },
+        fillExecutedCount(
+          { obligation: 'VR18' },
+          { countPrevious: 0, countPeriod: 0, hasPreviousPeriod: true },
+        ),
+      ) === 1,
   );
 
   assert(
@@ -2004,13 +2042,18 @@ assert(
     'VR18 period counts: vorige dienst telt, huidige leeg',
     (() => {
       const c = vr18PeriodCounts(enrollments, current, previous);
-      return c.previousCount === 1 && c.currentCount === 0 && vr18NeedsFillInCurrent(c) === false;
+      return (
+        c.previousCount === 1 &&
+        c.currentCount === 0 &&
+        c.hasPreviousPeriod === true &&
+        vr18NeedsFillInCurrent(c) === false
+      );
     })(),
   );
   assert(
     'VR18 eerste planning ooit: geen vorige ronde',
     pickPreviousRound([], '2026-12-07') === null &&
-      vr18NeedsFillInCurrent(vr18PeriodCounts([], current, null)) === true,
+      vr18NeedsFillInCurrent(vr18PeriodCounts([], current, null)) === false,
   );
   assert(
     'VR18 pickPreviousRound kiest de ronde die eerder eindigt',
@@ -2099,8 +2142,18 @@ assert('FULL merkteken blijft sterretje', obligationMark({ obligation: 'FULL', m
       vr18NeedsFillInCurrent(vr18PeriodCounts([octDuty], p2, inferred)) === false,
   );
   assert(
-    'zonder ronde-rij: eerste planning ooit blijft vullen',
-    vr18NeedsFillInCurrent(vr18PeriodCounts([], p1, inferPrecedingPeriod(p1.from, p1.to))) === true,
+    'zonder ronde-rij: eerste planning ooit overslaan (afgeleide periode telt niet)',
+    (() => {
+      const c = vr18PeriodCounts([], p1, inferPrecedingPeriod(p1.from, p1.to));
+      return c.hasPreviousPeriod === false && vr18NeedsFillInCurrent(c) === false;
+    })(),
+  );
+  assert(
+    'tweede ronde: VR18 die de eerste oversloeg moet nu wel',
+    (() => {
+      const c = vr18PeriodCounts([], p2, prevOfP2);
+      return c.hasPreviousPeriod === true && c.previousCount === 0 && vr18NeedsFillInCurrent(c) === true;
+    })(),
   );
   assert(
     'drie AUTO-diensten achter elkaar schendt 1× per 2 (2 dec is de extra)',

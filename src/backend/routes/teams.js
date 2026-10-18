@@ -152,6 +152,7 @@ router.get(
             countYear: personalEnrollmentCount(enrollments, yearStart, to),
             countPeriod: vr18.currentCount,
             countPrevious: vr18.previousCount,
+            hasPreviousPeriod: vr18.hasPreviousPeriod,
           };
           const executed = executedCountForObligation(member, counts);
           const teamStands = enrollments.filter(

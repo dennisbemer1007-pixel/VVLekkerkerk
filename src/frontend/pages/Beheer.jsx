@@ -1619,8 +1619,8 @@ function PlanningBeheer() {
         <p className="text-sm text-gray-700">
           Klik hieronder om open <strong>vrijwilligersplekken</strong> te vullen met leden
           die verplicht zijn (minstens 1× in <strong>deze planningsperiode</strong>), VR18+
-          (1× per 2 planningen; wie in de vorige niet stond én in deze nog niet, wordt
-          ingedeeld) of een inhaaldienst hebben. Teamplekken
+          (1× per 2 planningen; in de eerste planning nog niet, daarna wie in de vorige
+          niet stond én in deze nog niet) of een inhaaldienst hebben. Teamplekken
           (O8–O17 thuis) blijven staan voor de bardienstcoördinator, die de namen van ouders invult.
         </p>
         <p className="text-xs text-gray-600">
