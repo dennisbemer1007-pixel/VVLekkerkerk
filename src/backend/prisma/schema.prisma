@@ -213,6 +213,8 @@ model Service {
   kind           String       @default("PERSONAL")
   /** AUTO | MANUAL | YEAR */
   origin         String       @default("AUTO")
+  /** Barcommissie heeft het team verplaatst of de teamplek weggehaald. Sync laat die keuze staan. */
+  teamDutiesManual Boolean    @default(false)
   slot           String?
   note           String?
   matchId        Int?

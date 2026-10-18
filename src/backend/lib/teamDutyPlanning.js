@@ -363,13 +363,18 @@ export function displayEnrollmentReason(reason) {
   return cleaned;
 }
 
+/** De barcommissie heeft deze teamplekken zelf gezet of weggehaald. */
+export function teamDutiesHeldByHand(service) {
+  return Boolean(service?.teamDutiesManual) || service?.origin === 'MANUAL';
+}
+
 /**
  * Lege teamplekken mogen opnieuw worden toegewezen voor eerlijke rotatie —
- * ook na publiceren (locked). Zodra er een naam op de dienst staat (team of
- * persoonlijk), of de dienst handmatig is, blijven teamplekken onaangeroerd.
+ * ook na publiceren (locked). Zodra er een naam op de dienst staat, of de
+ * barcommissie het team heeft verplaatst of weggehaald, blijven ze staan.
  */
 export function canReassignEmptyTeamDuties(service) {
-  if (!service || service.origin === 'MANUAL') return false;
+  if (!service || teamDutiesHeldByHand(service)) return false;
   const named = (service.enrollments || []).some((e) => !e.noShow);
   return !named;
 }
@@ -405,7 +410,7 @@ export function shouldReviveEmptyLockedAuto(service) {
 }
 
 export function shouldAttachTeamDutiesToLocked(service, assignments) {
-  if (service?.origin === 'MANUAL') return false;
+  if (teamDutiesHeldByHand(service)) return false;
   if (!canReassignEmptyTeamDuties(service) && (service?.teamDuties || []).length > 0) {
     return false;
   }

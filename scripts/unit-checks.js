@@ -1143,6 +1143,47 @@ assert(
   }) === false,
 );
 assert(
+  'handmatige teamplek blijft staan, ook zonder naam',
+  canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    locked: true,
+    teamDutiesManual: true,
+    teamDuties: [{ id: 1, teamId: 15 }],
+    enrollments: [],
+  }) === false &&
+    shouldAttachTeamDutiesToLocked(
+      {
+        origin: 'AUTO',
+        locked: true,
+        teamDutiesManual: true,
+        teamDuties: [{ id: 1, teamId: 15 }],
+        enrollments: [],
+      },
+      [{ team: { id: 16 } }],
+    ) === false &&
+    frozenTeamDutyFromService(
+      {
+        origin: 'AUTO',
+        teamDutiesManual: true,
+        teamDuties: [{ teamId: 15, reserved: 2 }],
+        enrollments: [],
+      },
+      [{ team: { id: 15, name: 'O15-1' } }],
+    )?.team?.id === 15,
+);
+assert(
+  'weggehaalde teamplek komt niet terug',
+  shouldAttachTeamDutiesToLocked(
+    { origin: 'AUTO', locked: true, teamDutiesManual: true, teamDuties: [], enrollments: [] },
+    [{ team: { id: 7 } }],
+  ) === false && canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    teamDutiesManual: true,
+    teamDuties: [],
+    enrollments: [],
+  }) === false,
+);
+assert(
   'ingevulde teamplekken blijven staan na publiceren',
   canReassignEmptyTeamDuties({
     origin: 'AUTO',
@@ -3248,6 +3289,8 @@ assert(
       liveDeploySrc.includes('20261009120000_chantal_herinnering_o19') &&
       renderStartSrc.includes('CHANTAL3_MIGRATION') &&
       renderStartSrc.includes('CHANTAL5_MIGRATION') &&
+      renderStartSrc.includes('TEAM_DUTIES_MANUAL_MIGRATION') &&
+      liveDeploySrc.includes('20261018200000_team_duties_manual') &&
       renderStartSrc.includes('backupSqlite') &&
       renderStartSrc.includes('applyNamedMigrationsOnce') &&
       renderStartSrc.includes('repairAccidentalWeekendTeams') &&
@@ -4557,6 +4600,28 @@ assert(
       migration5.includes('coordinatorRemindedAt') &&
       !/DROP TABLE/i.test(migration5) &&
       !/DROP COLUMN/i.test(migration5),
+  );
+  const teamDutyMigration = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/prisma/migrations/20261018200000_team_duties_manual/migration.sql',
+    ),
+    'utf8',
+  );
+  assert(
+    'teamplek-migratie bevriest de huidige officiële diensten en is additief',
+    teamDutyMigration.includes('teamDutiesManual') &&
+      teamDutyMigration.includes('WHERE "locked" = 1') &&
+      !/DROP TABLE/i.test(teamDutyMigration) &&
+      !/DROP COLUMN/i.test(teamDutyMigration),
+  );
+  const servicesRouteSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/services.js'),
+    'utf8',
+  );
+  assert(
+    'wijzigen of weghalen van een teamplek zet de vlag',
+    servicesRouteSrc.split('teamDutiesManual: true').length >= 3,
   );
   const beheerSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),

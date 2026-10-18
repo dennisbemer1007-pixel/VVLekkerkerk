@@ -275,7 +275,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   const excludeServiceIds = [];
   for (const spec of needed.values()) {
     for (const service of existingByKey.get(spec.key) || []) {
-      if (service.origin === 'MANUAL') continue;
+      if (service.origin === 'MANUAL' || service.teamDutiesManual) continue;
       if (service.locked && !canReassignEmptyTeamDuties(service)) continue;
       excludeServiceIds.push(service.id);
     }
@@ -304,7 +304,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     // Ingevulde of handmatige diensten: bestaande teamplekken bevriezen (tellen wél mee
     // voor rotatie), zodat we geen phantom-stands boeken voor teams die de plek niet krijgen.
     const frozen = frozenTeamDutyFromService(target, spec.candidates);
-    const manualFrozen = target?.origin === 'MANUAL';
+    const manualFrozen = target?.origin === 'MANUAL' || Boolean(target?.teamDutiesManual);
     let assignments;
     if (frozen) {
       assignments = [frozen];
@@ -398,6 +398,11 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     }
 
     if (target) {
+      if (target.teamDutiesManual) {
+        // Keuze van de barcommissie: team laten staan, of weggehaald laten.
+        skipped += 1;
+        continue;
+      }
       if (target.origin === 'MANUAL') {
         skipped += 1;
         await applyFixedPerson(target.id, spec);
