@@ -25,6 +25,7 @@ import {
   CHANTAL_MIGRATION,
   CHANTAL3_MIGRATION,
   CHANTAL5_MIGRATION,
+  TEAM_DUTIES_MANUAL_MIGRATION,
 } from '../src/backend/lib/liveDeploy.js';
 import {
   repairAccidentalWeekendTeams,
@@ -99,6 +100,7 @@ console.log(
   CHANTAL_MIGRATION,
   CHANTAL3_MIGRATION,
   CHANTAL5_MIGRATION,
+  TEAM_DUTIES_MANUAL_MIGRATION,
 );
 
 const dbFile = resolveLiveDbFile(root);

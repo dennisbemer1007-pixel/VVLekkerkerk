@@ -254,6 +254,10 @@ router.put(
         data,
         include: { team: true },
       });
+      await prisma.service.update({
+        where: { id: duty.serviceId },
+        data: { teamDutiesManual: true },
+      });
       res.json(updated);
     } catch (err) {
       next(err);
@@ -270,6 +274,10 @@ router.delete(
         return res.status(404).json({ error: 'Teamplek niet gevonden' });
       }
       await prisma.serviceTeamDuty.delete({ where: { id: duty.id } });
+      await prisma.service.update({
+        where: { id: duty.serviceId },
+        data: { teamDutiesManual: true },
+      });
       res.json({ ok: true });
     } catch (err) {
       next(err);

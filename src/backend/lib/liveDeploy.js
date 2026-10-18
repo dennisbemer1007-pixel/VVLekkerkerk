@@ -9,6 +9,7 @@ export const CALENDAR_MIGRATION = '20261004120000_calendar';
 export const CHANTAL_MIGRATION = '20261004150000_chantal_tester';
 export const CHANTAL3_MIGRATION = '20261006100000_chantal_ronde3';
 export const CHANTAL5_MIGRATION = '20261009120000_chantal_herinnering_o19';
+export const TEAM_DUTIES_MANUAL_MIGRATION = '20261018200000_team_duties_manual';
 
 export const LIVE_MIGRATIONS = [
   TOURNAMENT_MIGRATION,
@@ -17,6 +18,7 @@ export const LIVE_MIGRATIONS = [
   CHANTAL_MIGRATION,
   CHANTAL3_MIGRATION,
   CHANTAL5_MIGRATION,
+  TEAM_DUTIES_MANUAL_MIGRATION,
 ];
 
 export function deployStateDir(dbFile) {

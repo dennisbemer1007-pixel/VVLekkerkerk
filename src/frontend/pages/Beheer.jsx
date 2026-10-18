@@ -620,7 +620,8 @@ function DienstenBeheer() {
                   <p className="font-bold">Teamplekken</p>
                   <p className="text-xs text-gray-600">
                     Teamplekken vult de bardienstcoördinator via Team. Als barcommissie kun je hier het team wijzigen of
-                    bewust iemand op die plek zetten.
+                    bewust iemand op die plek zetten. Een wijziging of een weggehaalde teamplek blijft staan: een sync
+                    of herstart zet die niet terug.
                   </p>
                   {(s.teamDuties || []).map((duty) => (
                     <div key={duty.id} className="flex flex-wrap items-end gap-2">
