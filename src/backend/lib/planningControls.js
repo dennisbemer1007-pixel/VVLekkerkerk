@@ -85,6 +85,7 @@ export async function buildPlanningControls(now = new Date()) {
       countYear: personalEnrollmentCount(person.enrollments, w.yearStart, w.to),
       countPeriod: vr18.currentCount,
       countPrevious: vr18.previousCount,
+      hasPreviousPeriod: vr18.hasPreviousPeriod,
     };
     if (person.obligation === OBLIGATIONS.VR18) {
       counts.vr18Done = !vr18NeedsFillInCurrent(vr18);

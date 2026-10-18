@@ -30,6 +30,7 @@ function countsForPerson(person, windows) {
     countYear: personalEnrollmentCount(person.enrollments, windows.yearStart, windows.to),
     countPeriod: vr18.currentCount,
     countPrevious: vr18.previousCount,
+    hasPreviousPeriod: vr18.hasPreviousPeriod,
   };
 }
 
@@ -114,6 +115,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
       vr18NeedsFillInCurrent({
         previousCount: counts.countPrevious,
         currentCount: counts.countPeriod,
+        hasPreviousPeriod: counts.hasPreviousPeriod,
       });
     counts.vr18Done = person.obligation === OBLIGATIONS.VR18 ? !vr18Needs : undefined;
     const executed = fillExecutedCount(person, counts);

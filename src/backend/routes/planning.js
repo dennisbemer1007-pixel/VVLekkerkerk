@@ -166,7 +166,8 @@ router.get(
           })
         : [];
       const enrolledAnyIds = new Set(enrollmentsInPeriod.map((e) => e.personId));
-      // Verplicht FULL: nergens in deze planning. VR18+: niet vorige én niet huidige.
+      // Verplicht FULL: nergens in deze planning.
+      // VR18+: alleen als er een echte vorige ronde was en ze daar én hier niet stonden.
       notSelfEnrolled = people
         .filter((p) => {
           if (p.exempted) return false;

@@ -100,8 +100,8 @@ export default function Dashboard({ focus = 'week' }) {
         <BeheerNavButtons />
         <h1 className="font-heading text-xl font-black uppercase">Aandacht</h1>
         <p className="text-sm text-gray-700">
-          Verplichte vrijwilligers (1× in deze planningsperiode) en VR18+ (1× per 2 planningen) die extra
-          aandacht nodig hebben.
+          Verplichte vrijwilligers (1× in deze planningsperiode) en VR18+ (1× per 2
+          planningen; niet in de eerste planning) die extra aandacht nodig hebben.
         </p>
         {error ? <p className="text-sm text-red-800">{error}</p> : null}
         <label className="block max-w-sm">
