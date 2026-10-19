@@ -141,6 +141,9 @@ export function teamFitsDutyRule(team, rule) {
 
 export function eligibleTeamDutyCandidates(rule, homeMatches) {
   if (!rule?.teamDuty || !rule.teamDutySlotRole) return [];
+  // Teamdiensten horen bij zaterdag (jeugd). Weekdagregels zoals donderdag bar
+  // krijgen nooit een 7x7- of O-teamplek, ook niet via "Ook deze teams".
+  if (rule.weekday != null && Number(rule.weekday) !== 6) return [];
   const role = rule.teamDutySlotRole;
   const reserved = reservedSpotsForRule(rule);
   if (!reserved) return [];
@@ -395,10 +398,6 @@ export function frozenTeamDutyFromService(service, candidates = []) {
 }
 
 /**
- * Officiële auto-dienst mag teamplekken krijgen of lege teamplekken herverdelen
- * als er thuisjeugd is. Ingevulde teamplekken (ouders) blijven staan.
- */
-/**
  * Lege officiële AUTO-dienst die eerder verborgen is (active=false) terwijl de
  * regel hem weer nodig heeft. Eerste gepubliceerde week (zoals za 24/10) blijft
  * anders leeg: locked blokkeert een nieuwe dienst. Handmatig en ingevuld niet.
@@ -409,12 +408,36 @@ export function shouldReviveEmptyLockedAuto(service) {
   return !(service.enrollments || []).length;
 }
 
+/**
+ * Mag de sync teamplekken schrijven?
+ * - Handmatige keuze van de barcommissie: nooit.
+ * - Dienst nog leeg: zetten of opruimen mag.
+ * - Er staat al iemand (vrijwilliger of teamplek-ouder): geen nieuwe teamplek
+ *   erbij (voorkomt 2/1 als Cees al zelf stond). Bestaande teamplekken blijven.
+ */
+export function shouldSyncTeamDuties(service) {
+  if (!service || teamDutiesHeldByHand(service)) return false;
+  if (canReassignEmptyTeamDuties(service)) return true;
+  return (service.teamDuties || []).length > 0;
+}
+
+/**
+ * Mag de sync teamplekken op een locked dienst zetten of herverdelen?
+ * Geen nieuwe teamplek naast een vrijwilliger (shouldSync). Ingevulde
+ * teamplekken herschrijven we niet via dit pad.
+ */
 export function shouldAttachTeamDutiesToLocked(service, assignments) {
-  if (teamDutiesHeldByHand(service)) return false;
+  if (!shouldSyncTeamDuties(service)) return false;
   if (!canReassignEmptyTeamDuties(service) && (service?.teamDuties || []).length > 0) {
     return false;
   }
   if ((assignments || []).length > 0) return true;
-  // Geen kandidaten: lege teamplekken alsnog opruimen bij sync.
   return (service?.teamDuties || []).length > 0 && canReassignEmptyTeamDuties(service);
+}
+
+/** Kalenderdag is zaterdag (lokaal, zelfde als dienstregels weekday 6). */
+export function serviceDateIsSaturday(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getDay() === 6;
 }

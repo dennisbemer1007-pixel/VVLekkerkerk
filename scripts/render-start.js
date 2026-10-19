@@ -44,6 +44,7 @@ import {
 } from '../src/backend/lib/unpublishedAutoRepair.js';
 import { repairOrphanNoShows } from '../src/backend/lib/orphanNoShowRepair.js';
 import { repairPublishedPeriodDrafts } from '../src/backend/lib/publishedDraftRepair.js';
+import { repairWeekdayTeamDuties } from '../src/backend/lib/weekdayTeamDutyRepair.js';
 import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.js';
 import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
 import { getActiveRound } from '../src/backend/lib/planningRounds.js';
@@ -262,6 +263,21 @@ try {
   );
 } catch (err) {
   console.warn('[render-start] Gepubliceerde diensten uit concept:', err.message);
+}
+
+let weekdayTeamDutyRepair = { already: false };
+try {
+  weekdayTeamDutyRepair = await repairWeekdayTeamDuties(prisma, { stateDir });
+  console.log(
+    '[render-start] Teamplekken op weekdagen weg:',
+    JSON.stringify({
+      already: weekdayTeamDutyRepair.already || false,
+      removed: weekdayTeamDutyRepair.removed,
+      services: weekdayTeamDutyRepair.services,
+    }),
+  );
+} catch (err) {
+  console.warn('[render-start] Teamplekken op weekdagen:', err.message);
 }
 
 let publishedPeriodBackfill = { skipped: true };

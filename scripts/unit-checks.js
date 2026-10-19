@@ -127,11 +127,17 @@ import {
   recordTeamDutyStand,
   requiredForTeamDuties,
   serviceCapacity,
+  serviceDateIsSaturday,
   shouldAttachTeamDutiesToLocked,
   shouldReviveEmptyLockedAuto,
+  shouldSyncTeamDuties,
   teamDutyAssignments,
   teamFitsDutyRule,
 } from '../src/backend/lib/teamDutyPlanning.js';
+import {
+  WEEKDAY_TEAM_DUTY_REPAIR_ID,
+  weekdayTeamDutyRepairMarkerPath,
+} from '../src/backend/lib/weekdayTeamDutyRepair.js';
 import {
   buildTeamIndex,
   clubTeamLabel,
@@ -1206,6 +1212,77 @@ assert(
       },
       [{ team: { id: 15, name: 'O15-1' }, match: { id: 9 } }],
     )?.team?.id === 15,
+);
+assert(
+  'vrijwilliger krijgt geen teamplek erbij (voorkomt 2/1)',
+  shouldSyncTeamDuties({
+    origin: 'AUTO',
+    locked: true,
+    teamDuties: [],
+    enrollments: [{ kind: 'PERSONAL', noShow: false }],
+  }) === false &&
+    shouldAttachTeamDutiesToLocked(
+      {
+        origin: 'AUTO',
+        locked: true,
+        teamDuties: [],
+        enrollments: [{ kind: 'PERSONAL', noShow: false }],
+      },
+      [{ team: { id: 7, name: '7x7' } }],
+    ) === false,
+);
+assert(
+  'weekdagregel heeft geen teamdienst-kandidaten (ook niet via 7x7-id)',
+  eligibleTeamDutyCandidates(
+    {
+      teamDuty: true,
+      teamDutySlotRole: 'LAST',
+      teamDutyReserved: 1,
+      teamDutyTeamIds: [88],
+      weekday: 4,
+      required: 1,
+    },
+    [
+      {
+        team: { id: 88, name: '7x7 mannen', teamDutyUse: false, active: true },
+        home: true,
+        time: '19:00',
+      },
+    ],
+  ).length === 0 &&
+    eligibleTeamDutyCandidates(
+      {
+        teamDuty: true,
+        teamDutySlotRole: 'LAST',
+        teamDutyReserved: 1,
+        teamDutyTeamIds: [88],
+        weekday: 6,
+        required: 1,
+      },
+      [
+        {
+          team: { id: 88, name: '7x7 mannen', teamDutyUse: false, active: true },
+          home: true,
+          time: '19:00',
+        },
+      ],
+    ).map((c) => c.team.id).join(',') === '88',
+);
+assert(
+  'zaterdag-helper herkent alleen zaterdag',
+  serviceDateIsSaturday(new Date('2026-11-12T18:30:00')) === false &&
+    serviceDateIsSaturday(new Date('2026-11-14T12:00:00')) === true,
+);
+assert(
+  'teamplek + vrijwilliger op dienst voor 1 is bezetting 2/1',
+  (() => {
+    const cap = serviceCapacity({
+      required: 1,
+      teamDuties: [{ teamId: 7, reserved: 1 }],
+      enrollments: [{ kind: 'PERSONAL', noShow: false }],
+    });
+    return occupiedSlots(cap) === 2 && cap.required === 1;
+  })(),
 );
 assert(
   'JO/O alias-sleutel koppelt KNVB O aan app JO',
@@ -4614,6 +4691,44 @@ assert(
       teamDutyMigration.includes('WHERE "locked" = 1') &&
       !/DROP TABLE/i.test(teamDutyMigration) &&
       !/DROP COLUMN/i.test(teamDutyMigration),
+  );
+  const officialSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/official.js'),
+    'utf8',
+  );
+  const generationSrc = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/lib/serviceGeneration.js',
+    ),
+    'utf8',
+  );
+  const weekdayRepairSrc = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/lib/weekdayTeamDutyRepair.js',
+    ),
+    'utf8',
+  );
+  const renderStartSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scripts/render-start.js'),
+    'utf8',
+  );
+  assert(
+    'officieel lock zet voortaan ook teamDutiesManual',
+    (officialSrc.match(/locked: true, teamDutiesManual: true/g) || []).length >= 2 &&
+      generationSrc.includes('locked: true, teamDutiesManual: true'),
+  );
+  assert(
+    'weekdag-teamplek-repair bestaat en draait bij start',
+    WEEKDAY_TEAM_DUTY_REPAIR_ID === 'weekday-team-duty-strip-2026-10-19' &&
+      weekdayTeamDutyRepairMarkerPath('/tmp/state').endsWith(
+        `repaired-${WEEKDAY_TEAM_DUTY_REPAIR_ID}.json`,
+      ) &&
+      weekdayRepairSrc.includes('teamDutiesManual: true') &&
+      weekdayRepairSrc.includes('serviceDateIsSaturday') &&
+      renderStartSrc.includes('repairWeekdayTeamDuties') &&
+      generationSrc.includes('shouldSyncTeamDuties'),
   );
   const servicesRouteSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/services.js'),

@@ -30,7 +30,7 @@ export async function markPlanningOfficial({ from, to, weeks } = {}) {
       draft: false,
       date: { gte: period.from, lte: period.to },
     },
-    data: { locked: true },
+    data: { locked: true, teamDutiesManual: true },
   });
   const round = await prisma.planningRound.update({
     where: { id: before.id },
@@ -92,7 +92,7 @@ export async function syncOfficialLocks() {
         date: { gte: period.from, lte: period.to },
         locked: false,
       },
-      data: { locked: true },
+      data: { locked: true, teamDutiesManual: true },
     });
     return { synced: r.count, official: true };
   }
