@@ -141,9 +141,8 @@ export function teamFitsDutyRule(team, rule) {
 
 export function eligibleTeamDutyCandidates(rule, homeMatches) {
   if (!rule?.teamDuty || !rule.teamDutySlotRole) return [];
-  // Teamdiensten horen bij zaterdag (jeugd). Weekdagregels zoals donderdag bar
-  // krijgen nooit een 7x7- of O-teamplek, ook niet via "Ook deze teams".
-  if (rule.weekday != null && Number(rule.weekday) !== 6) return [];
+  // Weekdagen mogen wél teamplekken (bijv. 7x7 thuis op donderdag).
+  // Verwijderde teamplekken komen niet terug via teamDutiesManual / shouldSync.
   const role = rule.teamDutySlotRole;
   const reserved = reservedSpotsForRule(rule);
   if (!reserved) return [];

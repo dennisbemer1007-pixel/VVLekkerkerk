@@ -127,7 +127,6 @@ import {
   recordTeamDutyStand,
   requiredForTeamDuties,
   serviceCapacity,
-  serviceDateIsSaturday,
   shouldAttachTeamDutiesToLocked,
   shouldReviveEmptyLockedAuto,
   shouldSyncTeamDuties,
@@ -136,7 +135,9 @@ import {
 } from '../src/backend/lib/teamDutyPlanning.js';
 import {
   WEEKDAY_TEAM_DUTY_REPAIR_ID,
+  WEEKDAY_TEAM_DUTY_UNDO_ID,
   weekdayTeamDutyRepairMarkerPath,
+  weekdayTeamDutyUndoMarkerPath,
 } from '../src/backend/lib/weekdayTeamDutyRepair.js';
 import {
   buildTeamIndex,
@@ -1232,7 +1233,7 @@ assert(
     ) === false,
 );
 assert(
-  'weekdagregel heeft geen teamdienst-kandidaten (ook niet via 7x7-id)',
+  'weekdagregel mag 7x7-teamplek (donderdag thuis)',
   eligibleTeamDutyCandidates(
     {
       teamDuty: true,
@@ -1249,29 +1250,27 @@ assert(
         time: '19:00',
       },
     ],
-  ).length === 0 &&
-    eligibleTeamDutyCandidates(
-      {
-        teamDuty: true,
-        teamDutySlotRole: 'LAST',
-        teamDutyReserved: 1,
-        teamDutyTeamIds: [88],
-        weekday: 6,
-        required: 1,
-      },
-      [
-        {
-          team: { id: 88, name: '7x7 mannen', teamDutyUse: false, active: true },
-          home: true,
-          time: '19:00',
-        },
-      ],
-    ).map((c) => c.team.id).join(',') === '88',
+  ).map((c) => c.team.id).join(',') === '88',
 );
 assert(
-  'zaterdag-helper herkent alleen zaterdag',
-  serviceDateIsSaturday(new Date('2026-11-12T18:30:00')) === false &&
-    serviceDateIsSaturday(new Date('2026-11-14T12:00:00')) === true,
+  'verwijderde teamplek komt niet terug (ook niet met vrijwilliger)',
+  shouldSyncTeamDuties({
+    origin: 'AUTO',
+    locked: true,
+    teamDutiesManual: true,
+    teamDuties: [],
+    enrollments: [{ kind: 'PERSONAL', noShow: false }],
+  }) === false &&
+    shouldAttachTeamDutiesToLocked(
+      {
+        origin: 'AUTO',
+        locked: true,
+        teamDutiesManual: true,
+        teamDuties: [],
+        enrollments: [],
+      },
+      [{ team: { id: 7, name: '7x7' } }],
+    ) === false,
 );
 assert(
   'teamplek + vrijwilliger op dienst voor 1 is bezetting 2/1',
@@ -4719,16 +4718,29 @@ assert(
     (officialSrc.match(/locked: true, teamDutiesManual: true/g) || []).length >= 2 &&
       generationSrc.includes('locked: true, teamDutiesManual: true'),
   );
+  const teamDutyPlanningSrc = fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/backend/lib/teamDutyPlanning.js',
+    ),
+    'utf8',
+  );
   assert(
-    'weekdag-teamplek-repair bestaat en draait bij start',
+    'weekdag-teamplek: geen strip meer, wel herstel na #70',
     WEEKDAY_TEAM_DUTY_REPAIR_ID === 'weekday-team-duty-strip-2026-10-19' &&
+      WEEKDAY_TEAM_DUTY_UNDO_ID === 'weekday-team-duty-undo-2026-10-19' &&
       weekdayTeamDutyRepairMarkerPath('/tmp/state').endsWith(
         `repaired-${WEEKDAY_TEAM_DUTY_REPAIR_ID}.json`,
       ) &&
-      weekdayRepairSrc.includes('teamDutiesManual: true') &&
-      weekdayRepairSrc.includes('serviceDateIsSaturday') &&
-      renderStartSrc.includes('repairWeekdayTeamDuties') &&
-      generationSrc.includes('shouldSyncTeamDuties'),
+      weekdayTeamDutyUndoMarkerPath('/tmp/state').endsWith(
+        `repaired-${WEEKDAY_TEAM_DUTY_UNDO_ID}.json`,
+      ) &&
+      weekdayRepairSrc.includes('undoWeekdayTeamDutyStrip') &&
+      weekdayRepairSrc.includes('no-strip-weekdays-allowed') &&
+      weekdayRepairSrc.includes('personal-enrollment') &&
+      renderStartSrc.includes('undoWeekdayTeamDutyStrip') &&
+      generationSrc.includes('shouldSyncTeamDuties') &&
+      !teamDutyPlanningSrc.includes('Number(rule.weekday) !== 6'),
   );
   const servicesRouteSrc = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/services.js'),
