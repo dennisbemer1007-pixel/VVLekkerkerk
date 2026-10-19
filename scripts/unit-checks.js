@@ -1113,7 +1113,16 @@ assert(
   enrollmentNameWithTeam(
     { person: { name: 'Chantal van der Wouden' }, forTeam: { name: 'O12-1' } },
     'O12-1',
-  ) === 'Chantal van der Wouden (O12-1)',
+  ) === 'Chantal van der Wouden (O12-1)' &&
+    enrollmentNameWithTeam({
+      kind: 'PERSONAL',
+      person: { name: 'Jay de Jong', team: { name: 'O15-1' } },
+    }) === 'Jay de Jong (O15-1)' &&
+    enrollmentNameWithTeam({
+      kind: 'PERSONAL',
+      reason: 'Ingevuld door de bardienstcoördinator',
+      person: { name: 'Hanneke Verhoeff', team: { name: 'O9-2' } },
+    }) === 'Hanneke Verhoeff (O9-2)',
 );
 assert(
   'bezetting is gevuld/nodig',
@@ -1130,16 +1139,41 @@ assert(
     shouldAttachTeamDutiesToLocked({ origin: 'MANUAL', teamDuties: [] }, [{ team: { id: 1 } }]) === false,
 );
 assert(
-  'lege teamplekken op locked mogen herverdeeld (geen namen)',
+  'officiële teamplek met team wisselt niet, ook zonder vlag en zonder naam',
   canReassignEmptyTeamDuties({
     origin: 'AUTO',
+    locked: true,
     teamDuties: [{ id: 1, teamId: 15 }],
     enrollments: [],
-  }) === true &&
+  }) === false &&
+    shouldSyncTeamDuties({
+      origin: 'AUTO',
+      locked: true,
+      teamDuties: [{ id: 1, teamId: 15 }],
+      enrollments: [],
+    }) === false &&
     shouldAttachTeamDutiesToLocked(
-      { origin: 'AUTO', teamDuties: [{ id: 1, teamId: 15 }], enrollments: [] },
+      { origin: 'AUTO', locked: true, teamDuties: [{ id: 1, teamId: 15 }], enrollments: [] },
       [{ team: { id: 16 } }],
-    ) === true,
+    ) === false &&
+    frozenTeamDutyFromService(
+      {
+        origin: 'AUTO',
+        locked: true,
+        teamDuties: [{ teamId: 15, reserved: 2 }],
+        enrollments: [],
+      },
+      [{ team: { id: 16, name: 'O15-3' } }, { team: { id: 15, name: 'O15-1' } }],
+    )?.team?.id === 15,
+);
+assert(
+  'nog niet officiële lege teamplek mag nog herverdeeld',
+  canReassignEmptyTeamDuties({
+    origin: 'AUTO',
+    locked: false,
+    teamDuties: [{ id: 1, teamId: 15 }],
+    enrollments: [],
+  }) === true,
 );
 assert(
   'persoonlijke naam blokkeert herverdeling teamplekken',
@@ -4740,6 +4774,9 @@ assert(
       weekdayRepairSrc.includes('personal-enrollment') &&
       renderStartSrc.includes('undoWeekdayTeamDutyStrip') &&
       generationSrc.includes('shouldSyncTeamDuties') &&
+      generationSrc.includes('officiële teamplek die al een team heeft') &&
+      !weekdayRepairSrc.includes('teamDutiesManual: false') &&
+      teamDutyPlanningSrc.includes('officialTeamDutyIsFrozen') &&
       !teamDutyPlanningSrc.includes('Number(rule.weekday) !== 6'),
   );
   const servicesRouteSrc = fs.readFileSync(
@@ -4822,6 +4859,13 @@ const calendarApi = spawnSync(process.execPath, ['scripts/calendar-api-check.js'
   stdio: 'inherit',
 });
 assert('agenda-API: 404 uit, ICS en limiet', calendarApi.status === 0);
+
+const teamDutyFreeze = spawnSync(process.execPath, ['scripts/team-duty-freeze-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+  env: { ...process.env, TZ: 'UTC', NODE_ENV: 'production', SEED_DEMO: '' },
+});
+assert('officiële teamplek blijft na Ander team en sync', teamDutyFreeze.status === 0);
 
 const chantalPlanning = spawnSync(process.execPath, ['scripts/chantal-planning-regression.js'], {
   cwd: unitRoot,

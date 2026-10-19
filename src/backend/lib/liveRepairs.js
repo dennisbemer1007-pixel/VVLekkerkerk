@@ -91,6 +91,7 @@ export async function repairMoOWrongMerges(prisma) {
       });
       for (const duty of duties) {
         if ((duty.service?.enrollments || []).length) continue;
+        if (duty.service?.locked || duty.service?.teamDutiesManual) continue;
         await prisma.serviceTeamDuty.update({
           where: { id: duty.id },
           data: { teamId: team.id },
@@ -170,6 +171,7 @@ export async function repairMoOWrongMerges(prisma) {
     let movedDuties = 0;
     for (const duty of duties) {
       if ((duty.service?.enrollments || []).length) continue;
+      if (duty.service?.locked || duty.service?.teamDutiesManual) continue;
       await prisma.serviceTeamDuty.update({
         where: { id: duty.id },
         data: { teamId: boys.id },
@@ -298,7 +300,7 @@ export async function repairJoOYouthDuplicates(prisma) {
         data: { teamId: canonical.id },
       });
       const duties = await prisma.serviceTeamDuty.updateMany({
-        where: { teamId: team.id },
+        where: { teamId: team.id, service: { locked: false, teamDutiesManual: false } },
         data: { teamId: canonical.id },
       });
       const enrollments = await prisma.enrollment.updateMany({
@@ -427,7 +429,7 @@ export async function repairAccidentalWeekendTeams(prisma) {
 
     const matches = await prisma.match.updateMany({ where: { teamId: team.id }, data: { teamId: canonical.id } });
     const duties = await prisma.serviceTeamDuty.updateMany({
-      where: { teamId: team.id },
+      where: { teamId: team.id, service: { locked: false, teamDutiesManual: false } },
       data: { teamId: canonical.id },
     });
     const enrollments = await prisma.enrollment.updateMany({

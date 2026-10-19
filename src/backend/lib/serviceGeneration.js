@@ -135,6 +135,19 @@ function pickExistingTarget(list) {
 }
 
 async function syncTeamDuties(serviceId, assignments) {
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: {
+      locked: true,
+      teamDutiesManual: true,
+      origin: true,
+      teamDuties: { select: { id: true } },
+    },
+  });
+  // Laatste grendel: een officiële teamplek die al een team heeft, nooit herschrijven.
+  if (service?.origin === 'MANUAL' || service?.teamDutiesManual) return;
+  if (service?.locked && (service.teamDuties || []).length > 0) return;
+
   const wanted = new Map((assignments || []).map((a) => [a.team.id, a.reserved]));
   const existing = await prisma.serviceTeamDuty.findMany({ where: { serviceId } });
   for (const row of existing) {
