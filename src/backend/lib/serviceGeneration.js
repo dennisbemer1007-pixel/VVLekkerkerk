@@ -25,6 +25,7 @@ import {
   canReassignEmptyTeamDuties,
   frozenTeamDutyFromService,
   shouldAttachTeamDutiesToLocked,
+  shouldSyncTeamDuties,
   shouldReviveEmptyLockedAuto,
   standsFromDutyRows,
 } from './teamDutyPlanning.js';
@@ -415,7 +416,9 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
             where: { id: target.id },
             data: payload,
           });
-          await syncTeamDuties(target.id, spec.assignments);
+          if (shouldSyncTeamDuties(target)) {
+            await syncTeamDuties(target.id, spec.assignments);
+          }
           updated += 1;
           serviceId = target.id;
         } else if (shouldAttachTeamDutiesToLocked(target, spec.assignments)) {
@@ -441,7 +444,10 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
         where: { id: target.id },
         data: payload,
       });
-      await syncTeamDuties(target.id, spec.assignments);
+      // Geen teamplek erbij als er al een vrijwilliger staat (voorkomt 2/1).
+      if (shouldSyncTeamDuties(target)) {
+        await syncTeamDuties(target.id, spec.assignments);
+      }
       updated += 1;
       serviceId = target.id;
     } else {
@@ -520,7 +526,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     },
   });
 
-  // Officiële periode: nieuw aangemaakte diensten meteen vergrendelen.
+  // Officiële periode: nieuw aangemaakte diensten meteen vergrendelen en
+  // teamplekken vastzetten, zodat een latere sync ze niet meer herschrijft.
   if (existingRound.official) {
     await prisma.service.updateMany({
       where: {
@@ -529,7 +536,7 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
         date: { gte: start, lte: end },
         locked: false,
       },
-      data: { locked: true },
+      data: { locked: true, teamDutiesManual: true },
     });
   }
 
