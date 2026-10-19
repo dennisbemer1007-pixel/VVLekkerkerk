@@ -44,7 +44,10 @@ import {
 } from '../src/backend/lib/unpublishedAutoRepair.js';
 import { repairOrphanNoShows } from '../src/backend/lib/orphanNoShowRepair.js';
 import { repairPublishedPeriodDrafts } from '../src/backend/lib/publishedDraftRepair.js';
-import { repairWeekdayTeamDuties } from '../src/backend/lib/weekdayTeamDutyRepair.js';
+import {
+  repairWeekdayTeamDuties,
+  undoWeekdayTeamDutyStrip,
+} from '../src/backend/lib/weekdayTeamDutyRepair.js';
 import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.js';
 import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
 import { getActiveRound } from '../src/backend/lib/planningRounds.js';
@@ -265,19 +268,34 @@ try {
   console.warn('[render-start] Gepubliceerde diensten uit concept:', err.message);
 }
 
+// #70 stripte per ongeluk weekdag-teamplekken; niet meer strippen, wél herstellen.
 let weekdayTeamDutyRepair = { already: false };
 try {
   weekdayTeamDutyRepair = await repairWeekdayTeamDuties(prisma, { stateDir });
   console.log(
-    '[render-start] Teamplekken op weekdagen weg:',
+    '[render-start] Weekdag-teamplek strip (uit):',
     JSON.stringify({
       already: weekdayTeamDutyRepair.already || false,
-      removed: weekdayTeamDutyRepair.removed,
-      services: weekdayTeamDutyRepair.services,
+      removed: weekdayTeamDutyRepair.removed || 0,
+      skipped: weekdayTeamDutyRepair.skipped || null,
     }),
   );
 } catch (err) {
-  console.warn('[render-start] Teamplekken op weekdagen:', err.message);
+  console.warn('[render-start] Weekdag-teamplek strip:', err.message);
+}
+let weekdayTeamDutyUndo = { already: false };
+try {
+  weekdayTeamDutyUndo = await undoWeekdayTeamDutyStrip(prisma, { stateDir });
+  console.log(
+    '[render-start] Weekdag-teamplek herstel na #70:',
+    JSON.stringify({
+      already: weekdayTeamDutyUndo.already || false,
+      restored: weekdayTeamDutyUndo.restored,
+      skippedEnrolled: weekdayTeamDutyUndo.skippedEnrolled,
+    }),
+  );
+} catch (err) {
+  console.warn('[render-start] Weekdag-teamplek herstel:', err.message);
 }
 
 let publishedPeriodBackfill = { skipped: true };
