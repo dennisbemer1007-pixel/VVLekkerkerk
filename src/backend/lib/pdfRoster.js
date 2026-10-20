@@ -347,6 +347,65 @@ export function isoWeekNumber(ws) {
   return 1 + Math.round(((t - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
 }
 
+/** Voettekst: altijd Nederlandse tijd (niet UTC van de server). */
+export function formatGeneratedAt(date = new Date(), timeZone = 'Europe/Amsterdam') {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('day')}-${get('month')}-${get('year')}, ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
+/**
+ * Compacte maten zodat het rooster op 1 liggende A4 past als het nipt is.
+ * pageHeight: PDFKit A4 landscape ≈ 595.28.
+ */
+export function computeRosterPageLayout({
+  pageHeight = 595.28,
+  sectionCount = 7,
+  rowCount = 0,
+  extraCount = 0,
+} = {}) {
+  const top = 14;
+  // Ruimte voor voettekst + marge zodat PDFKit niet zelf een 2e pagina opent.
+  const footerReserve = 28;
+  const titleH = 28;
+  const budget = pageHeight - top - footerReserve - titleH;
+  let headerH = 20;
+  let sectionH = 11;
+  let rowH = 15.5;
+  const needed = () => headerH + sectionCount * sectionH + (rowCount + extraCount) * rowH;
+  while (needed() > budget && rowH > 11) {
+    rowH -= 0.5;
+    sectionH = Math.max(9, sectionH - 0.25);
+    headerH = Math.max(16, headerH - 0.25);
+  }
+  const compact = rowH < 14.5;
+  return {
+    top,
+    footerReserve,
+    titleH,
+    headerH,
+    sectionH,
+    rowH,
+    cellSize: compact ? 5 : 5.5,
+    labelSize: compact ? 4.6 : 5.1,
+    sectionLabelSize: compact ? 6.5 : 7.2,
+    titleSize: compact ? 10.5 : 11.5,
+    fitsOnePage: needed() <= budget,
+    neededHeight: titleH + needed() + footerReserve + top,
+  };
+}
+
 function drawCell(doc, x, y, w, h, text, opts = {}) {
   const {
     bold = false,
@@ -355,7 +414,7 @@ function drawCell(doc, x, y, w, h, text, opts = {}) {
     fill = null,
     stroke = '#bbbbbb',
     color = '#000000',
-    pad = 2,
+    pad = 1.5,
   } = opts;
 
   if (fill) {
@@ -364,17 +423,39 @@ function drawCell(doc, x, y, w, h, text, opts = {}) {
   doc.rect(x, y, w, h).strokeColor(stroke).lineWidth(0.5).stroke();
 
   const isClosed = String(text).trim().toLowerCase() === 'gesloten';
+  const prevX = doc.x;
+  const prevY = doc.y;
+  // Clip + y terugzetten: voorkomt dat PDFKit bij te lange celtekst een nieuwe pagina opent.
+  doc.save();
+  doc.rect(x, y, w, h).clip();
   doc
     .fillColor(isClosed ? '#888888' : color)
     .font(bold ? 'Helvetica-Bold' : 'Helvetica')
     .fontSize(size)
     .text(String(text), x + pad, y + pad, {
       width: w - pad * 2,
-      height: h - pad * 2,
+      height: Math.max(4, h - pad * 2),
       align,
       ellipsis: true,
+      lineGap: 0,
+      lineBreak: true,
     });
+  doc.restore();
+  doc.x = prevX;
+  doc.y = prevY;
   doc.fillColor('#000000');
+}
+
+/** Extra rijen over alle dagen voor één weekset (max per dagkolom). */
+export function countRosterExtraRows(daySections, weekStarts, byWeekDay) {
+  let total = 0;
+  for (const section of daySections) {
+    const extrasPerWeek = weekStarts.map((ws) =>
+      additionalRosterServices(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], section.rows),
+    );
+    total += extrasPerWeek.reduce((max, list) => Math.max(max, list.length), 0);
+  }
+  return total;
 }
 
 /** Tekent het liggende A4-rooster op een pdfkit-document. */
@@ -400,20 +481,30 @@ export function renderPlanningRoster(doc, {
   const pageW = doc.page.width - 48;
   const left = 24;
   const labelW = 88;
-  const headerH = 26;
-  const sectionH = 14;
-  const rowH = 18;
+  const fixedRowCount = daySections.reduce((sum, s) => sum + s.rows.length, 0);
+  const generatedLabel = formatGeneratedAt(generatedAt);
 
   chunks.forEach((weekStarts, chunkIndex) => {
     if (chunkIndex > 0) {
-      doc.addPage({ size: 'A4', layout: 'landscape', margin: 24 });
+      doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
     }
-    let y = 22;
+
+    const extraCount = countRosterExtraRows(daySections, weekStarts, byWeekDay);
+    const layout = computeRosterPageLayout({
+      pageHeight: doc.page.height,
+      sectionCount: daySections.length,
+      rowCount: fixedRowCount,
+      extraCount,
+    });
+    const { headerH, sectionH, rowH, cellSize, labelSize, sectionLabelSize, titleSize, top, footerReserve } =
+      layout;
+
+    let y = top;
     const colW = (pageW - labelW) / Math.max(weekStarts.length, 1);
 
     const drawTitle = () => {
       doc
-        .fontSize(13)
+        .fontSize(titleSize)
         .font('Helvetica-Bold')
         .fillColor('#000000')
         .text(
@@ -427,9 +518,9 @@ export function renderPlanningRoster(doc, {
             align: 'center',
           },
         );
-      y = doc.y + 2;
+      y = doc.y + 1;
       doc
-        .fontSize(7)
+        .fontSize(Math.max(6, titleSize - 5))
         .font('Helvetica')
         .fillColor('#555555')
         .text(
@@ -444,13 +535,13 @@ export function renderPlanningRoster(doc, {
           },
         );
       doc.fillColor('#000000');
-      y = doc.y + 8;
+      y = doc.y + 4;
     };
 
     const drawWeekHeader = () => {
       drawCell(doc, left, y, labelW, headerH, 'Dag / Tijd', {
         bold: true,
-        size: 7,
+        size: Math.min(7, cellSize + 1),
         fill: '#f0f0f0',
         stroke: '#888888',
       });
@@ -458,7 +549,7 @@ export function renderPlanningRoster(doc, {
         const x = left + labelW + i * colW;
         drawCell(doc, x, y, colW, headerH, `Week ${isoWeekNumber(ws)}\n${formatWeekRange(ws)}`, {
           bold: true,
-          size: 6.5,
+          size: Math.min(6.5, cellSize + 0.5),
           align: 'center',
           fill: '#f0f0f0',
           stroke: '#888888',
@@ -467,10 +558,11 @@ export function renderPlanningRoster(doc, {
       y += headerH;
     };
 
+    // Alleen als schalen niet genoeg was: laatste redmiddel tweede pagina.
     const ensureSpace = (need) => {
-      if (y + need > doc.page.height - 28) {
-        doc.addPage({ size: 'A4', layout: 'landscape', margin: 24 });
-        y = 24;
+      if (y + need > doc.page.height - footerReserve) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+        y = top;
         drawWeekHeader();
       }
     };
@@ -479,11 +571,15 @@ export function renderPlanningRoster(doc, {
     drawWeekHeader();
 
     for (const section of daySections) {
-      ensureSpace(sectionH + section.rows.length * rowH);
+      const extrasPerWeek = weekStarts.map((ws) =>
+        additionalRosterServices(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], section.rows),
+      );
+      const sectionExtras = extrasPerWeek.reduce((max, list) => Math.max(max, list.length), 0);
+      ensureSpace(sectionH + (section.rows.length + sectionExtras) * rowH);
 
       drawCell(doc, left, y, labelW, sectionH, section.label, {
         bold: true,
-        size: 8,
+        size: sectionLabelSize,
         fill: '#e8e8e8',
         stroke: '#888888',
       });
@@ -504,9 +600,10 @@ export function renderPlanningRoster(doc, {
         const labelTime = rowLabelTime(row, sampleList);
         drawCell(doc, left, y, labelW, rowH, `${row.label}\n${labelTime}`, {
           bold: true,
-          size: 5.5,
+          size: labelSize,
           fill: '#f7f7f7',
           stroke: '#aaaaaa',
+          pad: rowH < 14 ? 1 : 2,
         });
         weekStarts.forEach((ws, i) => {
           const x = left + labelW + i * colW;
@@ -515,30 +612,27 @@ export function renderPlanningRoster(doc, {
           const text = slotCellText(cellServices);
           const hasOpen = slotCellHasOpen(cellServices);
           drawCell(doc, x, y, colW, rowH, text, {
-            size: 6,
+            size: cellSize,
             align: text === 'gesloten' || text === 'nog open' ? 'center' : 'left',
             stroke: '#cccccc',
             fill: hasOpen ? '#fff3cd' : null,
             color: hasOpen && /open plek/i.test(text) ? '#7a4e00' : '#000000',
+            pad: rowH < 14 ? 1 : 2,
           });
         });
         y += rowH;
       }
 
-      const extrasPerWeek = weekStarts.map((ws) =>
-        additionalRosterServices(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], section.rows),
-      );
-      const extraCount = extrasPerWeek.reduce((max, list) => Math.max(max, list.length), 0);
-      for (let extraIndex = 0; extraIndex < extraCount; extraIndex += 1) {
-        ensureSpace(rowH);
+      for (let extraIndex = 0; extraIndex < sectionExtras; extraIndex += 1) {
         const sample = extrasPerWeek.map((list) => list[extraIndex]).find(Boolean);
         const extraLabel = serviceEventLabel(sample) || 'Extra';
         const extraTime = String(sample?.time || '').trim();
         drawCell(doc, left, y, labelW, rowH, `${extraLabel}\n${extraTime}`, {
           bold: true,
-          size: 5.5,
+          size: labelSize,
           fill: '#f7f7f7',
           stroke: '#aaaaaa',
+          pad: rowH < 14 ? 1 : 2,
         });
         weekStarts.forEach((_ws, i) => {
           const x = left + labelW + i * colW;
@@ -546,11 +640,12 @@ export function renderPlanningRoster(doc, {
           const text = extraCellText(extra);
           const hasOpen = extra ? slotCellHasOpen([extra]) : false;
           drawCell(doc, x, y, colW, rowH, text, {
-            size: 6,
+            size: cellSize,
             align: text === 'gesloten' ? 'center' : 'left',
             stroke: '#cccccc',
             fill: hasOpen ? '#fff3cd' : null,
             color: hasOpen && /open plek/i.test(text) ? '#7a4e00' : '#000000',
+            pad: rowH < 14 ? 1 : 2,
           });
         });
         y += rowH;
@@ -560,11 +655,9 @@ export function renderPlanningRoster(doc, {
     doc
       .fontSize(6.5)
       .fillColor('#666666')
-      .text(
-        `Gegenereerd ${generatedAt.toLocaleString('nl-NL')} — VVL Planning App`,
-        left,
-        doc.page.height - 18,
-        { align: 'center', width: pageW },
-      );
+      .text(`Gegenereerd ${generatedLabel} — VVL Planning App`, left, doc.page.height - footerReserve, {
+        align: 'center',
+        width: pageW,
+      });
   });
 }

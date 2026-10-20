@@ -1778,6 +1778,11 @@ function PlanningBeheer() {
             Dit rooster is officieel. Met “Officieel terugdraaien” zet je de vergrendeling weer uit.
           </p>
         ) : null}
+        <p className="text-xs text-gray-600" data-testid="planning-klaar-mail-uitleg">
+          Bij “Maak officieel” gaat (als SMTP aanstaat) de mail “De planning is klaar” naar iedereen
+          met een account. Die mail zit in de inbox van de ontvangers — die kun je niet terugtrekken
+          of in de app wissen. Er staat geen aparte melding of aankondiging in de app.
+        </p>
       </PlanningStep>
 
       {msg ? (
