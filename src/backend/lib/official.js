@@ -6,9 +6,14 @@ import { notifyPlanningReady } from './mail.js';
 export const OFFICIAL_DECISION =
   'Officieel maken zet het rooster vast voor de kantine. Vrijwilligers kunnen zich daarna nog wel inschrijven op een open plek, maar niet meer zelf uitschrijven. Onderling ruilen van twee persoonlijke diensten blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De bardienstcoördinator kan een teamdienst nog op naam zetten. Wie een account heeft, krijgt dan de mail “planning klaar” als SMTP aanstaat. Officieel maken kan de barcommissie later weer terugdraaien.';
 
-export async function markPlanningOfficial({ from, to, weeks } = {}) {
+/**
+ * @param {{ from?: string, to?: string, weeks?: number, sendMail?: boolean }} [opts]
+ * sendMail default true: mail “planning klaar” alleen als SMTP aanstaat én vinkje aan.
+ */
+export async function markPlanningOfficial({ from, to, weeks, sendMail = true } = {}) {
   const before = await getActiveRound(prisma);
   const wasOfficial = Boolean(before?.official);
+  const wantMail = sendMail !== false && sendMail !== 'false' && sendMail !== 0;
   // Altijd actieve ronde-datums gebruiken zodat diensten synchroon locked blijven.
   const period = await periodFromRound(prisma);
   if (from || to || weeks) {
@@ -42,7 +47,14 @@ export async function markPlanningOfficial({ from, to, weeks } = {}) {
       publishedAt: before.publishedAt || new Date(),
     },
   });
-  const mail = wasOfficial ? { sent: 0, skipped: true } : await notifyPlanningReady();
+  let mail;
+  if (wasOfficial) {
+    mail = { sent: 0, skipped: true, reason: 'already_official' };
+  } else if (!wantMail) {
+    mail = { sent: 0, skipped: true, reason: 'send_mail_off' };
+  } else {
+    mail = await notifyPlanningReady();
+  }
   return { locked: locked.count, round, period, mail };
 }
 

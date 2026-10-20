@@ -570,12 +570,18 @@ router.post(
   admin(async (req, res, next) => {
     try {
       const result = await markPlanningOfficial(req.body ?? {});
+      const mailDetail =
+        result.mail?.reason === 'send_mail_off'
+          ? '; geen mail (vinkje uit)'
+          : result.mail?.skipped
+            ? ''
+            : `; mail ${result.mail?.sent ?? 0}`;
       await writeAudit({
         actorId: req.person.id,
         action: 'planning.official',
         entity: 'PlanningRound',
         entityId: 1,
-        detail: `${result.locked} dienst(en) vergrendeld`,
+        detail: `${result.locked} dienst(en) vergrendeld${mailDetail}`,
       });
       res.json(result);
     } catch (err) {

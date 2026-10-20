@@ -3,7 +3,12 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { endOfWeek, startOfDay, startOfWeek } from '../lib/dates.js';
 import { getPersonFromRequest } from '../lib/auth.js';
-import { renderPlanningRoster, servicesForRoster, sixWeekRosterWindow } from '../lib/pdfRoster.js';
+import {
+  planRosterDocument,
+  renderPlanningRoster,
+  servicesForRoster,
+  sixWeekRosterWindow,
+} from '../lib/pdfRoster.js';
 import { planningIsOfficial } from '../lib/official.js';
 
 const router = Router();
@@ -61,16 +66,31 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
 
     // margin 0: wij bepalen de layout zelf; PDFKit mag niet zelf een 2e pagina openen
     // wanneer celtekst tegen de ondermarge aankomt.
-    const doc = new PDFDocument({ margin: 0, size: 'A4', layout: 'landscape' });
+    // Dichte cellen (veel namen) → wrap + eventueel A3, nooit afkappen.
+    const rosterServices = servicesForRoster(services);
+    const plan = planRosterDocument({
+      services: rosterServices,
+      from,
+      to,
+      maxWeeks,
+      clubhouse,
+      rules,
+    });
+    const doc = new PDFDocument({
+      margin: 0,
+      size: plan.pageSize || 'A4',
+      layout: 'landscape',
+    });
     doc.pipe(res);
     renderPlanningRoster(doc, {
-      services: servicesForRoster(services),
+      services: rosterServices,
       from,
       to,
       official,
       clubhouse,
       maxWeeks,
       rules,
+      pageSize: plan.pageSize || 'A4',
     });
     doc.end();
   } catch (err) {

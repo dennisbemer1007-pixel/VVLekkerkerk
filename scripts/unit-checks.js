@@ -197,11 +197,15 @@ import {
   sixWeekRosterWindow,
   weekStartsInRange,
   formatGeneratedAt,
+  chooseRosterPageSize,
   computeRosterPageLayout,
   countRosterExtraRows,
+  planRosterDocument,
   renderPlanningRoster,
+  wrapRosterCellText,
 } from '../src/backend/lib/pdfRoster.js';
 import PDFDocument from 'pdfkit';
+import zlib from 'zlib';
 import { manualCoversSpec } from '../src/backend/lib/serviceRuleLogic.js';
 import {
   isInsideAnyPeriod,
@@ -2581,6 +2585,26 @@ assert(
 }
 
 {
+  assert(
+    'pdf wrap: namen elk op eigen regel, geen ellipsis-afkappen',
+    wrapRosterCellText('Anna Jansen, Bert de Vries, open plek') ===
+      'Anna Jansen\nBert de Vries\nopen plek' &&
+      wrapRosterCellText('gesloten') === 'gesloten',
+  );
+  const denseLayout = chooseRosterPageSize({
+    sectionCount: 7,
+    rowCount: 26,
+    extraCount: 2,
+    maxLinesPerRow: 6,
+    weekCount: 6,
+  });
+  assert(
+    'dichte cellen kiezen A4 of A3 en blijven op 1 pagina-fit',
+    (denseLayout.pageSize === 'A4' || denseLayout.pageSize === 'A3') &&
+      denseLayout.layout.fitsOnePage === true &&
+      denseLayout.layout.rowH >= denseLayout.layout.cellSize + 2,
+  );
+
   const sections = rosterDaySections();
   const fixedRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
   const layoutTight = computeRosterPageLayout({
@@ -2590,7 +2614,7 @@ assert(
   });
   assert(
     'rooster-layout past standaard + 2 extra rijen op 1 liggende A4',
-    layoutTight.fitsOnePage === true && layoutTight.rowH <= 16 && layoutTight.rowH >= 11,
+    layoutTight.fitsOnePage === true && layoutTight.rowH <= 18 && layoutTight.rowH >= 10,
   );
   const layoutLoose = computeRosterPageLayout({
     sectionCount: 2,
@@ -2608,7 +2632,7 @@ assert(
   });
   assert(
     'bij heel veel rijen schaalt layout naar compacte rijenhoogte',
-    layoutPacked.rowH <= 12 && layoutPacked.cellSize <= 5.2,
+    layoutPacked.fitsOnePage === true && layoutPacked.rowH <= 12 && layoutPacked.cellSize <= 5.5,
   );
   assert(
     'countRosterExtraRows telt max-extras per dag',
@@ -2636,9 +2660,41 @@ assert(
   );
 }
 
+function pdfPlainTextFromBuf(buf) {
+  const raw = buf.toString('latin1');
+  const streams = [...raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((match) =>
+    Buffer.from(match[1], 'latin1'),
+  );
+  let text = '';
+  for (const stream of streams) {
+    let body = stream;
+    try {
+      body = zlib.inflateSync(stream);
+    } catch {
+      /* ongecomprimeerd */
+    }
+    const chunks = [];
+    for (const match of body.toString('latin1').matchAll(/<([0-9A-Fa-f\s]+)>/g)) {
+      const clean = match[1].replace(/\s/g, '');
+      if (!clean || clean.length % 2) continue;
+      chunks.push(Buffer.from(clean, 'hex').toString('latin1'));
+    }
+    text += chunks.join('');
+  }
+  return text;
+}
+
 {
   const from = new Date('2026-10-19T00:00:00Z');
   const to = new Date('2026-11-29T00:00:00Z');
+  const denseNames = [
+    'Chantal van der Berg',
+    'Dennis Bemer',
+    'Marieke van den Heuvel',
+    'Pieter-Jan de Groot',
+    'Sophie Elisabeth Vermeer',
+    'open plek',
+  ];
   const services = [];
   for (let w = 0; w < 6; w += 1) {
     const mon = new Date(Date.UTC(2026, 9, 19 + w * 7));
@@ -2647,19 +2703,21 @@ assert(
       d.setUTCDate(d.getUTCDate() + dayOff);
       const rows = dayOff === 6 ? SUNDAY_SLOT_ROWS : SLOT_ROWS;
       for (const row of rows) {
+        const many =
+          dayOff === 5 && (row.slot === 'MORNING' || row.slot === 'AFTERNOON');
         services.push({
           id: services.length + 1,
           date: d,
           type: row.type,
           slot: row.slot,
           time: row.time,
-          spots: 3,
+          required: many ? 6 : 3,
+          spots: many ? 6 : 3,
           draft: false,
           active: true,
-          enrollments: [
-            { person: { name: 'Chantal van der Berg' } },
-            { person: { name: 'Dennis Bemer' } },
-          ],
+          enrollments: (many ? denseNames.slice(0, 5) : denseNames.slice(0, 2)).map((name) => ({
+            person: { name },
+          })),
         });
       }
     }
@@ -2679,16 +2737,22 @@ assert(
       enrollments: [],
     });
   }
+  const plan = planRosterDocument({ services, from, to, maxWeeks: 6 });
   let pages = 0;
-  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0 });
+  const doc = new PDFDocument({
+    size: plan.pageSize || 'A4',
+    layout: 'landscape',
+    margin: 0,
+  });
   const origAdd = doc.addPage.bind(doc);
   doc.addPage = (...args) => {
     pages += 1;
     return origAdd(...args);
   };
   pages = 1;
+  const chunks = [];
+  doc.on('data', (c) => chunks.push(c));
   const ended = new Promise((resolve) => doc.on('end', resolve));
-  doc.on('data', () => {});
   renderPlanningRoster(doc, {
     services,
     from,
@@ -2696,12 +2760,26 @@ assert(
     generatedAt: new Date('2025-10-20T17:39:57.000Z'),
     official: true,
     maxWeeks: 6,
+    pageSize: plan.pageSize || 'A4',
   });
   doc.end();
-  // Synchronously PDFKit flushes pageAdded during render; end is async but page count is final after end.
-  // Busy-wait via Atomics is unnecessary: addPage is only called during renderPlanningRoster (sync).
+  // addPage tijdens render is sync; buffer komt bij end (async).
   assert('dicht 6-wekenrooster past op 1 PDF-pagina', pages === 1);
-  void ended;
+  await ended;
+  const pdfText = pdfPlainTextFromBuf(Buffer.concat(chunks));
+  assert(
+    'dicht rooster-PDF bevat volledige lange namen (geen afkapping)',
+    denseNames.slice(0, 5).every((name) => pdfText.includes(name)) && !/\.\.\./.test(pdfText),
+  );
+  assert(
+    'pdf-route plant A4/A3 vóór render',
+    fs
+      .readFileSync(
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/routes/pdf.js'),
+        'utf8',
+      )
+      .includes('planRosterDocument'),
+  );
 }
 
 {
@@ -2714,6 +2792,21 @@ assert(
     beheerSrc.includes('planning-klaar-mail-uitleg') &&
       beheerSrc.includes('niet terugtrekken') &&
       beheerSrc.includes('geen aparte melding'),
+  );
+  assert(
+    'Beheer heeft vinkje Mail versturen naar vrijwilligers (standaard aan)',
+    beheerSrc.includes('planning-klaar-mail-vinkje') &&
+      beheerSrc.includes('Mail versturen naar vrijwilligers') &&
+      beheerSrc.includes('sendMail: sendPlanningReadyMail') &&
+      beheerSrc.includes('useState(true)'),
+  );
+  const officialSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/backend/lib/official.js'),
+    'utf8',
+  );
+  assert(
+    'officieel maken respecteert sendMail=false zonder mail',
+    officialSrc.includes('sendMail = true') && officialSrc.includes("reason: 'send_mail_off'"),
   );
 }
 
@@ -5071,12 +5164,19 @@ const teamDutyFreeze = spawnSync(process.execPath, ['scripts/team-duty-freeze-ch
 });
 assert('officiële teamplek blijft na Ander team en sync', teamDutyFreeze.status === 0);
 
-const chantalPlanning = spawnSync(process.execPath, ['scripts/chantal-planning-regression.js'], {
-  cwd: unitRoot,
-  stdio: 'inherit',
-  env: { ...process.env, TZ: 'UTC', NODE_ENV: 'production' },
-});
-assert('volledige planning met Chantal-csv en dienstregels', chantalPlanning.status === 0);
+const chantalNeverAgain = spawnSync(
+  process.execPath,
+  ['scripts/chantal-never-again-regression.js'],
+  {
+    cwd: unitRoot,
+    stdio: 'inherit',
+    env: { ...process.env, TZ: 'UTC', NODE_ENV: 'production', SEED_DEMO: '' },
+  },
+);
+assert(
+  'Chantal never-again: planning+sync+herstart dekt alle vaste punten',
+  chantalNeverAgain.status === 0,
+);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

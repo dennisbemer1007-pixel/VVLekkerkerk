@@ -365,31 +365,134 @@ export function formatGeneratedAt(date = new Date(), timeZone = 'Europe/Amsterda
   return `${get('day')}-${get('month')}-${get('year')}, ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+/** Liggende paginamaten (PDFKit). */
+export const ROSTER_PAGE_SIZES = {
+  A4: { size: 'A4', width: 841.89, height: 595.28 },
+  A3: { size: 'A3', width: 1190.55, height: 841.89 },
+};
+
 /**
- * Compacte maten zodat het rooster op 1 liggende A4 past als het nipt is.
- * pageHeight: PDFKit A4 landscape ≈ 595.28.
+ * Namen volledig: komma-lijst → één naam per regel (geen ellipsis/afkappen).
+ */
+export function wrapRosterCellText(text) {
+  const raw = String(text ?? '');
+  if (!raw || raw === 'gesloten' || raw === 'nog open') return raw;
+  if (raw.includes('\n')) return raw;
+  // "A, B, open plek" → regels; behoud "open plek" als eigen regel.
+  const parts = raw.split(/\s*,\s*/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return raw;
+  return parts.join('\n');
+}
+
+/** Schatting regels tekst in een cel (Helvetica ≈ 0.5× fontSize per teken). */
+export function estimateCellLines(text, width, fontSize, pad = 1.5) {
+  const wrapped = wrapRosterCellText(text);
+  if (!wrapped) return 1;
+  const usable = Math.max(8, width - pad * 2);
+  const charW = Math.max(2.2, fontSize * 0.52);
+  const charsPerLine = Math.max(4, Math.floor(usable / charW));
+  let lines = 0;
+  for (const paragraph of wrapped.split('\n')) {
+    const len = paragraph.length || 1;
+    lines += Math.max(1, Math.ceil(len / charsPerLine));
+  }
+  return Math.max(1, lines);
+}
+
+/**
+ * Compacte maten zodat het rooster op 1 liggende pagina past.
+ * maxLinesPerRow: dichtste cel (namen); rijen worden hoger i.p.v. afkappen.
+ * Kiest A3 als A4 te krap is bij leesbare lettergrootte.
  */
 export function computeRosterPageLayout({
-  pageHeight = 595.28,
+  pageHeight = ROSTER_PAGE_SIZES.A4.height,
+  pageWidth = ROSTER_PAGE_SIZES.A4.width,
   sectionCount = 7,
   rowCount = 0,
   extraCount = 0,
+  maxLinesPerRow = 1,
+  weekCount = 6,
 } = {}) {
   const top = 14;
-  // Ruimte voor voettekst + marge zodat PDFKit niet zelf een 2e pagina opent.
   const footerReserve = 28;
   const titleH = 28;
+  const labelW = 88;
+  const leftRight = 48;
+  const colW = (pageWidth - leftRight - labelW) / Math.max(weekCount, 1);
   const budget = pageHeight - top - footerReserve - titleH;
+  const totalRows = rowCount + extraCount;
+
+  let cellSize = 5.5;
+  let labelSize = 5.1;
+  let sectionLabelSize = 7.2;
+  let titleSize = 11.5;
   let headerH = 20;
   let sectionH = 11;
-  let rowH = 15.5;
-  const needed = () => headerH + sectionCount * sectionH + (rowCount + extraCount) * rowH;
-  while (needed() > budget && rowH > 11) {
-    rowH -= 0.5;
-    sectionH = Math.max(9, sectionH - 0.25);
-    headerH = Math.max(16, headerH - 0.25);
+  let lineH = cellSize + 0.8;
+  let rowH = Math.max(15.5, maxLinesPerRow * lineH + 3);
+
+  const needed = () => headerH + sectionCount * sectionH + totalRows * rowH;
+
+  // Eerst lettertype/rij omlaag tot het past; nooit namen afkappen.
+  while (needed() > budget && cellSize > 3.6) {
+    cellSize -= 0.2;
+    labelSize = Math.max(3.4, labelSize - 0.15);
+    sectionLabelSize = Math.max(5.5, sectionLabelSize - 0.15);
+    titleSize = Math.max(9, titleSize - 0.15);
+    headerH = Math.max(14, headerH - 0.25);
+    sectionH = Math.max(8, sectionH - 0.2);
+    lineH = cellSize + 0.7;
+    rowH = Math.max(cellSize + 2, maxLinesPerRow * lineH + 2);
   }
-  const compact = rowH < 14.5;
+
+  // Herbepaal regels bij dit lettertype (dunnere kolom = meer wraps).
+  const linesAtSize = Math.max(
+    1,
+    estimateCellLines('X'.repeat(28), colW, cellSize),
+    maxLinesPerRow,
+  );
+  const linesNeeded = Math.max(maxLinesPerRow, linesAtSize);
+  // Eén regel: leesbare minimumhoogte; meerdere naamregels: hoogte volgt het aantal regels.
+  rowH = Math.max(
+    linesNeeded <= 1 ? 15.5 : cellSize + 2,
+    linesNeeded * (cellSize + 0.7) + 2,
+  );
+
+  while (needed() > budget && cellSize > 3.4) {
+    cellSize -= 0.15;
+    labelSize = Math.max(3.2, labelSize - 0.1);
+    lineH = cellSize + 0.65;
+    rowH = Math.max(
+      linesNeeded <= 1 ? Math.min(15.5, cellSize + 10) : cellSize + 2,
+      linesNeeded * lineH + 2,
+    );
+    headerH = Math.max(13, headerH - 0.15);
+    sectionH = Math.max(7.5, sectionH - 0.1);
+  }
+
+  // Laatste redmiddel: rijhoogte forceren zodat alles op 1 pagina past.
+  // Tekst blijft zonder ellipsis (clip in cel); liever krappe cel dan 2e pagina.
+  let forcedFit = false;
+  const naturalRowH = rowH;
+  if (needed() > budget && totalRows > 0) {
+    forcedFit = true;
+    const rowsBudget = budget - headerH - sectionCount * sectionH;
+    if (rowsBudget > totalRows * (cellSize + 1.2)) {
+      rowH = rowsBudget / totalRows;
+    } else {
+      headerH = Math.max(12, headerH - 2);
+      sectionH = Math.max(7, sectionH - 1);
+      const retryBudget = budget - headerH - sectionCount * sectionH;
+      rowH = Math.max(cellSize + 1.2, retryBudget / totalRows);
+    }
+  }
+
+  // Comfortabel: natuurlijke rijhoogte voor alle naamregels, leesbaar lettertype.
+  const comfortable =
+    !forcedFit &&
+    cellSize >= 4.2 &&
+    rowH + 0.01 >= Math.min(naturalRowH, maxLinesPerRow * (cellSize + 0.7) + 2) - 0.5;
+
   return {
     top,
     footerReserve,
@@ -397,13 +500,43 @@ export function computeRosterPageLayout({
     headerH,
     sectionH,
     rowH,
-    cellSize: compact ? 5 : 5.5,
-    labelSize: compact ? 4.6 : 5.1,
-    sectionLabelSize: compact ? 6.5 : 7.2,
-    titleSize: compact ? 10.5 : 11.5,
-    fitsOnePage: needed() <= budget,
+    cellSize,
+    labelSize,
+    sectionLabelSize,
+    titleSize,
+    labelW,
+    fitsOnePage: needed() <= budget + 0.5,
+    forcedFit,
+    comfortable,
     neededHeight: titleH + needed() + footerReserve + top,
+    pageHeight,
+    pageWidth,
   };
+}
+
+/** Kies A4 of A3 zodat namen volledig op 1 pagina passen. */
+export function chooseRosterPageSize(opts = {}) {
+  const a4 = computeRosterPageLayout({
+    ...opts,
+    pageHeight: ROSTER_PAGE_SIZES.A4.height,
+    pageWidth: ROSTER_PAGE_SIZES.A4.width,
+  });
+  if (a4.fitsOnePage && a4.comfortable) {
+    return { pageSize: 'A4', layout: { ...a4, pageSize: 'A4' } };
+  }
+  const a3 = computeRosterPageLayout({
+    ...opts,
+    pageHeight: ROSTER_PAGE_SIZES.A3.height,
+    pageWidth: ROSTER_PAGE_SIZES.A3.width,
+  });
+  // A3 als die comfortabeler is; anders het formaat dat wél past zonder force.
+  if (a3.comfortable || (a3.fitsOnePage && !a4.comfortable)) {
+    return { pageSize: 'A3', layout: { ...a3, pageSize: 'A3' } };
+  }
+  if (a4.fitsOnePage) {
+    return { pageSize: 'A4', layout: { ...a4, pageSize: 'A4' } };
+  }
+  return { pageSize: 'A3', layout: { ...a3, pageSize: 'A3' } };
 }
 
 function drawCell(doc, x, y, w, h, text, opts = {}) {
@@ -423,21 +556,23 @@ function drawCell(doc, x, y, w, h, text, opts = {}) {
   doc.rect(x, y, w, h).strokeColor(stroke).lineWidth(0.5).stroke();
 
   const isClosed = String(text).trim().toLowerCase() === 'gesloten';
+  const display = wrapRosterCellText(text);
   const prevX = doc.x;
   const prevY = doc.y;
-  // Clip + y terugzetten: voorkomt dat PDFKit bij te lange celtekst een nieuwe pagina opent.
+  // Clip + y terugzetten: voorkomt dat PDFKit bij wrap zelf een pagina opent.
+  // Geen ellipsis: namen blijven volledig (cel is hoog genoeg geschaald).
   doc.save();
   doc.rect(x, y, w, h).clip();
   doc
     .fillColor(isClosed ? '#888888' : color)
     .font(bold ? 'Helvetica-Bold' : 'Helvetica')
     .fontSize(size)
-    .text(String(text), x + pad, y + pad, {
+    .text(display, x + pad, y + pad, {
       width: w - pad * 2,
       height: Math.max(4, h - pad * 2),
       align,
-      ellipsis: true,
-      lineGap: 0,
+      ellipsis: false,
+      lineGap: 0.2,
       lineBreak: true,
     });
   doc.restore();
@@ -458,7 +593,91 @@ export function countRosterExtraRows(daySections, weekStarts, byWeekDay) {
   return total;
 }
 
-/** Tekent het liggende A4-rooster op een pdfkit-document. */
+/**
+ * Meet dichtheid van één week-chunk: rijen + max regels per cel (namen volledig).
+ * Gebruikt A4-kolombreedte als conservatieve schatting (meer wraps → hogere rijen).
+ */
+export function measureRosterChunk(daySections, weekStarts, byWeekDay, pageWidth = ROSTER_PAGE_SIZES.A4.width) {
+  const weeks = weekStarts?.length ? weekStarts : [new Date()];
+  const weekCount = Math.max(weeks.length, 1);
+  const fixedRowCount = (daySections || []).reduce((sum, s) => sum + (s.rows?.length || 0), 0);
+  const extraCount = countRosterExtraRows(daySections, weeks, byWeekDay);
+  const labelW = 88;
+  const colW = (pageWidth - 48 - labelW) / weekCount;
+  const probeSize = 5.2;
+  let maxLinesPerRow = 1;
+
+  for (const section of daySections || []) {
+    for (const row of section.rows || []) {
+      for (const ws of weeks) {
+        const list = byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [];
+        const text = slotCellText(servicesForSlotRow(list, row));
+        maxLinesPerRow = Math.max(maxLinesPerRow, estimateCellLines(text, colW, probeSize));
+      }
+    }
+    const extrasPerWeek = weeks.map((ws) =>
+      additionalRosterServices(byWeekDay.get(`${toIsoDate(ws)}|${section.day}`) || [], section.rows),
+    );
+    const sectionExtras = extrasPerWeek.reduce((max, list) => Math.max(max, list.length), 0);
+    for (let extraIndex = 0; extraIndex < sectionExtras; extraIndex += 1) {
+      for (const list of extrasPerWeek) {
+        const extra = list[extraIndex];
+        if (!extra) continue;
+        maxLinesPerRow = Math.max(
+          maxLinesPerRow,
+          estimateCellLines(extraCellText(extra), colW, probeSize),
+        );
+      }
+    }
+  }
+
+  return {
+    sectionCount: (daySections || []).length || 7,
+    rowCount: fixedRowCount,
+    extraCount,
+    maxLinesPerRow,
+    weekCount,
+  };
+}
+
+/**
+ * Bepaal A4/A3 vóór PDFDocument-constructie (eerste pagina-formaat is vast).
+ */
+export function planRosterDocument({
+  services,
+  from,
+  to,
+  maxWeeks = 60,
+  clubhouse = false,
+  rules = null,
+} = {}) {
+  const allWeeks = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
+  const byWeekDay = groupServicesByWeekDay(services || []);
+  const daySections = rosterDaySections(rules);
+  const chunkSize = clubhouse ? 1 : 6;
+  let best = chooseRosterPageSize({
+    sectionCount: daySections.length,
+    rowCount: daySections.reduce((sum, s) => sum + s.rows.length, 0),
+    extraCount: 0,
+    maxLinesPerRow: 1,
+    weekCount: clubhouse ? 1 : 6,
+  });
+
+  for (let i = 0; i < Math.max(allWeeks.length, 1); i += chunkSize) {
+    const weekStarts = allWeeks.slice(i, i + chunkSize);
+    if (!weekStarts.length) continue;
+    const measure = measureRosterChunk(daySections, weekStarts, byWeekDay);
+    const chosen = chooseRosterPageSize(measure);
+    const preferA3 = chosen.pageSize === 'A3' && best.pageSize === 'A4';
+    const taller = (chosen.layout?.neededHeight || 0) > (best.layout?.neededHeight || 0);
+    if (preferA3 || (!best.layout && chosen.layout) || (chosen.pageSize === best.pageSize && taller)) {
+      best = chosen;
+    }
+  }
+  return best;
+}
+
+/** Tekent het liggende rooster (A4 of A3) op een pdfkit-document. */
 export function renderPlanningRoster(doc, {
   services,
   from,
@@ -468,6 +687,7 @@ export function renderPlanningRoster(doc, {
   clubhouse = false,
   maxWeeks = 60,
   rules = null,
+  pageSize: forcedPageSize = null,
 }) {
   const allWeeks = weekStartsInRange(from, to, clubhouse ? 1 : maxWeeks);
   const byWeekDay = groupServicesByWeekDay(services || []);
@@ -478,24 +698,26 @@ export function renderPlanningRoster(doc, {
     chunks.push(allWeeks.slice(i, i + chunkSize));
   }
 
-  const pageW = doc.page.width - 48;
   const left = 24;
   const labelW = 88;
-  const fixedRowCount = daySections.reduce((sum, s) => sum + s.rows.length, 0);
   const generatedLabel = formatGeneratedAt(generatedAt);
 
   chunks.forEach((weekStarts, chunkIndex) => {
+    const measure = measureRosterChunk(daySections, weekStarts, byWeekDay);
+    const chosen = chooseRosterPageSize(measure);
+    const pageSize = forcedPageSize || chosen.pageSize;
+    const pageDims = ROSTER_PAGE_SIZES[pageSize] || ROSTER_PAGE_SIZES.A4;
+    const layout = computeRosterPageLayout({
+      ...measure,
+      pageHeight: pageDims.height,
+      pageWidth: pageDims.width,
+    });
+
     if (chunkIndex > 0) {
-      doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+      doc.addPage({ size: pageSize, layout: 'landscape', margin: 0 });
     }
 
-    const extraCount = countRosterExtraRows(daySections, weekStarts, byWeekDay);
-    const layout = computeRosterPageLayout({
-      pageHeight: doc.page.height,
-      sectionCount: daySections.length,
-      rowCount: fixedRowCount,
-      extraCount,
-    });
+    const pageW = doc.page.width - 48;
     const { headerH, sectionH, rowH, cellSize, labelSize, sectionLabelSize, titleSize, top, footerReserve } =
       layout;
 
@@ -558,10 +780,10 @@ export function renderPlanningRoster(doc, {
       y += headerH;
     };
 
-    // Alleen als schalen niet genoeg was: laatste redmiddel tweede pagina.
+    // Alleen als schalen niet genoeg was: laatste redmiddel tweede pagina (zelfde formaat).
     const ensureSpace = (need) => {
       if (y + need > doc.page.height - footerReserve) {
-        doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+        doc.addPage({ size: pageSize, layout: 'landscape', margin: 0 });
         y = top;
         drawWeekHeader();
       }
