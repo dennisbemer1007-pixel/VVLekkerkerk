@@ -13,6 +13,7 @@ import { voorWieChoices } from '../utils/voorWie.js';
 import { householdIdsStillOpen } from '../../backend/lib/enrollmentAccess.js';
 import { serviceTileStatus, tileGroups } from '../utils/tiles.js';
 import { compareServicesByDateThenTime } from '../utils/formatDate.js';
+import { enrollmentNameWithTeam } from '../utils/teamLines.js';
 
 function serviceStatus(s) {
   return serviceTileStatus(s);
@@ -539,9 +540,11 @@ function AssignPanel({ service, people, seasonCounts, query, onQuery, onAssign, 
           {service.enrollments.map((e) => (
             <li key={e.id} className="flex items-center justify-between gap-2">
               <span>
-                {e.kind === 'TEAM' && (e.forTeam?.name || service.teamDuties?.find((d) => Number(d.teamId) === Number(e.forTeamId))?.team?.name)
-                  ? `${e.person?.name || '—'} (${e.forTeam?.name || service.teamDuties.find((d) => Number(d.teamId) === Number(e.forTeamId))?.team?.name})`
-                  : e.person?.name || '—'}
+                {enrollmentNameWithTeam(
+                  e,
+                  e.forTeam?.name ||
+                    service.teamDuties?.find((d) => Number(d.teamId) === Number(e.forTeamId))?.team?.name,
+                )}
               </span>
               <button type="button" className="vvl-btn-outline px-3 text-xs" onClick={() => onRemove(e.id)}>
                 Eruit

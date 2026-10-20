@@ -207,7 +207,13 @@ function openSpotTokens(service) {
   const personal = (service?.enrollments || []).filter(
     (row) => row.kind !== 'TEAM' && !row.noShow && row.person?.name,
   );
-  for (const row of personal) tokens.push({ kind: 'name', text: row.person.name });
+  for (const row of personal) {
+    const team = row.forTeam?.name || row.person?.team?.name || '';
+    tokens.push({
+      kind: 'name',
+      text: team ? `${row.person.name} (${team})` : row.person.name,
+    });
+  }
   tokens.push(...teamSpotTokens(service));
   if (!tokens.length) {
     for (const name of namesOnly(service)) tokens.push({ kind: 'name', text: name });

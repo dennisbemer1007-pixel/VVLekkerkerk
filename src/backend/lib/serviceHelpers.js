@@ -55,7 +55,10 @@ export function mapService(service) {
 
 export const serviceInclude = {
   enrollments: {
-    include: { person: true, forTeam: true },
+    include: {
+      person: { include: { team: { select: { id: true, name: true } } } },
+      forTeam: true,
+    },
     orderBy: { createdAt: 'asc' },
   },
   assignedTeam: true,

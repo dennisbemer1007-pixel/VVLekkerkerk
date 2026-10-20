@@ -123,11 +123,17 @@ export function publicPerson(person, options = {}) {
 export function publicPersonBrief(person) {
   if (!person) return null;
   const obligation = normalizeObligation(person.obligation);
+  const team = person.team?.id
+    ? { id: person.team.id, name: person.team.name || null }
+    : person.teamId
+      ? { id: person.teamId, name: null }
+      : null;
   return {
     id: person.id,
     name: person.name,
     role: canonicalAccessRole(person.role),
     teamId: person.teamId ?? null,
+    team,
     guardianId: person.guardianId ?? null,
     obligation,
     mandatoryBar: isMandatoryObligation(obligation),

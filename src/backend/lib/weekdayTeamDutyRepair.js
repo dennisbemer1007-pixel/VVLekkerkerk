@@ -125,13 +125,7 @@ export async function undoWeekdayTeamDutyStrip(prisma, { stateDir, force = false
         reserved: 1,
       },
     });
-    // Weer normaal synchroniseerbaar (tenzij Chantal later opnieuw verwijdert).
-    if (service.teamDutiesManual) {
-      await prisma.service.update({
-        where: { id: serviceId },
-        data: { teamDutiesManual: false },
-      });
-    }
+    // Vlag niet wissen: anders wijst de sync daarna alsnog een ander team toe.
     restored += 1;
     restoredItems.push({ serviceId, teamId, teamName: item.teamName || null });
   }

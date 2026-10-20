@@ -371,12 +371,21 @@ export function teamDutiesHeldByHand(service) {
 }
 
 /**
- * Lege teamplekken mogen opnieuw worden toegewezen voor eerlijke rotatie —
- * ook na publiceren (locked). Zodra er een naam op de dienst staat, of de
- * barcommissie het team heeft verplaatst of weggehaald, blijven ze staan.
+ * Officiële dienst die al een team op de teamplek heeft. Die keuze blijft,
+ * ook zonder handmatige vlag en ook als er nog geen naam op staat.
+ */
+export function officialTeamDutyIsFrozen(service) {
+  return Boolean(service?.locked) && (service?.teamDuties || []).length > 0;
+}
+
+/**
+ * Lege teamplekken op een nog niet officiële dienst mogen opnieuw worden
+ * toegewezen. Op een officiële dienst met al een team nooit. Zonder teamplek
+ * en zonder handmatige vlag mag een lege officiële dienst wél gevuld worden.
  */
 export function canReassignEmptyTeamDuties(service) {
   if (!service || teamDutiesHeldByHand(service)) return false;
+  if (officialTeamDutyIsFrozen(service)) return false;
   const named = (service.enrollments || []).some((e) => !e.noShow);
   return !named;
 }
@@ -416,6 +425,7 @@ export function shouldReviveEmptyLockedAuto(service) {
  */
 export function shouldSyncTeamDuties(service) {
   if (!service || teamDutiesHeldByHand(service)) return false;
+  if (officialTeamDutyIsFrozen(service)) return false;
   if (canReassignEmptyTeamDuties(service)) return true;
   return (service.teamDuties || []).length > 0;
 }

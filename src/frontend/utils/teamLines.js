@@ -4,6 +4,7 @@ export function enrollmentNameWithTeam(enrollment, teamName) {
   const team =
     teamName ||
     enrollment?.forTeam?.name ||
+    enrollment?.person?.team?.name ||
     '';
   if (!team) return name;
   return `${name} (${team})`;
@@ -53,7 +54,7 @@ export function occupancyFraction(service) {
 export function rosterSpotSummary(service) {
   const personal = (service?.enrollments || [])
     .filter((row) => row.kind !== 'TEAM' && !row.noShow)
-    .map((row) => row.person?.name)
+    .map((row) => enrollmentNameWithTeam(row))
     .filter(Boolean);
   const team = teamSpotLines(service).map((line) => line.label);
   return [...personal, ...team];

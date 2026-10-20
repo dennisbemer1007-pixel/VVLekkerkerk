@@ -221,10 +221,7 @@ export default function DienstCard({
           ))}
           {dienst.enrollments?.filter((e) => !teamLineIds.has(e.id)).map((e) => {
             const reason = displayReason(e.reason, adminMode);
-            const displayName =
-              e.kind === 'TEAM'
-                ? enrollmentNameWithTeam(e, e.forTeam?.name)
-                : e.person?.name ?? 'Onbekend';
+            const displayName = enrollmentNameWithTeam(e, e.forTeam?.name) || 'Onbekend';
             return (
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
                 <span>
