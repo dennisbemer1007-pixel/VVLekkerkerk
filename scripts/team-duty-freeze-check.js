@@ -152,6 +152,9 @@ try {
   const jay = await prisma.person.create({
     data: { name: 'Jay de Jong', role: 'Vrijwilliger', teamId: o151.id },
   });
+  const hanneke = await prisma.person.create({
+    data: { name: 'Hanneke Verhoeff', role: 'Vrijwilliger', teamId: o151.id },
+  });
   await prisma.enrollment.create({
     data: {
       serviceId: morning.id,
@@ -161,14 +164,26 @@ try {
       reason: 'Zelf ingeschreven',
     },
   });
+  await prisma.enrollment.create({
+    data: {
+      serviceId: morning.id,
+      personId: hanneke.id,
+      source: 'TEAM',
+      kind: 'PERSONAL',
+      reason: 'Ingevuld door de bardienstcoördinator',
+    },
+  });
   const mapped = mapService(
     await prisma.service.findUnique({ where: { id: morning.id }, include: serviceInclude }),
   );
-  const shown = enrollmentNameWithTeam(mapped.enrollments[0]);
+  const byName = Object.fromEntries(
+    mapped.enrollments.map((row) => [row.person.name, enrollmentNameWithTeam(row)]),
+  );
+  assert('zelf ingeschreven toont geen team', byName['Jay de Jong'] === 'Jay de Jong', byName['Jay de Jong']);
   assert(
-    'zelf ingeschreven toont Naam (Team)',
-    shown === 'Jay de Jong (O15-1)',
-    shown,
+    'coördinator-invulling toont Naam (Team)',
+    byName['Hanneke Verhoeff'] === 'Hanneke Verhoeff (O15-1)',
+    byName['Hanneke Verhoeff'],
   );
 } catch (err) {
   console.error(err);

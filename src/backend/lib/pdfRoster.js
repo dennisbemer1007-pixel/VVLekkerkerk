@@ -208,7 +208,10 @@ function openSpotTokens(service) {
     (row) => row.kind !== 'TEAM' && !row.noShow && row.person?.name,
   );
   for (const row of personal) {
-    const team = row.forTeam?.name || row.person?.team?.name || '';
+    const coordinator =
+      row.source === 'TEAM' ||
+      /Ingevuld door de bardienstcoördinator/i.test(String(row.reason || ''));
+    const team = coordinator ? row.forTeam?.name || row.person?.team?.name || '' : '';
     tokens.push({
       kind: 'name',
       text: team ? `${row.person.name} (${team})` : row.person.name,

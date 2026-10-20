@@ -1,6 +1,16 @@
+/** Alleen teamplek of invulling door de bardienstcoördinator toont (Team). */
+export function shouldShowEnrollmentTeam(enrollment) {
+  if (!enrollment) return false;
+  if (enrollment.kind === 'TEAM') return true;
+  if (enrollment.source === 'TEAM') return true;
+  const reason = String(enrollment.reason || '');
+  return /Ingevuld door de bardienstcoördinator/i.test(reason);
+}
+
 /** Naam met team tussen haakjes, bijv. "Chantal van der Wouden (O12-1)". */
 export function enrollmentNameWithTeam(enrollment, teamName) {
   const name = enrollment?.person?.name || 'Naam';
+  if (!shouldShowEnrollmentTeam(enrollment)) return name;
   const team =
     teamName ||
     enrollment?.forTeam?.name ||
