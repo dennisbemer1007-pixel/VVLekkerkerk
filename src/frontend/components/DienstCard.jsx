@@ -226,7 +226,7 @@ export default function DienstCard({
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 font-semibold">
                 <span>
                   {displayName}
-                  {obligationMark(e.person)}
+                  {obligationMark(e.person, e)}
                   {e.noShow ? ' · no-show' : ''}
                   {reason ? (
                     <span className="block text-xs font-normal text-gray-600">{reason}</span>
