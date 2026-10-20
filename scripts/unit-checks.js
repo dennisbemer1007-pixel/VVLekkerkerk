@@ -2234,6 +2234,40 @@ assert(
 
 assert('VR18 merkteken ook als mandatoryBar true is', obligationMark({ obligation: 'VR18', mandatoryBar: true }) === ' VR18+');
 assert('FULL merkteken blijft sterretje', obligationMark({ obligation: 'FULL', mandatoryBar: true }) === ' *');
+assert(
+  'zelf ingeschreven toont geen VR18+ achter de naam',
+  obligationMark(
+    { obligation: 'VR18', name: 'Tiffany van den Berg' },
+    { source: 'SELF', kind: 'PERSONAL', reason: 'Zelf ingeschreven' },
+  ) === '' &&
+    obligationMark(
+      { obligation: 'VR18', name: 'Bo Snoei' },
+      { source: 'SELF', kind: 'PERSONAL', reason: 'Zelf ingeschreven' },
+    ) === '' &&
+    obligationMark(
+      { obligation: 'VR18', name: 'Mandy Snoei' },
+      { kind: 'PERSONAL', reason: 'Zelf ingeschreven' },
+    ) === '' &&
+    obligationMark(
+      { obligation: 'VR18', name: 'Hanneke Verhoeff' },
+      { source: 'TEAM', kind: 'PERSONAL', reason: 'Ingevuld door de bardienstcoördinator' },
+    ) === ' VR18+' &&
+    enrollmentNameWithTeam({
+      kind: 'PERSONAL',
+      source: 'SELF',
+      reason: 'Zelf ingeschreven',
+      person: { name: 'Tiffany van den Berg', team: { name: 'MO15-1' }, obligation: 'VR18' },
+    }) === 'Tiffany van den Berg',
+);
+assert(
+  'DienstCard geeft enrollment door aan obligationMark',
+  fs
+    .readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/components/DienstCard.jsx'),
+      'utf8',
+    )
+    .includes('obligationMark(e.person, e)'),
+);
 
 // Levi-scenario: 3 aaneengesloten 6-weekse planningen (17 okt, 2 dec, 30 jan)
 {
