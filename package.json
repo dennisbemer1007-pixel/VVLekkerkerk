@@ -25,6 +25,8 @@
     "test:accept": "node scripts/acceptance-test.js",
     "test:functional": "node scripts/functional-e2e.mjs",
     "docs:handleiding": "node scripts/make-handleiding-pdfs.mjs",
+    "docs:werkbeschrijving": "node docs/werkbeschrijving/generate-pdfs.mjs",
+    "docs:werkbeschrijving:shots": "node docs/werkbeschrijving/capture-shots.mjs",
     "test:security": "node scripts/security-retest.mjs",
     "lint": "eslint .",
     "demo:users": "node scripts/ensure-role-accounts.js",
