@@ -1279,6 +1279,8 @@ function PlanningBeheer() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  /** Stap 4: standaard aan — mail “planning is klaar” meesturen. */
+  const [sendPlanningReadyMail, setSendPlanningReadyMail] = useState(true);
 
   const periodPayload = () => ({ from: fromDate, to: toDate });
 
@@ -1694,25 +1696,58 @@ function PlanningBeheer() {
           Vrijwilligers kunnen zich daarna nog inschrijven op een open plek, maar niet meer uitschrijven. Onderling ruilen
           blijft mogelijk als beide personen akkoord zijn. De barcommissie kan nog wijzigen. De
           bardienstcoördinator kan een teamdienst nog op naam zetten. Accounts krijgen de mail “de
-          planning is klaar” als de mailserver aanstaat. Officieel maken kun je later weer
-          terugdraaien.
+          planning is klaar” alleen als de mailserver aanstaat én het vinkje hieronder aan staat.
+          Officieel maken kun je later weer terugdraaien.
         </p>
-        <div className="flex flex-wrap gap-2">
+        <label
+          className="mt-2 flex items-start gap-2 text-sm text-gray-800"
+          data-testid="planning-klaar-mail-vinkje"
+        >
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={sendPlanningReadyMail}
+            disabled={busy || isOfficial}
+            onChange={(e) => setSendPlanningReadyMail(e.target.checked)}
+          />
+          <span>
+            Mail versturen naar vrijwilligers (“De planning is klaar”). Standaard aan. Zet uit als je
+            alleen officieel wilt maken zonder mail.
+          </span>
+        </label>
+        <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             className="vvl-btn-primary"
             disabled={busy || !isPublished || isOfficial}
             onClick={() => {
+              const mailNote = sendPlanningReadyMail
+                ? ' Met het vinkje aan gaat (als SMTP aanstaat) de mail “planning is klaar” mee.'
+                : ' Het vinkje staat uit: er gaat geen mail mee.';
               if (
                 !window.confirm(
-                  'Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna nog inschrijven op een open plek, maar niet meer zelf uitschrijven. Onderling ruilen blijft mogelijk als beide akkoord zijn. De barcommissie en de bardienstcoördinator (voor teamdiensten) kunnen nog wijzigen. Doorgaan?',
+                  `Officieel maken zet deze periode vast. Vrijwilligers kunnen daarna nog inschrijven op een open plek, maar niet meer zelf uitschrijven. Onderling ruilen blijft mogelijk als beide akkoord zijn. De barcommissie en de bardienstcoördinator (voor teamdiensten) kunnen nog wijzigen.${mailNote} Doorgaan?`,
                 )
               ) {
                 return;
               }
               run(
-                () => api.markPlanningOfficial(periodPayload()),
-                (r) => `Stap 4 klaar: officieel — ${r.locked} dienst(en) vergrendeld.`,
+                () =>
+                  api.markPlanningOfficial({
+                    ...periodPayload(),
+                    sendMail: sendPlanningReadyMail,
+                  }),
+                (r) => {
+                  const mailBit =
+                    r.mail?.reason === 'send_mail_off'
+                      ? ' Geen mail verstuurd (vinkje uit).'
+                      : r.mail?.skipped
+                        ? ''
+                        : r.mail?.sent != null
+                          ? ` Mail: ${r.mail.sent} verstuurd.`
+                          : '';
+                  return `Stap 4 klaar: officieel — ${r.locked} dienst(en) vergrendeld.${mailBit}`;
+                },
               );
             }}
           >
@@ -1779,7 +1814,7 @@ function PlanningBeheer() {
           </p>
         ) : null}
         <p className="text-xs text-gray-600" data-testid="planning-klaar-mail-uitleg">
-          Bij “Maak officieel” gaat (als SMTP aanstaat) de mail “De planning is klaar” naar iedereen
+          Met het vinkje aan gaat (als SMTP aanstaat) de mail “De planning is klaar” naar iedereen
           met een account. Die mail zit in de inbox van de ontvangers — die kun je niet terugtrekken
           of in de app wissen. Er staat geen aparte melding of aankondiging in de app.
         </p>
