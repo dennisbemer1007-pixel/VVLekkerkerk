@@ -59,7 +59,9 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const doc = new PDFDocument({ margin: 24, size: 'A4', layout: 'landscape' });
+    // margin 0: wij bepalen de layout zelf; PDFKit mag niet zelf een 2e pagina openen
+    // wanneer celtekst tegen de ondermarge aankomt.
+    const doc = new PDFDocument({ margin: 0, size: 'A4', layout: 'landscape' });
     doc.pipe(res);
     renderPlanningRoster(doc, {
       services: servicesForRoster(services),

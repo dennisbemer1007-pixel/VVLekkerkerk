@@ -196,7 +196,12 @@ import {
   servicesForRoster,
   sixWeekRosterWindow,
   weekStartsInRange,
+  formatGeneratedAt,
+  computeRosterPageLayout,
+  countRosterExtraRows,
+  renderPlanningRoster,
 } from '../src/backend/lib/pdfRoster.js';
+import PDFDocument from 'pdfkit';
 import { manualCoversSpec } from '../src/backend/lib/serviceRuleLogic.js';
 import {
   isInsideAnyPeriod,
@@ -2560,6 +2565,157 @@ assert(
     sixWeeks.maxWeeks === 6 &&
     (sixWeeks.to.getTime() - sixWeeks.from.getTime()) / 86400000 < 43,
 );
+
+{
+  // 20 okt 2025 17:39:57 UTC → 19:39:57 Amsterdam (CEST, UTC+2)
+  const stamp = formatGeneratedAt(new Date('2025-10-20T17:39:57.000Z'), 'Europe/Amsterdam');
+  assert(
+    'pdf Gegenereerd-tijd in Europe/Amsterdam (niet UTC)',
+    stamp === '20-10-2025, 19:39:57',
+  );
+  assert(
+    'pdf Gegenereerd-tijd wintertijd Amsterdam',
+    formatGeneratedAt(new Date('2025-12-01T17:39:57.000Z'), 'Europe/Amsterdam') ===
+      '01-12-2025, 18:39:57',
+  );
+}
+
+{
+  const sections = rosterDaySections();
+  const fixedRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
+  const layoutTight = computeRosterPageLayout({
+    sectionCount: sections.length,
+    rowCount: fixedRows,
+    extraCount: 2,
+  });
+  assert(
+    'rooster-layout past standaard + 2 extra rijen op 1 liggende A4',
+    layoutTight.fitsOnePage === true && layoutTight.rowH <= 16 && layoutTight.rowH >= 11,
+  );
+  const layoutLoose = computeRosterPageLayout({
+    sectionCount: 2,
+    rowCount: 4,
+    extraCount: 0,
+  });
+  assert(
+    'ruim rooster houdt grotere rijen',
+    layoutLoose.fitsOnePage === true && layoutLoose.rowH >= 15,
+  );
+  const layoutPacked = computeRosterPageLayout({
+    sectionCount: 7,
+    rowCount: 30,
+    extraCount: 8,
+  });
+  assert(
+    'bij heel veel rijen schaalt layout naar compacte rijenhoogte',
+    layoutPacked.rowH <= 12 && layoutPacked.cellSize <= 5.2,
+  );
+  assert(
+    'countRosterExtraRows telt max-extras per dag',
+    countRosterExtraRows(
+      [{ day: 6, rows: SLOT_ROWS }],
+      [new Date('2026-10-19T12:00:00Z')],
+      new Map([
+        [
+          '2026-10-19|6',
+          [
+            {
+              id: 1,
+              type: 'BAR',
+              slot: 'EXTRA',
+              time: '20:00 - 22:00',
+              activityId: 9,
+              activity: { id: 9, name: 'Pubquiz' },
+              enrollments: [],
+              spots: 2,
+            },
+          ],
+        ],
+      ]),
+    ) === 1,
+  );
+}
+
+{
+  const from = new Date('2026-10-19T00:00:00Z');
+  const to = new Date('2026-11-29T00:00:00Z');
+  const services = [];
+  for (let w = 0; w < 6; w += 1) {
+    const mon = new Date(Date.UTC(2026, 9, 19 + w * 7));
+    for (const dayOff of [5, 6]) {
+      const d = new Date(mon);
+      d.setUTCDate(d.getUTCDate() + dayOff);
+      const rows = dayOff === 6 ? SUNDAY_SLOT_ROWS : SLOT_ROWS;
+      for (const row of rows) {
+        services.push({
+          id: services.length + 1,
+          date: d,
+          type: row.type,
+          slot: row.slot,
+          time: row.time,
+          spots: 3,
+          draft: false,
+          active: true,
+          enrollments: [
+            { person: { name: 'Chantal van der Berg' } },
+            { person: { name: 'Dennis Bemer' } },
+          ],
+        });
+      }
+    }
+    const sat = new Date(mon);
+    sat.setUTCDate(sat.getUTCDate() + 5);
+    services.push({
+      id: services.length + 1,
+      date: sat,
+      type: 'BAR',
+      slot: 'EXTRA',
+      time: '20:00 - 22:00',
+      activityId: 1,
+      activity: { id: 1, name: 'Pubquiz' },
+      spots: 2,
+      draft: false,
+      active: true,
+      enrollments: [],
+    });
+  }
+  let pages = 0;
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0 });
+  const origAdd = doc.addPage.bind(doc);
+  doc.addPage = (...args) => {
+    pages += 1;
+    return origAdd(...args);
+  };
+  pages = 1;
+  const ended = new Promise((resolve) => doc.on('end', resolve));
+  doc.on('data', () => {});
+  renderPlanningRoster(doc, {
+    services,
+    from,
+    to,
+    generatedAt: new Date('2025-10-20T17:39:57.000Z'),
+    official: true,
+    maxWeeks: 6,
+  });
+  doc.end();
+  // Synchronously PDFKit flushes pageAdded during render; end is async but page count is final after end.
+  // Busy-wait via Atomics is unnecessary: addPage is only called during renderPlanningRoster (sync).
+  assert('dicht 6-wekenrooster past op 1 PDF-pagina', pages === 1);
+  void ended;
+}
+
+{
+  const beheerSrc = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/frontend/pages/Beheer.jsx'),
+    'utf8',
+  );
+  assert(
+    'Beheer legt uit dat planning-klaar-mail niet terug te trekken is',
+    beheerSrc.includes('planning-klaar-mail-uitleg') &&
+      beheerSrc.includes('niet terugtrekken') &&
+      beheerSrc.includes('geen aparte melding'),
+  );
+}
 
 const roundSheets = personExportRowsSheets(
   [
