@@ -1109,20 +1109,34 @@ assert(
   ]) === 'Chantal van der Wouden (O15-3), open plek',
 );
 assert(
-  'enrollmentNameWithTeam helper',
+  'enrollmentNameWithTeam: alleen teamplek of coördinator toont team',
   enrollmentNameWithTeam(
-    { person: { name: 'Chantal van der Wouden' }, forTeam: { name: 'O12-1' } },
+    { kind: 'TEAM', person: { name: 'Chantal van der Wouden' }, forTeam: { name: 'O12-1' } },
     'O12-1',
   ) === 'Chantal van der Wouden (O12-1)' &&
     enrollmentNameWithTeam({
       kind: 'PERSONAL',
+      source: 'SELF',
+      reason: 'Zelf ingeschreven',
       person: { name: 'Jay de Jong', team: { name: 'O15-1' } },
-    }) === 'Jay de Jong (O15-1)' &&
+    }) === 'Jay de Jong' &&
+    enrollmentNameWithTeam({
+      kind: 'PERSONAL',
+      source: 'TEAM',
+      reason: 'Ingevuld door de bardienstcoördinator',
+      person: { name: 'Hanneke Verhoeff', team: { name: 'O9-2' } },
+    }) === 'Hanneke Verhoeff (O9-2)' &&
     enrollmentNameWithTeam({
       kind: 'PERSONAL',
       reason: 'Ingevuld door de bardienstcoördinator',
-      person: { name: 'Hanneke Verhoeff', team: { name: 'O9-2' } },
-    }) === 'Hanneke Verhoeff (O9-2)',
+      person: { name: 'Mirian Goudriaan', team: { name: 'O9-2' } },
+    }) === 'Mirian Goudriaan (O9-2)' &&
+    enrollmentNameWithTeam({
+      kind: 'PERSONAL',
+      source: 'ADMIN',
+      reason: 'Ingepland door de barcommissie',
+      person: { name: 'Iemand', team: { name: 'O15-1' } },
+    }) === 'Iemand',
 );
 assert(
   'bezetting is gevuld/nodig',
