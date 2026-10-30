@@ -412,6 +412,8 @@ export function frozenTeamDutyFromService(service, candidates = []) {
  */
 export function shouldReviveEmptyLockedAuto(service) {
   if (!service || service.origin === 'MANUAL') return false;
+  // Bewust uitgezet door barcommissie/admin (30/10): nooit vanzelf weer aan.
+  if (service.teamDutiesManual) return false;
   if (!service.locked || service.active !== false) return false;
   return !(service.enrollments || []).length;
 }

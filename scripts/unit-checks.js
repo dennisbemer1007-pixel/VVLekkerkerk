@@ -439,6 +439,13 @@ assert(
     enrollments: [],
   }) === true &&
     shouldReviveEmptyLockedAuto({
+      origin: 'AUTO',
+      locked: true,
+      active: false,
+      teamDutiesManual: true,
+      enrollments: [],
+    }) === false &&
+    shouldReviveEmptyLockedAuto({
       origin: 'MANUAL',
       locked: true,
       active: false,
