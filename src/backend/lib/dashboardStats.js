@@ -53,6 +53,7 @@ export function filterCommitteeNoShowPeople(people, noShowRows, auditedNoshowIds
         role: p.role,
         team: p.team?.name ?? p.team ?? null,
         obligation: p.obligation,
+        active: p.active !== false,
         noShowCount: info.count,
         lastNoShowDate: info.dates[0] || null,
       };
