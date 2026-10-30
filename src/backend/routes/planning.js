@@ -199,7 +199,27 @@ router.get(
       const auditedNoshowIds = new Set(
         audited.map((row) => Number(row.entityId)).filter((id) => Number.isFinite(id) && id > 0),
       );
-      noShowPeople = filterCommitteeNoShowPeople(people, noShowRows, auditedNoshowIds);
+      // Ook wie na een no-show op inactief is gezet, blijft in de no-show-lijst staan.
+      const activeIds = new Set(people.map((p) => p.id));
+      const inactiveNoShowIds = [
+        ...new Set(
+          noShowRows
+            .filter((r) => auditedNoshowIds.has(r.id) && !activeIds.has(r.personId))
+            .map((r) => r.personId),
+        ),
+      ];
+      const inactiveNoShowPeople = inactiveNoShowIds.length
+        ? await prisma.person.findMany({
+            where: { id: { in: inactiveNoShowIds }, active: false },
+            include: { team: true },
+            orderBy: { name: 'asc' },
+          })
+        : [];
+      noShowPeople = filterCommitteeNoShowPeople(
+        [...people, ...inactiveNoShowPeople],
+        noShowRows,
+        auditedNoshowIds,
+      );
     }
 
     res.json({

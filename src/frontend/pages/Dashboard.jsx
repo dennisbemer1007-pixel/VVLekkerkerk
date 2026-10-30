@@ -218,7 +218,10 @@ function PersonList({ people, showNoShowMeta = false }) {
               <Link to="/mensen" className="font-semibold underline">
                 {p.name}
               </Link>
-              <span className="text-right text-gray-600">
+              {showNoShowMeta && p.active === false ? (
+                <span className="text-xs text-gray-500">inactief</span>
+              ) : null}
+              <span className="ml-auto text-right text-gray-600">
                 {showNoShowMeta && p.noShowCount
                   ? `${p.noShowCount}×${
                       p.lastNoShowDate

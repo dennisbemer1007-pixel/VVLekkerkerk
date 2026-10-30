@@ -1149,6 +1149,29 @@ try {
   await new Promise((resolve) => doc.on('end', resolve));
   assert('dicht rooster-PDF past op 1 pagina', pages === 1, `pages=${pages}`);
 
+  // No-show-lijst: wie na een no-show inactief is gezet (Kevin, 24/10) blijft zichtbaar
+  {
+    const { filterCommitteeNoShowPeople } = await import('../src/backend/lib/dashboardStats.js');
+    const list = filterCommitteeNoShowPeople(
+      [
+        { id: 501, name: 'Actief', obligation: 'FULL', active: true },
+        { id: 502, name: 'Kevin Prevo', obligation: 'FULL', active: false },
+      ],
+      [
+        { id: 9001, personId: 501, service: { date: new Date('2026-10-24') } },
+        { id: 9002, personId: 502, service: { date: new Date('2026-10-24') } },
+      ],
+      new Set([9001, 9002]),
+    );
+    const kevin = list.find((p) => p.id === 502);
+    assert('inactieve persoon met no-show blijft in no-show-lijst', Boolean(kevin) && kevin.active === false);
+    assert('actieve no-show niet als inactief gemarkeerd', list.find((p) => p.id === 501)?.active === true);
+    const routeSrc = fs.readFileSync(path.join(root, 'src/backend/routes/planning.js'), 'utf8');
+    assert('planning-API laadt inactieve no-show-personen', routeSrc.includes('inactiveNoShowPeople'));
+    const dashSrc = fs.readFileSync(path.join(root, 'src/frontend/pages/Dashboard.jsx'), 'utf8');
+    assert('dashboard toont label inactief', dashSrc.includes('p.active === false') && dashSrc.includes('inactief'));
+  }
+
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart
   const finalRules = (await prisma.serviceRule.findMany({ orderBy: { id: 'asc' } })).map(finger);
   assert(
