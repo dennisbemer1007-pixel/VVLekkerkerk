@@ -488,6 +488,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     if (service.activityId) continue;
     if (service.enrollments?.length) continue;
     if (service.origin !== 'AUTO') continue;
+    // Bewust uitgezette dienst blijft als 'weg'-markering staan, zodat hij niet terugkomt.
+    if (service.active === false && service.teamDutiesManual) continue;
     const key = serviceKey(service.date, service.type, startTimeFromService(service));
     const dayList = existingByDay.get(toIsoDate(service.date)) || [];
     const supersededByManual = manualCoversSpec(dayList, {

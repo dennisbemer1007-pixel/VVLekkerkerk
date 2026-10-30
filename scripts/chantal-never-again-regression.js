@@ -98,6 +98,8 @@ const { enrollmentNameWithTeam } = await import('../src/frontend/utils/teamLines
 const { mapService, serviceInclude } = await import('../src/backend/lib/serviceHelpers.js');
 const { createSession } = await import('../src/backend/lib/auth.js');
 const { default: authRouter } = await import('../src/backend/routes/auth.js');
+const { default: servicesRouter } = await import('../src/backend/routes/services.js');
+const { trySyncPlanningFromMatches } = await import('../src/backend/lib/proposePlanning.js');
 const { default: enrollmentsRouter, enrollmentFollowUp } = await import(
   '../src/backend/routes/enrollments.js'
 );
@@ -1170,6 +1172,63 @@ try {
     assert('planning-API laadt inactieve no-show-personen', routeSrc.includes('inactiveNoShowPeople'));
     const dashSrc = fs.readFileSync(path.join(root, 'src/frontend/pages/Dashboard.jsx'), 'utf8');
     assert('dashboard toont label inactief', dashSrc.includes('p.active === false') && dashSrc.includes('inactief'));
+  }
+
+  // 30/10: op inactief gezet / verwijderd blijft weg na herstart + sync (render-start én server.js)
+  {
+    const svcApp = express();
+    svcApp.use(express.json());
+    svcApp.use('/api/services', servicesRouter);
+    svcApp.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
+    const svcServer = await new Promise((resolve) => {
+      const l = svcApp.listen(0, '127.0.0.1', () => resolve(l));
+    });
+    const svcBase = `http://127.0.0.1:${svcServer.address().port}`;
+    try {
+      const candidates = await prisma.service.findMany({
+        where: { active: true, draft: false, origin: 'AUTO', enrollments: { none: {} } },
+        orderBy: { date: 'asc' },
+        take: 2,
+      });
+      assert('er zijn lege AUTO-diensten om uit te zetten', candidates.length === 2, `n=${candidates.length}`);
+      const [viaApi, legacy] = candidates;
+      await prisma.service.update({ where: { id: viaApi.id }, data: { locked: true } });
+      const put = await fetch(`${svcBase}/api/services/${viaApi.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${committeeToken}` },
+        body: JSON.stringify({ active: false }),
+      });
+      assert('barcommissie kan dienst op inactief zetten', put.status === 200, `status=${put.status}`);
+      // Zoals scripts/revert-revived-diensten.js --apply: inactief + vlag.
+      await prisma.service.update({
+        where: { id: legacy.id },
+        data: { locked: true, active: false, teamDutiesManual: true },
+      });
+      const countBefore = await prisma.service.count({ where: { active: true } });
+      await restartLikeRenderStart();
+      await trySyncPlanningFromMatches({ from: FROM, to: TO });
+      await trySyncPlanningFromMatches();
+      const a = await prisma.service.findUnique({ where: { id: viaApi.id } });
+      const b = await prisma.service.findUnique({ where: { id: legacy.id } });
+      assert(
+        'op inactief gezet -> herstart+sync -> blijft inactief (met vlag)',
+        a && a.active === false && a.teamDutiesManual === true,
+      );
+      assert('teruggezette officiele dienst gaat niet vanzelf weer aan', b && b.active === false);
+      const sameSlotActive = await prisma.service.count({
+        where: {
+          active: true,
+          type: a.type,
+          date: a.date,
+          time: a.time,
+        },
+      });
+      assert('verwijderde dienst wordt niet opnieuw aangemaakt', sameSlotActive === 0, `n=${sameSlotActive}`);
+      const countAfter = await prisma.service.count({ where: { active: true } });
+      assert('herstart maakt geen extra open diensten', countAfter <= countBefore, `${countBefore}->${countAfter}`);
+    } finally {
+      await new Promise((resolve) => svcServer.close(resolve));
+    }
   }
 
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart

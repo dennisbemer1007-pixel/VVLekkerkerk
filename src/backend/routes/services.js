@@ -220,6 +220,8 @@ router.put(
           ...(required !== undefined && { required: Math.max(1, Number(required) || 1) }),
           ...(location !== undefined && { location: location.trim() }),
           ...(active !== undefined && { active: Boolean(active) }),
+          // Bewust op inactief gezet door barcommissie/admin: sync en herstart blijven eraf.
+          ...(active !== undefined && !active && { teamDutiesManual: true }),
           ...(draft !== undefined && { draft: Boolean(draft) }),
           ...(locked !== undefined && { locked: Boolean(locked) }),
           ...(kind !== undefined && { kind: kind === 'TEAM' ? 'TEAM' : 'PERSONAL' }),
