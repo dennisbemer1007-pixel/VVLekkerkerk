@@ -31,3 +31,21 @@ export const TEAM_DUTY_SHIFT_OPTIONS = [
   { id: 'SECOND', label: 'Middag (tweede shift)' },
   { id: 'LAST', label: 'Avond (laatste shift)' },
 ];
+
+/** Dienst uit de jaarplanning: gekoppeld aan een activiteit en geen concept. */
+export function isJaarplanningService(service) {
+  return Boolean(service && !service.draft && (service.activityId || service.activity?.id));
+}
+
+/**
+ * Splits de diensten van de actieve periode voor de planning-wizard:
+ * concepten (draft) en jaarplanning-bardiensten (niet-concept, wel activiteit).
+ * Wijzigt geen draft-status en laat overige handmatige diensten buiten beide lijsten.
+ */
+export function splitPlanningWizardServices(services) {
+  const list = Array.isArray(services) ? services : [];
+  return {
+    drafts: list.filter((row) => row.draft),
+    jaarplanning: list.filter(isJaarplanningService),
+  };
+}

@@ -15,6 +15,7 @@ import {
 } from '../utils/formatDate.js';
 import { scrollToForm } from '../utils/scrollToForm.js';
 
+import { splitPlanningWizardServices } from './planningLabels.js';
 import DienstregelsBeheer from './DienstregelsBeheer.jsx';
 import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
 import PersonenBeheer from './PersonenBeheer.jsx';
@@ -1271,6 +1272,7 @@ function PlanningBeheer() {
     to: defaultPlanningEndInput(),
   });
   const [drafts, setDrafts] = useState([]);
+  const [jaarplanningServices, setJaarplanningServices] = useState([]);
   const [periodServiceCount, setPeriodServiceCount] = useState(0);
   const [publishedOpen, setPublishedOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
@@ -1295,7 +1297,9 @@ function PlanningBeheer() {
         setRound(r);
         setRounds(allRounds);
         const allPeriod = withDrafts.services || [];
-        setDrafts(allPeriod.filter((s) => s.draft));
+        const split = splitPlanningWizardServices(allPeriod);
+        setDrafts(split.drafts);
+        setJaarplanningServices(split.jaarplanning);
         setPeriodServiceCount(allPeriod.length);
         const open = (published.services || []).filter(
           (s) => !s.draft && (s.enrolled ?? s.enrollments?.length ?? 0) < (s.required ?? 0),
@@ -1843,6 +1847,25 @@ function PlanningBeheer() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {drafts.map((s) => (
+              <DienstCard key={s.id} dienst={s} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="mb-2 font-heading font-black uppercase">
+          Jaarplanning in deze periode ({jaarplanningServices.length})
+        </h3>
+        {jaarplanningServices.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            Geen jaarplanning-diensten in deze periode. Items uit de Jaarplanning met
+            bardiensten verschijnen hier, inclusief wie al is ingepland. Na publiceren
+            zie je ze ook op Planning.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {jaarplanningServices.map((s) => (
               <DienstCard key={s.id} dienst={s} />
             ))}
           </div>
