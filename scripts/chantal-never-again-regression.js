@@ -65,6 +65,8 @@ const {
   canReassignEmptyTeamDuties,
 } = await import('../src/backend/lib/teamDutyPlanning.js');
 const { youthGender, youthTeamAliasKey } = await import('../src/backend/lib/youthTeams.js');
+const { splitPlanningWizardServices } = await import('../src/frontend/pages/planningLabels.js');
+const { parseMatchDateInput } = await import('../src/backend/lib/authz.js');
 const {
   additionalRosterServices,
   chooseRosterPageSize,
@@ -1229,6 +1231,137 @@ try {
     } finally {
       await new Promise((resolve) => svcServer.close(resolve));
     }
+  }
+
+  // 16/11: jaarplanning-bardiensten zichtbaar in de concept-wizard, blijven geen concept
+  {
+    const brigitta = await prisma.person.create({
+      data: { name: 'Brigitta Verhoog', email: 'brigitta.jaar@example.test', role: 'Vrijwilliger', active: true },
+    });
+    const claudia = await prisma.person.create({
+      data: { name: 'Claudia den Hoed', email: 'claudia.jaar@example.test', role: 'Vrijwilliger', active: true },
+    });
+    const ronald = await prisma.person.create({
+      data: { name: 'Ronald Rijke', email: 'ronald.jaar@example.test', role: 'Vrijwilliger', active: true },
+    });
+
+    async function addJaarplanningItem(fields, personIds = []) {
+      const activity = await prisma.activity.create({
+        data: {
+          name: fields.name,
+          type: fields.type,
+          date: parseMatchDateInput(fields.date),
+          startTime: fields.startTime,
+          endTime: fields.endTime,
+          locked: true,
+          openForEnrollment: fields.open,
+          barRequired: fields.barRequired,
+        },
+      });
+      const service = await prisma.service.create({
+        data: {
+          type: 'BAR',
+          date: activity.date,
+          time: `${activity.startTime} - ${activity.endTime}`,
+          location: 'Bar',
+          required: fields.barRequired,
+          origin: 'MANUAL',
+          slot: 'EXTRA',
+          activityId: activity.id,
+          active: true,
+          draft: false,
+        },
+      });
+      for (const personId of personIds) {
+        await prisma.enrollment.create({
+          data: {
+            serviceId: service.id,
+            personId,
+            source: 'ADMIN',
+            kind: 'PERSONAL',
+            reason: 'Vooraf ingepland via jaarplanning',
+          },
+        });
+      }
+      return service;
+    }
+
+    const pubquiz = await addJaarplanningItem({
+      name: 'Pubquiz', type: 'overig', date: '2026-12-12', startTime: '19:30', endTime: '00:00', barRequired: 2, open: false,
+    });
+    const klaverjas = await addJaarplanningItem({
+      name: 'Klaverjas', type: 'klaverjas', date: '2026-12-18', startTime: '18:30', endTime: '00:00', barRequired: 2, open: false,
+    }, [brigitta.id, claudia.id]);
+    const zaalMiddag = await addJaarplanningItem({
+      name: 'Zaalvoetbaltoernooi', type: 'toernooi', date: '2026-12-28', startTime: '12:30', endTime: '17:00', barRequired: 1, open: true,
+    });
+    const zaalOchtend = await addJaarplanningItem({
+      name: 'Zaalvoetbaltoernooi', type: 'toernooi', date: '2026-12-28', startTime: '08:30', endTime: '12:30', barRequired: 1, open: true,
+    });
+    const zaalAvond = await addJaarplanningItem({
+      name: 'Zaalvoetbaltoernooi', type: 'toernooi', date: '2026-12-29', startTime: '18:30', endTime: '22:30', barRequired: 1, open: true,
+    }, [ronald.id]);
+    const ochtendbar = await prisma.service.create({
+      data: {
+        type: 'BAR',
+        date: parseMatchDateInput('2026-12-12'),
+        time: '07:30 - 12:00',
+        location: 'Bar',
+        required: 3,
+        origin: 'AUTO',
+        slot: 'MORNING',
+        active: true,
+        draft: true,
+      },
+    });
+
+    const periodRows = await prisma.service.findMany({
+      where: {
+        active: true,
+        date: { gte: parseMatchDateInput('2026-12-07'), lte: parseMatchDateInput('2027-01-03') },
+        id: { in: [pubquiz.id, klaverjas.id, zaalMiddag.id, zaalOchtend.id, zaalAvond.id, ochtendbar.id] },
+      },
+      include: { activity: true, enrollments: { include: { person: true } } },
+    });
+    const split = splitPlanningWizardServices(periodRows);
+    const jaarIds = split.jaarplanning.map((s) => s.id).sort((a, b) => a - b);
+    const expectedJaar = [pubquiz.id, klaverjas.id, zaalMiddag.id, zaalOchtend.id, zaalAvond.id].sort((a, b) => a - b);
+    assert('concept-ochtendbar blijft in de conceptlijst', split.drafts.some((s) => s.id === ochtendbar.id && s.draft === true));
+    assert('vijf jaarplanning-diensten in de wizard-periode', jaarIds.join(',') === expectedJaar.join(','), `ids=${jaarIds}`);
+    assert(
+      'jaarplanning-diensten blijven geen concept (open inschrijving blijft)',
+      split.jaarplanning.every((s) => s.draft === false && s.activity?.openForEnrollment === (s.id === zaalMiddag.id || s.id === zaalOchtend.id || s.id === zaalAvond.id)),
+    );
+    const klaverjasRow = split.jaarplanning.find((s) => s.id === klaverjas.id);
+    const klaverjasNames = (klaverjasRow?.enrollments || []).map((e) => e.person?.name).sort();
+    assert(
+      'klaverjas toont Brigitta en Claudia',
+      klaverjasNames.join(',') === 'Brigitta Verhoog,Claudia den Hoed',
+      `names=${klaverjasNames}`,
+    );
+    const avondRow = split.jaarplanning.find((s) => s.id === zaalAvond.id);
+    assert(
+      'zaalvoetbal 29-12 toont Ronald Rijke',
+      (avondRow?.enrollments || []).some((e) => e.person?.name === 'Ronald Rijke'),
+    );
+    assert('open toernooi-items blijven open', zaalMiddag && (await prisma.service.findUnique({ where: { id: zaalOchtend.id } })).draft === false);
+    const afterCounts = await prisma.enrollment.groupBy({
+      by: ['serviceId'],
+      where: { serviceId: { in: [klaverjas.id, zaalAvond.id] } },
+      _count: { id: true },
+    });
+    const countBy = Object.fromEntries(afterCounts.map((r) => [r.serviceId, r._count.id]));
+    assert('inschrijvingen jaarplanning ongewijzigd', countBy[klaverjas.id] === 2 && countBy[zaalAvond.id] === 1, JSON.stringify(countBy));
+
+    const beheerSrc = fs.readFileSync(path.join(root, 'src/frontend/pages/Beheer.jsx'), 'utf8');
+    const activitiesSrc = fs.readFileSync(path.join(root, 'src/backend/routes/activities.js'), 'utf8');
+    const cardSrc = fs.readFileSync(path.join(root, 'src/frontend/components/DienstCard.jsx'), 'utf8');
+    assert(
+      'wizard toont blok Jaarplanning in deze periode',
+      beheerSrc.includes('splitPlanningWizardServices') && beheerSrc.includes('Jaarplanning in deze periode'),
+    );
+    assert('jaarplanning-aanmaak blijft draft: false', /draft:\s*false/.test(activitiesSrc) && !/draft:\s*true/.test(activitiesSrc));
+    assert('dienstkaart heeft label Jaarplanning', cardSrc.includes('jaarplanning-label') && cardSrc.includes('Jaarplanning'));
   }
 
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart

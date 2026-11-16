@@ -168,6 +168,14 @@ export default function DienstCard({
           </button>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {dienst.activityId || dienst.activity?.id ? (
+            <span
+              className="rounded-sm bg-vvl-secondary px-2 py-1 text-xs font-bold uppercase"
+              data-testid="jaarplanning-label"
+            >
+              Jaarplanning
+            </span>
+          ) : null}
           {isDraft ? (
             <span
               className="rounded-sm bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-950"
