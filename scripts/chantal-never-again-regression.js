@@ -46,7 +46,7 @@ const { parseCsv, validateMatchRows } = await import('../src/backend/lib/csvMatc
 const { persistValidMatchRows } = await import('../src/backend/lib/importMatches.js');
 const { createPlanningRound, activatePlanningRound } = await import('../src/backend/lib/planningRounds.js');
 const { proposeFromMatches, publishDraftServices } = await import('../src/backend/lib/proposePlanning.js');
-const { generateServicesFromRules } = await import('../src/backend/lib/serviceGeneration.js');
+const { generateServicesFromRules, shouldKeepServiceOutsideGeneratedPeriod } = await import('../src/backend/lib/serviceGeneration.js');
 const { fillMandatoryPersonal } = await import('../src/backend/lib/autoFill.js');
 const { markPlanningOfficial } = await import('../src/backend/lib/official.js');
 const { toIsoDate } = await import('../src/backend/lib/dates.js');
@@ -1741,6 +1741,114 @@ try {
       'formulier Dienst toevoegen heeft veld Teamdienst',
       beheerSrc.includes('Teamdienst (optioneel)') && beheerSrc.includes('Teamdienst toevoegen'),
     );
+  }
+
+  // 17/11 na #82: donderdag 3-12, keuken 12-12 en bar 16:30–19:30 mogen niet
+  // verdwijnen als de eerste (gepubliceerde) periode opnieuw gesynct wordt,
+  // of als de tweede conceptplanning wordt gegenereerd.
+  {
+    const seedAuto = (date, type, time, extra = {}) =>
+      prisma.service.create({
+        data: {
+          type,
+          date: new Date(date),
+          time,
+          location: type === 'KITCHEN' ? 'Keuken' : 'Bar',
+          required: 2,
+          active: true,
+          draft: true,
+          locked: false,
+          kind: 'PERSONAL',
+          origin: 'AUTO',
+          ...extra,
+        },
+      });
+    const dayRange = (isoDay) => ({
+      gte: new Date(`${isoDay}T00:00:00.000Z`),
+      lte: new Date(`${isoDay}T23:59:59.999Z`),
+    });
+    async function ensureSlot(isoDay, type, time, extra = {}) {
+      const existing = await prisma.service.findFirst({
+        where: { type, time, date: dayRange(isoDay), active: true },
+      });
+      if (existing) return existing;
+      return seedAuto(`${isoDay}T12:00:00Z`, type, time, extra);
+    }
+    async function slotExists(isoDay, type, time) {
+      return prisma.service.findFirst({
+        where: { type, time, date: dayRange(isoDay), active: { not: false } },
+        select: { id: true, time: true, active: true, draft: true },
+      });
+    }
+    const thu1830 = await ensureSlot('2026-12-03', 'BAR', '18:30 - 00:00');
+    const thu1900 = await ensureSlot('2026-12-03', 'BAR', '19:00 - 21:30', { kind: 'TEAM', assignedTeamId: seven.id });
+    const thuDuty = await prisma.serviceTeamDuty.findFirst({ where: { serviceId: thu1900.id, teamId: seven.id } });
+    if (!thuDuty) {
+      await prisma.serviceTeamDuty.create({ data: { serviceId: thu1900.id, teamId: seven.id, reserved: 1 } });
+    }
+    await ensureSlot('2026-12-12', 'KITCHEN', '10:00 - 13:00');
+    await ensureSlot('2026-12-12', 'KITCHEN', '13:00 - 16:00');
+    await ensureSlot('2026-12-12', 'KITCHEN', '16:00 - 19:00');
+    await ensureSlot('2026-12-12', 'BAR', '16:30 - 19:30');
+
+    assert(
+      'concept-AUTO in een latere ronde wordt niet als buiten-periode gewist (regel)',
+      shouldKeepServiceOutsideGeneratedPeriod(
+        { origin: 'AUTO', draft: true, locked: false, date: new Date('2026-12-03T12:00:00Z'), enrollments: [] },
+        { rounds: [{ fromDate: new Date('2026-12-07T00:00:00Z'), toDate: new Date('2027-01-10T00:00:00Z') }] },
+      ) === true,
+    );
+
+    const firstRound = await prisma.planningRound.findFirst({
+      where: { fromDate: { not: null }, publishedAt: { not: null } },
+      orderBy: { fromDate: 'asc' },
+    });
+    assert('er is een gepubliceerde eerste planning', Boolean(firstRound));
+    await activatePlanningRound(prisma, firstRound.id);
+    const syncFirst = await trySyncPlanningFromMatches();
+    const afterFirstSlots = await Promise.all([
+      slotExists('2026-12-03', 'BAR', '18:30 - 00:00'),
+      slotExists('2026-12-03', 'BAR', '19:00 - 21:30'),
+      slotExists('2026-12-12', 'KITCHEN', '10:00 - 13:00'),
+      slotExists('2026-12-12', 'KITCHEN', '13:00 - 16:00'),
+      slotExists('2026-12-12', 'KITCHEN', '16:00 - 19:00'),
+      slotExists('2026-12-12', 'BAR', '16:30 - 19:30'),
+    ]);
+    assert(
+      'startup-sync van de eerste gepubliceerde periode wist 3-12 en 12-12 niet',
+      afterFirstSlots.every(Boolean),
+      `removed=${syncFirst.removed} missing=${['3-12 18:30','3-12 19:00','12-12 keuken ochtend','12-12 keuken middag','12-12 keuken laat','12-12 16:30'].filter((_, i) => !afterFirstSlots[i]).join(',')}`,
+    );
+
+    const secondRound = await prisma.planningRound.findFirst({
+      where: { label: { contains: 'Tweede' } },
+      orderBy: { id: 'desc' },
+    });
+    if (secondRound) await activatePlanningRound(prisma, secondRound.id);
+    const genSecond = await generateServicesFromRules({ from: '2026-12-07', to: '2027-01-10' });
+    const afterSecondSlots = await Promise.all([
+      slotExists('2026-12-03', 'BAR', '18:30 - 00:00'),
+      slotExists('2026-12-03', 'BAR', '19:00 - 21:30'),
+      slotExists('2026-12-12', 'KITCHEN', '10:00 - 13:00'),
+      slotExists('2026-12-12', 'KITCHEN', '13:00 - 16:00'),
+      slotExists('2026-12-12', 'KITCHEN', '16:00 - 19:00'),
+      slotExists('2026-12-12', 'BAR', '16:30 - 19:30'),
+    ]);
+    assert(
+      'generatie tweede planning wist donderdag 3-12 niet (gat vóór 7-12)',
+      Boolean(afterSecondSlots[0] && afterSecondSlots[1]),
+      `removed=${genSecond.removed}`,
+    );
+    assert(
+      'generatie tweede planning behoudt keukendiensten 12-12',
+      afterSecondSlots[2] && afterSecondSlots[3] && afterSecondSlots[4],
+    );
+    assert(
+      'generatie tweede planning behoudt bardienst 12-12 16:30–19:30',
+      Boolean(afterSecondSlots[5] && afterSecondSlots[5].time.startsWith('16:30')),
+    );
+    const enrollAfter = await prisma.enrollment.count();
+    assert('herstelsync raakt geen inschrijvingen-telling (smoke)', Number.isInteger(enrollAfter));
   }
 
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart
