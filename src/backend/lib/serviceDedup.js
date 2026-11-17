@@ -34,6 +34,8 @@ export function serviceRuleFingerprint(service) {
 export function isOrphanAutoService(service, rules) {
   if (!service || service.origin !== 'AUTO') return false;
   if (service.active === false) return false;
+  // Bewust aangepast (tijd/team) door barcommissie: geen 'wees' om uit te zetten.
+  if (service.teamDutiesManual) return false;
   if (service.activityId || service.activity?.id) return false;
   if ((service.enrollments || []).length) return false;
   const fingerprints = new Set((rules || []).filter((rule) => rule?.active !== false).map(ruleFingerprint));

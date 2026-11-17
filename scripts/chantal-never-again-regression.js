@@ -66,6 +66,7 @@ const {
 } = await import('../src/backend/lib/teamDutyPlanning.js');
 const { youthGender, youthTeamAliasKey } = await import('../src/backend/lib/youthTeams.js');
 const { splitPlanningWizardServices } = await import('../src/frontend/pages/planningLabels.js');
+const { matchesForDienstKoppeling } = await import('../src/frontend/utils/matchDropdown.js');
 const { parseMatchDateInput } = await import('../src/backend/lib/authz.js');
 const {
   additionalRosterServices,
@@ -1494,6 +1495,251 @@ try {
     assert(
       'ongepubliceerde Planning-lijst toont wel jaarplanning-diensten',
       planningSrc.includes("where.activityId = { not: null }"),
+    );
+  }
+
+  // 17/11: bewerkte 7x7-teamdienst blijft staan na planning, handmatig toevoegen werkt,
+  // en Koppel-aan-wedstrijd toont december (niet alleen t/m september).
+  {
+    const decFrom = '2026-12-07';
+    const decTo = '2027-01-10';
+    const thuDate = new Date('2026-12-10T12:00:00Z');
+    await prisma.match.create({
+      data: {
+        date: thuDate,
+        time: '20:00',
+        home: true,
+        opponent: 'Ergens 7x7',
+        matchNumber: '7x7-2026-12-10',
+        teamId: seven.id,
+      },
+    });
+    await generateServicesFromRules({ from: decFrom, to: decTo });
+    let sevenDuty = await prisma.service.findFirst({
+      where: {
+        type: 'BAR',
+        date: { gte: new Date('2026-12-10T00:00:00Z'), lte: new Date('2026-12-10T23:59:59Z') },
+        active: true,
+        teamDuties: { some: { teamId: seven.id } },
+      },
+      include: { teamDuties: { include: { team: true } }, enrollments: true },
+      orderBy: { id: 'asc' },
+    });
+    // Zoals Chantal die had: AUTO-teamdienst 19:00 na thuiswedstrijd (ook als de generator hem overslaat).
+    if (!sevenDuty) {
+      sevenDuty = await prisma.service.create({
+        data: {
+          type: 'BAR',
+          date: thuDate,
+          time: '19:00 - 21:30',
+          location: 'Bar',
+          required: 1,
+          active: true,
+          draft: true,
+          locked: false,
+          kind: 'TEAM',
+          origin: 'AUTO',
+          slot: 'EVENING',
+          assignedTeamId: seven.id,
+          sourceRuleId: thursdayRule.id,
+          teamDuties: { create: { teamId: seven.id, reserved: 1 } },
+        },
+        include: { teamDuties: { include: { team: true } }, enrollments: true },
+      });
+    }
+    assert(
+      '7x7 heeft een donderdag-teamdienst op 10-12 (19:00, concept)',
+      Boolean(sevenDuty) && /19:00/.test(sevenDuty.time || ''),
+      `id=${sevenDuty?.id} time=${sevenDuty?.time} duties=${(sevenDuty?.teamDuties || []).map((d) => d.team?.name).join(',')}`,
+    );
+
+    const svcApp = express();
+    svcApp.use(express.json());
+    svcApp.use('/api/services', servicesRouter);
+    svcApp.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
+    const svcServer = await new Promise((resolve) => {
+      const l = svcApp.listen(0, '127.0.0.1', () => resolve(l));
+    });
+    const svcBase = `http://127.0.0.1:${svcServer.address().port}`;
+    const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${committeeToken}` };
+    try {
+      const putTime = await fetch(`${svcBase}/api/services/${sevenDuty.id}`, {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ time: '22:00 - 00:00' }),
+      });
+      const edited = await putTime.json();
+      assert('tijd wijzigen van 7x7-dienst lukt', putTime.status === 200, `status=${putTime.status}`);
+      assert(
+        'tijdswijziging zet de handmatig-vlag',
+        edited.time.startsWith('22:00') && edited.teamDutiesManual === true,
+        `time=${edited.time} flag=${edited.teamDutiesManual}`,
+      );
+
+      const createVol = await fetch(`${svcBase}/api/services`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          type: 'BAR',
+          date: '2026-12-10',
+          time: '19:00 - 22:00',
+          required: 2,
+          draft: true,
+          active: true,
+        }),
+      });
+      const volunteerShift = await createVol.json();
+      assert('handmatige bardienst 19:00-22:00 wordt aangemaakt', createVol.status === 201 && volunteerShift.origin === 'MANUAL', `status=${createVol.status}`);
+
+      const extraPerson = await prisma.person.create({
+        data: { name: 'Chantal Test 19-22', email: `chantal-1922-${process.pid}@vvl.test`, active: true },
+      });
+      await prisma.enrollment.create({
+        data: { serviceId: volunteerShift.id, personId: extraPerson.id, source: 'ADMIN', kind: 'PERSONAL' },
+      });
+
+      const createTeam = await fetch(`${svcBase}/api/services`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          type: 'BAR',
+          date: '2026-12-17',
+          time: '22:00 - 00:00',
+          required: 2,
+          draft: true,
+          active: true,
+          assignedTeamId: seven.id,
+        }),
+      });
+      const manualTeam = await createTeam.json();
+      assert(
+        'handmatige teamdienst via Dienst toevoegen werkt',
+        createTeam.status === 201 &&
+          manualTeam.origin === 'MANUAL' &&
+          (manualTeam.kind === 'TEAM' || manualTeam.kind === 'MIXED') &&
+          (manualTeam.teamDuties || []).some((d) => d.teamId === seven.id || /7x7/i.test(d.team?.name || '')),
+        `status=${createTeam.status} kind=${manualTeam.kind} duties=${JSON.stringify(manualTeam.teamDuties)}`,
+      );
+
+      const bare = await fetch(`${svcBase}/api/services`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          type: 'BAR',
+          date: '2026-12-17',
+          time: '19:00 - 22:00',
+          required: 2,
+          draft: true,
+          active: true,
+        }),
+      });
+      const bareShift = await bare.json();
+      const addDuty = await fetch(`${svcBase}/api/services/${bareShift.id}/team-duties`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ teamId: seven.id, reserved: 2 }),
+      });
+      const addedDuty = await addDuty.json();
+      assert(
+        'teamplek achteraf toevoegen op een bestaande dienst werkt',
+        addDuty.status === 201 && Number(addedDuty.teamId) === seven.id,
+        `status=${addDuty.status} ${JSON.stringify(addedDuty)}`,
+      );
+
+      await generateServicesFromRules({ from: decFrom, to: decTo });
+      await trySyncPlanningFromMatches({ from: decFrom, to: decTo });
+
+      const stillSeven = await prisma.service.findUnique({
+        where: { id: sevenDuty.id },
+        include: { teamDuties: { include: { team: true } } },
+      });
+      const stillVolunteer = await prisma.service.findUnique({
+        where: { id: volunteerShift.id },
+        include: { enrollments: true },
+      });
+      const stillManualTeam = await prisma.service.findUnique({
+        where: { id: manualTeam.id },
+        include: { teamDuties: true },
+      });
+      assert(
+        'bewerkte 7x7-dienst 22:00 overleeft planning genereren',
+        stillSeven &&
+          stillSeven.active === true &&
+          stillSeven.time.startsWith('22:00') &&
+          stillSeven.teamDutiesManual === true &&
+          (stillSeven.teamDuties || []).some((d) => d.teamId === seven.id),
+        `id=${stillSeven?.id} active=${stillSeven?.active} time=${stillSeven?.time} flag=${stillSeven?.teamDutiesManual} duties=${(stillSeven?.teamDuties || []).map((d) => d.team?.name).join(',')}`,
+      );
+      assert(
+        'handmatige 19:00-22:00 blijft staan',
+        stillVolunteer && stillVolunteer.active === true && stillVolunteer.time.startsWith('19:00'),
+        `id=${stillVolunteer?.id} time=${stillVolunteer?.time}`,
+      );
+      assert(
+        'inschrijving op de 19:00-dienst blijft ongewijzigd',
+        (stillVolunteer?.enrollments || []).some((e) => e.personId === extraPerson.id) &&
+          (stillVolunteer?.enrollments || []).length === 1,
+        `n=${stillVolunteer?.enrollments?.length}`,
+      );
+      assert(
+        'handmatig toegevoegde teamdienst blijft na sync',
+        stillManualTeam && (stillManualTeam.teamDuties || []).some((d) => d.teamId === seven.id),
+      );
+    } finally {
+      await new Promise((resolve) => svcServer.close(resolve));
+    }
+
+    const manyMatches = [];
+    let id = 1;
+    for (let d = new Date('2026-08-01T12:00:00'); d <= new Date('2027-01-10T12:00:00'); d = new Date(d.getTime() + 2 * 24 * 60 * 60 * 1000)) {
+      manyMatches.push({
+        id: id++,
+        date: d.toISOString(),
+        time: '09:00',
+        team: { name: `O11-${id}` },
+        opponent: 'Tegenstander',
+      });
+    }
+    manyMatches.push({
+      id: 9001,
+      date: '2026-12-10T20:00:00.000Z',
+      time: '20:00',
+      team: { name: '7x7 mannen' },
+      opponent: 'Ergens 7x7',
+    });
+    manyMatches.push({
+      id: 9002,
+      date: '2026-12-12T09:30:00.000Z',
+      time: '09:30',
+      team: { name: 'O10-1' },
+      opponent: 'Perkouw O10-1JM',
+    });
+    assert('testdata heeft meer dan 80 wedstrijden (zoals een seizoen)', manyMatches.length > 80, `n=${manyMatches.length}`);
+    const shown = matchesForDienstKoppeling(manyMatches, {
+      formDate: '2026-12-10',
+      selectedId: '',
+      today: new Date('2026-11-17T12:00:00'),
+    });
+    const shownDays = shown.map((m) => String(m.date).slice(0, 10));
+    assert(
+      'dropdown toont decemberwedstrijden (7x7 10-12 en O10-1 12-12)',
+      shown.some((m) => m.id === 9001) && shown.some((m) => m.id === 9002),
+      `days=${[...new Set(shownDays)].join(',')}`,
+    );
+    assert(
+      'dropdown toont niet alleen de eerste 80 van augustus/september',
+      shown.some((m) => String(m.date).startsWith('2026-12')) &&
+        !shown.some((m) => String(m.date).startsWith('2026-08') || String(m.date).startsWith('2026-09')),
+      `first=${shownDays[0]} last=${shownDays[shownDays.length - 1]} n=${shown.length}`,
+    );
+    const beheerSrc = fs.readFileSync(path.join(root, 'src/frontend/pages/Beheer.jsx'), 'utf8');
+    assert(
+      'Dienst toevoegen gebruikt komende wedstrijden i.p.v. slice(0, 80)',
+      beheerSrc.includes('matchesForDienstKoppeling') && !beheerSrc.includes('matches.slice(0, 80)'),
+    );
+    assert(
+      'formulier Dienst toevoegen heeft veld Teamdienst',
+      beheerSrc.includes('Teamdienst (optioneel)') && beheerSrc.includes('Teamdienst toevoegen'),
     );
   }
 

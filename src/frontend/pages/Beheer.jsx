@@ -16,6 +16,7 @@ import {
 import { scrollToForm } from '../utils/scrollToForm.js';
 
 import { splitPlanningWizardServices } from './planningLabels.js';
+import { matchesForDienstKoppeling } from '../utils/matchDropdown.js';
 import DienstregelsBeheer from './DienstregelsBeheer.jsx';
 import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
 import PersonenBeheer from './PersonenBeheer.jsx';
@@ -207,6 +208,7 @@ function DienstenBeheer() {
     active: true,
     draft: false,
     slot: 'EXTRA',
+    assignedTeamId: '',
   });
   const [editId, setEditId] = useState(null);
   const [startTime, setStartTime] = useState('18:00');
@@ -227,6 +229,7 @@ function DienstenBeheer() {
   const [matches, setMatches] = useState([]);
   const [dutyTeams, setDutyTeams] = useState([]);
   const [teamPick, setTeamPick] = useState({});
+  const [addTeamPick, setAddTeamPick] = useState({});
 
   const load = () =>
     Promise.all([
@@ -285,6 +288,7 @@ function DienstenBeheer() {
       active: true,
       draft: false,
       slot: 'EXTRA',
+      assignedTeamId: '',
     });
     setStartTime('18:00');
     setEndTime('22:00');
@@ -301,6 +305,7 @@ function DienstenBeheer() {
         ...form,
         time: `${startTime} - ${endTime}`,
         matchId: matchId || null,
+        assignedTeamId: form.assignedTeamId || null,
         required: Number(form.required),
         location,
       };
@@ -325,6 +330,7 @@ function DienstenBeheer() {
       active: s.active !== false,
       draft: Boolean(s.draft),
       slot: s.slot || 'EXTRA',
+      assignedTeamId: String(s.assignedTeamId || s.teamDuties?.[0]?.teamId || ''),
     });
     const parts = String(s.time || '').split('-').map((part) => part.trim());
     setStartTime(parts[0] || '18:00');
@@ -422,14 +428,31 @@ function DienstenBeheer() {
           <label className="vvl-label">Koppel aan wedstrijd (optioneel)</label>
           <select className="vvl-input" value={matchId} onChange={(e) => setMatchId(e.target.value)}>
             <option value="">— Geen wedstrijd —</option>
-            {matches.slice(0, 80).map((match) => (
+            {matchesForDienstKoppeling(matches, { formDate: form.date, selectedId: matchId }).map((match) => (
               <option key={match.id} value={match.id}>
                 {new Date(match.date).toLocaleDateString('nl-NL')} {match.time || ''} {match.team?.name || ''} {match.opponent || ''}
               </option>
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-600">
-            Voor een eenmalige tijd, bijvoorbeeld 7x7 thuis: bardienst 19:00–21:30, daarna neemt het team het over.
+            Komende wedstrijden en wedstrijden op de gekozen datum. Voor een eenmalige tijd,
+            bijvoorbeeld 7x7 thuis: bardienst 19:00–22:00, daarna neemt het team het over.
+          </p>
+        </div>
+        <div>
+          <label className="vvl-label">Teamdienst (optioneel)</label>
+          <select
+            className="vvl-input"
+            value={form.assignedTeamId}
+            onChange={(e) => setForm({ ...form, assignedTeamId: e.target.value })}
+          >
+            <option value="">— Geen team —</option>
+            {dutyTeams.filter((team) => team.active !== false).map((team) => (
+              <option key={team.id} value={team.id}>{team.name}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-600">
+            Koppel een team (bijvoorbeeld 7x7) zodat dit een teamdienst wordt.
           </p>
         </div>
         <div>
@@ -616,13 +639,12 @@ function DienstenBeheer() {
                   </button>
                 </div>
               ) : null}
-              {(s.teamDuties || []).length ? (
-                <div className="vvl-card space-y-2 py-3 text-sm">
+              <div className="vvl-card space-y-2 py-3 text-sm">
                   <p className="font-bold">Teamplekken</p>
                   <p className="text-xs text-gray-600">
-                    Teamplekken vult de bardienstcoördinator via Team. Als barcommissie kun je hier het team wijzigen of
-                    bewust iemand op die plek zetten. Een wijziging of een weggehaalde teamplek blijft staan: een sync
-                    of herstart zet die niet terug.
+                    Teamplekken vult de bardienstcoördinator via Team. Als barcommissie kun je hier een teamdienst
+                    toevoegen, het team wijzigen of bewust iemand op die plek zetten. Een wijziging of een weggehaalde
+                    teamplek blijft staan: een sync of herstart zet die niet terug.
                   </p>
                   {(s.teamDuties || []).map((duty) => (
                     <div key={duty.id} className="flex flex-wrap items-end gap-2">
@@ -693,8 +715,44 @@ function DienstenBeheer() {
                       </button>
                     </div>
                   ))}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <select
+                      className="vvl-input min-h-11"
+                      value={addTeamPick[s.id] || ''}
+                      onChange={(e) => setAddTeamPick({ ...addTeamPick, [s.id]: e.target.value })}
+                      aria-label="Team voor nieuwe teamplek"
+                    >
+                      <option value="">— Team kiezen —</option>
+                      {dutyTeams
+                        .filter((team) => team.active !== false)
+                        .filter((team) => !(s.teamDuties || []).some((d) => Number(d.teamId) === Number(team.id)))
+                        .map((team) => (
+                          <option key={team.id} value={team.id}>{team.name}</option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="vvl-btn-primary text-xs"
+                      onClick={async () => {
+                        const teamId = Number(addTeamPick[s.id]);
+                        if (!teamId) {
+                          setError('Kies een team voor de teamplek.');
+                          return;
+                        }
+                        try {
+                          await api.createTeamDuty(s.id, { teamId, reserved: Math.max(1, Number(s.required) || 2) });
+                          setAddTeamPick({ ...addTeamPick, [s.id]: '' });
+                          setMsg('Teamdienst toegevoegd.');
+                          await load();
+                        } catch (err) {
+                          setError(err.message);
+                        }
+                      }}
+                    >
+                      Teamdienst toevoegen
+                    </button>
+                  </div>
                 </div>
-              ) : null}
             </div>
           );
         })}

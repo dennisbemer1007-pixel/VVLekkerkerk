@@ -223,6 +223,8 @@ export const api = {
   createEnrollment: (data) =>
     json('/enrollments', { method: 'POST', body: JSON.stringify(data) }),
   deleteEnrollment: (id) => json(`/enrollments/${id}`, { method: 'DELETE' }),
+  createTeamDuty: (serviceId, data) =>
+    json(`/services/${serviceId}/team-duties`, { method: 'POST', body: JSON.stringify(data) }),
   updateTeamDuty: (serviceId, dutyId, data) =>
     json(`/services/${serviceId}/team-duties/${dutyId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTeamDuty: (serviceId, dutyId) =>

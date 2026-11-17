@@ -12,6 +12,18 @@ import {
 import { includesText, queryText, tightenDate } from '../lib/listFilters.js';
 import { inferSlot } from '../lib/pdfRoster.js';
 
+async function ensureAssignedTeamDuty(serviceId, assignedTeamId, reserved = 2) {
+  const teamId = Number(assignedTeamId);
+  if (!Number.isInteger(teamId) || teamId <= 0) return null;
+  const existing = await prisma.serviceTeamDuty.findUnique({
+    where: { serviceId_teamId: { serviceId, teamId } },
+  });
+  if (existing) return existing;
+  return prisma.serviceTeamDuty.create({
+    data: { serviceId, teamId, reserved: Math.max(1, Number(reserved) || 2) },
+  });
+}
+
 const router = Router();
 const admin = (...args) => requireRole(...ADMIN_ROLES)(...args);
 
@@ -158,7 +170,7 @@ router.post(
         rawSlot && rawSlot !== 'EXTRA'
           ? rawSlot
           : inferSlot({ type: serviceType, time: timeTrimmed, slot: rawSlot || 'EXTRA' });
-      const service = await prisma.service.create({
+      const created = await prisma.service.create({
         data: {
           type: serviceType,
           date: new Date(date),
@@ -171,12 +183,19 @@ router.post(
           locked: Boolean(locked),
           kind: serviceKind,
           origin: 'MANUAL',
+          teamDutiesManual: Boolean(assignedTeamId),
           slot: resolvedSlot,
           assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
           matchId: matchId ? Number(matchId) : null,
         },
         include: serviceInclude,
       });
+      if (assignedTeamId) {
+        await ensureAssignedTeamDuty(created.id, assignedTeamId, required);
+      }
+      const service = assignedTeamId
+        ? await prisma.service.findUnique({ where: { id: created.id }, include: serviceInclude })
+        : created;
       res.status(201).json(mapService(service));
     } catch (err) {
       next(err);
@@ -210,7 +229,27 @@ router.put(
           });
         }
       }
-      const service = await prisma.service.update({
+      const manualEdit =
+        date !== undefined ||
+        time !== undefined ||
+        type !== undefined ||
+        required !== undefined ||
+        location !== undefined ||
+        note !== undefined ||
+        slot !== undefined ||
+        kind !== undefined ||
+        assignedTeamId !== undefined ||
+        matchId !== undefined ||
+        (active !== undefined && !active);
+      const nextKind =
+        kind !== undefined
+          ? kind === 'TEAM' || kind === 'MIXED'
+            ? kind
+            : 'PERSONAL'
+          : assignedTeamId
+            ? 'TEAM'
+            : undefined;
+      let service = await prisma.service.update({
         where: { id: Number(req.params.id) },
         data: {
           ...(nextType !== undefined && { type: nextType }),
@@ -220,11 +259,11 @@ router.put(
           ...(required !== undefined && { required: Math.max(1, Number(required) || 1) }),
           ...(location !== undefined && { location: location.trim() }),
           ...(active !== undefined && { active: Boolean(active) }),
-          // Bewust op inactief gezet door barcommissie/admin: sync en herstart blijven eraf.
-          ...(active !== undefined && !active && { teamDutiesManual: true }),
+          // Bewust gewijzigd of uitgezet door barcommissie/admin: sync blijft eraf.
+          ...(manualEdit && { teamDutiesManual: true }),
           ...(draft !== undefined && { draft: Boolean(draft) }),
           ...(locked !== undefined && { locked: Boolean(locked) }),
-          ...(kind !== undefined && { kind: kind === 'TEAM' ? 'TEAM' : 'PERSONAL' }),
+          ...(nextKind !== undefined && { kind: nextKind }),
           ...(nextSlot !== undefined && { slot: nextSlot }),
           ...(assignedTeamId !== undefined && {
             assignedTeamId: assignedTeamId ? Number(assignedTeamId) : null,
@@ -233,7 +272,51 @@ router.put(
         },
         include: serviceInclude,
       });
+      if (assignedTeamId) {
+        await ensureAssignedTeamDuty(service.id, assignedTeamId, required ?? service.required);
+        service = await prisma.service.findUnique({ where: { id: service.id }, include: serviceInclude });
+      }
       res.json(mapService(service));
+    } catch (err) {
+      next(err);
+    }
+  }),
+);
+
+router.post(
+  '/:id/team-duties',
+  admin(async (req, res, next) => {
+    try {
+      const serviceId = Number(req.params.id);
+      const service = await prisma.service.findUnique({ where: { id: serviceId } });
+      if (!service) return res.status(404).json({ error: 'Dienst niet gevonden' });
+      const teamId = Number(req.body.teamId);
+      if (!Number.isInteger(teamId) || teamId <= 0) {
+        return res.status(400).json({ error: 'Kies een team' });
+      }
+      const team = await prisma.team.findUnique({ where: { id: teamId } });
+      if (!team) return res.status(404).json({ error: 'Team niet gevonden' });
+      const reserved = Math.max(1, Number(req.body.reserved) || 2);
+      const existing = await prisma.serviceTeamDuty.findUnique({
+        where: { serviceId_teamId: { serviceId, teamId } },
+      });
+      if (existing) {
+        return res.status(400).json({ error: 'Dit team staat al op deze dienst' });
+      }
+      const duty = await prisma.serviceTeamDuty.create({
+        data: { serviceId, teamId, reserved },
+        include: { team: true },
+      });
+      const nextKind = service.kind === 'PERSONAL' ? 'TEAM' : service.kind;
+      await prisma.service.update({
+        where: { id: serviceId },
+        data: {
+          teamDutiesManual: true,
+          assignedTeamId: service.assignedTeamId || teamId,
+          kind: nextKind,
+        },
+      });
+      res.status(201).json(duty);
     } catch (err) {
       next(err);
     }
