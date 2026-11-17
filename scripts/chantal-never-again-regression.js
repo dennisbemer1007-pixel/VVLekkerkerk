@@ -44,7 +44,7 @@ const { default: prisma } = await import('../src/backend/lib/prisma.js');
 const { ensureDefaultServiceRules } = await import('../src/backend/lib/clubDefaults.js');
 const { parseCsv, validateMatchRows } = await import('../src/backend/lib/csvMatches.js');
 const { persistValidMatchRows } = await import('../src/backend/lib/importMatches.js');
-const { createPlanningRound } = await import('../src/backend/lib/planningRounds.js');
+const { createPlanningRound, activatePlanningRound } = await import('../src/backend/lib/planningRounds.js');
 const { proposeFromMatches, publishDraftServices } = await import('../src/backend/lib/proposePlanning.js');
 const { generateServicesFromRules } = await import('../src/backend/lib/serviceGeneration.js');
 const { fillMandatoryPersonal } = await import('../src/backend/lib/autoFill.js');
@@ -964,33 +964,35 @@ try {
   enrollmentFollowUp.confirm = async () => {
     throw new Error('smtp kapot');
   };
-  const kitchenMid = await prisma.service.findFirst({
-    where: {
-      type: 'KITCHEN',
-      date: { gte: new Date('2026-10-31T00:00:00Z'), lte: new Date('2026-10-31T23:59:59Z') },
-      time: { startsWith: '13:00' },
-      active: true,
+  // Altijd een toekomstige dienst: inschrijven in het verleden is voor vrijwilligers geblokkeerd.
+  const enrollDate = new Date();
+  enrollDate.setDate(enrollDate.getDate() + 21);
+  enrollDate.setHours(12, 0, 0, 0);
+  const enrollActivity = await prisma.activity.create({
+    data: {
+      name: 'Inschrijftest toekomst',
+      type: 'overig',
+      date: enrollDate,
+      startTime: '13:00',
+      endTime: '16:00',
+      openForEnrollment: true,
+      barRequired: 3,
     },
   });
-  const enrollTarget =
-    kitchenMid ||
-    (await prisma.service.create({
-      data: {
-        type: 'KITCHEN',
-        date: new Date('2026-10-31T12:00:00Z'),
-        time: '13:00 - 16:00',
-        location: 'Keuken',
-        required: 3,
-        slot: 'AFTERNOON',
-        origin: 'AUTO',
-        locked: true,
-        draft: false,
-        active: true,
-      },
-    }));
-  await prisma.service.update({
-    where: { id: enrollTarget.id },
-    data: { required: 3, locked: true, draft: false, active: true },
+  const enrollTarget = await prisma.service.create({
+    data: {
+      type: 'KITCHEN',
+      date: enrollDate,
+      time: '13:00 - 16:00',
+      location: 'Keuken',
+      required: 3,
+      slot: 'AFTERNOON',
+      origin: 'MANUAL',
+      locked: true,
+      draft: false,
+      active: true,
+      activityId: enrollActivity.id,
+    },
   });
 
   const app = express();
@@ -1362,6 +1364,121 @@ try {
     );
     assert('jaarplanning-aanmaak blijft draft: false', /draft:\s*false/.test(activitiesSrc) && !/draft:\s*true/.test(activitiesSrc));
     assert('dienstkaart heeft label Jaarplanning', cardSrc.includes('jaarplanning-label') && cardSrc.includes('Jaarplanning'));
+    assert(
+      'alleen barcommissie staat op de jaarplanning-kaart',
+      cardSrc.includes('alleen barcommissie'),
+    );
+  }
+
+  // 17/11: CSV tweede planning — O10-1 12-12 moet in preview, import én ochtendbar (ook als concept)
+  {
+    const csvPathCandidates = [
+      '/home/box/agent-data/agents/7857ba09-8345-4c94-b604-e26595fe244e/attachments/7c81db92901e0c55b23a72866568dbd8f464af2923b037c0dcb397a2d59f2a24.csv',
+      path.join(root, 'scripts/fixtures/wedstrijdplanning-6.csv'),
+    ];
+    const csvPath = csvPathCandidates.find((p) => fs.existsSync(p));
+    assert('CSV van Chantal is beschikbaar voor regressie', Boolean(csvPath), csvPathCandidates.join(','));
+    const csvText = fs.readFileSync(csvPath, 'utf8');
+    const parsed = parseCsv(csvText);
+    const validated = validateMatchRows(parsed.rows, { format: parsed.format, headerError: parsed.headerError });
+    assert('CSV heeft 42 geldige rijen', validated.ok && validated.rows.length === 42, `n=${validated.rows.length}`);
+    const o10Home = validated.rows.find((r) => r.matchNumber === '72442');
+    assert(
+      'O10-1 thuis 12-12 09:30 tegen Perkouw zit in de file (niet XerxesDZB)',
+      o10Home?.team === 'O10-1' && o10Home.date === '2026-12-12' && o10Home.time === '09:30' && o10Home.home === true && /Perkouw/i.test(o10Home.opponent || ''),
+      JSON.stringify(o10Home),
+    );
+    const matchesSrc = fs.readFileSync(path.join(root, 'src/backend/routes/matches.js'), 'utf8');
+    assert(
+      'import-preview toont alle geldige rijen (niet alleen de eerste 10)',
+      matchesSrc.includes('preview: result.rows') && !matchesSrc.includes('preview: result.rows.slice(0, 10)'),
+    );
+    assert(
+      'import-sync gebruikt de periode van de actieve (ook concept) planning',
+      matchesSrc.includes('toIsoDate(round.fromDate)') && matchesSrc.includes('trySyncPlanningFromMatches({ from:'),
+    );
+
+    const decFrom = '2026-12-07';
+    const decTo = '2027-01-10';
+    const secondRound = await createPlanningRound(prisma, {
+      label: 'Tweede planning never-again',
+      from: decFrom,
+      to: decTo,
+    });
+    await activatePlanningRound(prisma, secondRound.id);
+    await generateServicesFromRules({ from: decFrom, to: decTo });
+    const barBefore = await prisma.service.findFirst({
+      where: {
+        type: 'BAR',
+        time: { startsWith: '07:30' },
+        date: { gte: new Date('2026-12-12T00:00:00'), lte: new Date('2026-12-12T23:59:59') },
+        active: true,
+      },
+      include: { teamDuties: true },
+    });
+    assert('ochtendbar 12-12 bestaat na stap 1 zonder wedstrijden, zonder teamplek', Boolean(barBefore) && (barBefore.teamDuties || []).length === 0, `bar=${barBefore?.id}`);
+
+    const firstImport = await persistValidMatchRows(prisma, validated.rows);
+    const firstTotal =
+      firstImport.created.length + firstImport.skippedDuplicates + (firstImport.updatedExisting || []).length;
+    assert('eerste import verwerkt alle 42 rijen', firstTotal === 42, `n=${firstTotal} created=${firstImport.created.length}`);
+    const storedO10 = await prisma.match.findFirst({ where: { matchNumber: '72442' }, include: { team: true } });
+    assert('wedstrijd 72442 staat als O10-1 thuis vs Perkouw', storedO10?.team?.name === 'O10-1' && storedO10.home === true && /Perkouw/i.test(storedO10.opponent || ''));
+    if (storedO10?.teamId) {
+      await prisma.team.update({
+        where: { id: storedO10.teamId },
+        data: { teamDutyUse: true, teamDutySlots: JSON.stringify(['MORNING']), active: true },
+      });
+    }
+
+    const afterImportSync = await trySyncPlanningFromMatches({ from: decFrom, to: decTo });
+
+    const barAfter = await prisma.service.findUnique({
+      where: { id: barBefore.id },
+      include: { teamDuties: { include: { team: true } } },
+    });
+    assert(
+      'na import+sync krijgt ochtendbar 12-12 teamplek O10-1',
+      (barAfter?.teamDuties || []).some((d) => /O10-1|JO10-1/i.test(d.team?.name || '')),
+      `duties=${(barAfter?.teamDuties || []).map((d) => d.team?.name).join(',') || '—'} updated=${afterImportSync.updated}`,
+    );
+
+    const second = await persistValidMatchRows(prisma, validated.rows);
+    const secondTotal = second.created.length + second.skippedDuplicates + (second.updatedExisting || []).length;
+    assert(
+      'tweede import slaat identieke rijen over',
+      second.created.length === 0 && secondTotal === 42,
+      `created=${second.created.length} skipped=${second.skippedDuplicates} updated=${(second.updatedExisting || []).length}`,
+    );
+
+    await prisma.match.update({
+      where: { id: storedO10.id },
+      data: { opponent: 'XerxesDZB', date: parseMatchDateInput('2026-11-01') },
+    });
+    const third = await persistValidMatchRows(prisma, validated.rows);
+    const repaired = await prisma.match.findUnique({ where: { id: storedO10.id }, include: { team: true } });
+    assert(
+      'herimport herstelt afwijkende wedstrijd met hetzelfde nummer',
+      (third.updatedExisting || []).some((m) => m.matchNumber === '72442') &&
+        /Perkouw/i.test(repaired?.opponent || '') &&
+        repaired.home === true,
+      `updated=${(third.updatedExisting || []).length} opp=${repaired?.opponent}`,
+    );
+
+    // Alleen-barcommissie jaarplanning blijft in de wizard, ook zonder open inschrijving
+    const pub = splitPlanningWizardServices([
+      { id: 1, draft: true, time: '07:30 - 12:00' },
+      { id: 2, draft: false, activityId: 9, activity: { id: 9, name: 'Iets', openForEnrollment: false } },
+    ]);
+    assert(
+      'wizard toont alleen-barcommissie jaarplanning-dienst',
+      pub.jaarplanning.length === 1 && pub.jaarplanning[0].id === 2 && pub.drafts.length === 1,
+    );
+    const planningSrc = fs.readFileSync(path.join(root, 'src/backend/routes/planning.js'), 'utf8');
+    assert(
+      'ongepubliceerde Planning-lijst toont wel jaarplanning-diensten',
+      planningSrc.includes("where.activityId = { not: null }"),
+    );
   }
 
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart

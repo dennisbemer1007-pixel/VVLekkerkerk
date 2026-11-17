@@ -7,6 +7,8 @@ import { parseMatchDateInput } from '../lib/authz.js';
 import { combineDateAndTime } from '../lib/time.js';
 import { xlsxToObjects } from '../lib/xlsxWorkbook.js';
 import { trySyncPlanningFromMatches } from '../lib/proposePlanning.js';
+import { getActiveRound } from '../lib/planningRounds.js';
+import { toIsoDate } from '../lib/dates.js';
 import { persistValidMatchRows } from '../lib/importMatches.js';
 import { workbookToXlsx } from '../lib/xlsxWrite.js';
 import { matchTemplateSheets } from '../lib/matchesXlsx.js';
@@ -223,7 +225,7 @@ function validationPayload(result) {
     rowCount: result.rows.length,
     errors: result.errors,
     invalidRows: result.invalidRows,
-    preview: result.rows.slice(0, 10),
+    preview: result.rows,
     headerError: result.headerError || null,
   };
 }
@@ -271,12 +273,16 @@ router.post(
         });
       }
 
-      const { created, persistErrors, skippedDuplicates, teamsRecognized, unknownTeams, createdTeams } =
+      const { created, persistErrors, skippedDuplicates, updatedExisting, teamsRecognized, unknownTeams, createdTeams } =
         await persistValidRows(result.rows);
-      const planning = await trySyncPlanningFromMatches();
+      // Expliciete periode: ook bij een conceptplanning teamplekken bijwerken (niet wachten op publicatie).
+      const round = await getActiveRound(prisma);
+      const planning = round?.fromDate && round?.toDate
+        ? await trySyncPlanningFromMatches({ from: toIsoDate(round.fromDate), to: toIsoDate(round.toDate) })
+        : await trySyncPlanningFromMatches();
       await syncRefereeSlots().catch((err) => console.error('[scheids]', err.message));
 
-      if (created.length === 0 && skippedDuplicates === 0) {
+      if (created.length === 0 && skippedDuplicates === 0 && !(updatedExisting || []).length) {
         return res.status(400).json({
           error: 'Opslaan mislukt voor alle rijen.',
           errors: persistErrors,
@@ -289,6 +295,15 @@ router.post(
       const summary = {
         created: created.length,
         skippedDuplicates,
+        updatedExisting: (updatedExisting || []).length,
+        updatedMatches: (updatedExisting || []).map((m) => ({
+          id: m.id,
+          date: m.date,
+          time: m.time,
+          team: m.team?.name || null,
+          opponent: m.opponent,
+          matchNumber: m.matchNumber,
+        })),
         matches: created,
         skipped: result.invalidRows.length,
         invalidRows: result.invalidRows,
@@ -305,7 +320,7 @@ router.post(
         teamDutiesCreated: planning.teamDuties ?? 0,
       };
 
-      if (created.length === 0 && skippedDuplicates > 0) {
+      if (created.length === 0) {
         return res.status(200).json(summary);
       }
 

@@ -367,16 +367,8 @@ router.get(
       // Dashboard / gepubliceerde lijst: zonder publicatie geen “open” diensten tellen.
       // Concepten blijven beschikbaar via includeDraft=true (Planning-stappen).
       if (!published && !wantDrafts) {
-        const periodStart = where.date.gte;
-        const periodEnd = where.date.lte;
-        return res.json({
-          services: [],
-          published: false,
-          period: {
-            from: toIsoDate(periodStart),
-            to: toIsoDate(periodEnd),
-          },
-        });
+        // Geen auto-concepten tellen als “open”, wél jaarplanning-bardiensten tonen.
+        where.activityId = { not: null };
       }
     } else {
       where.date = {};

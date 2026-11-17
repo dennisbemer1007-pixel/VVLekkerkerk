@@ -3973,8 +3973,8 @@ assert(
       'utf8',
     );
     assert(
-      'planning-API leeg zonder publicatie voor dashboard',
-      planningRouteSrc.includes('published: false') &&
+      'planning-API toont jaarplanning zonder publicatie, geen auto-concepten',
+      planningRouteSrc.includes('where.activityId = { not: null }') &&
         planningRouteSrc.includes('dashboardAttentionEnabled') &&
         planningRouteSrc.includes('filterCommitteeNoShowPeople'),
     );
