@@ -16,6 +16,8 @@ import tournamentsRouter from './routes/tournaments.js';
 import teamsRouter from './routes/teams.js';
 import { ensureAdmin } from './lib/seed.js';
 import { trySyncPlanningFromMatches } from './lib/proposePlanning.js';
+import { restoreMissingSecondPlanningServices } from './lib/restoreMissingSecondPlanning.js';
+import { deployStateDir, resolveLiveDbFile } from './lib/liveDeploy.js';
 import prisma from './lib/prisma.js';
 import { UPLOADS_DIR, ensureUploadDirs, isUnsafeUploadPath } from './lib/uploads.js';
 import { clientErrorPayload } from './lib/clientError.js';
@@ -247,15 +249,32 @@ ensureAdmin()
           '[Security] MAIL_SECRET ontbreekt. SMTP-wachtwoorden worden niet opgeslagen tot die sleutel gezet is.',
         );
       }
-      trySyncPlanningFromMatches().then((result) => {
+      trySyncPlanningFromMatches().then(async (result) => {
         if (result?.error) {
           console.error('[planning] startup sync failed:', result.error);
-          return;
-        }
-        if (result?.created || result?.removed || result?.updated) {
+        } else if (result?.created || result?.removed || result?.updated) {
           console.log(
             `[planning] startup sync: +${result.created} ~${result.updated} −${result.removed} (${result.slots} diensten uit regels)`,
           );
+        }
+        try {
+          const stateDir = deployStateDir(resolveLiveDbFile(path.join(__dirname, '..')));
+          const restore = await restoreMissingSecondPlanningServices(prisma, { stateDir });
+          if (!restore?.already) {
+            console.log(
+              '[planning] herstel uit #82-backup:',
+              JSON.stringify({
+                already: restore.already || false,
+                skipped: restore.skipped || false,
+                reason: restore.reason || null,
+                restored: restore.restored || 0,
+                enrollments: restore.enrollments || 0,
+                error: restore.error || null,
+              }),
+            );
+          }
+        } catch (err) {
+          console.error('[planning] herstel uit #82-backup mislukt:', err.message);
         }
       });
       setInterval(() => {

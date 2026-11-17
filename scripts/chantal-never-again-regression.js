@@ -46,7 +46,9 @@ const { parseCsv, validateMatchRows } = await import('../src/backend/lib/csvMatc
 const { persistValidMatchRows } = await import('../src/backend/lib/importMatches.js');
 const { createPlanningRound, activatePlanningRound } = await import('../src/backend/lib/planningRounds.js');
 const { proposeFromMatches, publishDraftServices } = await import('../src/backend/lib/proposePlanning.js');
-const { generateServicesFromRules } = await import('../src/backend/lib/serviceGeneration.js');
+const { generateServicesFromRules, shouldKeepServiceOutsideGeneratedPeriod } = await import('../src/backend/lib/serviceGeneration.js');
+const { deactivateOrphanAutoServices } = await import('../src/backend/lib/serviceDedup.js');
+const { restoreMissingSecondPlanningServices } = await import('../src/backend/lib/restoreMissingSecondPlanning.js');
 const { fillMandatoryPersonal } = await import('../src/backend/lib/autoFill.js');
 const { markPlanningOfficial } = await import('../src/backend/lib/official.js');
 const { toIsoDate } = await import('../src/backend/lib/dates.js');
@@ -1741,6 +1743,321 @@ try {
       'formulier Dienst toevoegen heeft veld Teamdienst',
       beheerSrc.includes('Teamdienst (optioneel)') && beheerSrc.includes('Teamdienst toevoegen'),
     );
+  }
+
+  // 17/11 na #82: donderdag 3-12, keuken 12-12 en bar 16:30–19:30 mogen niet
+  // verdwijnen als de eerste (gepubliceerde) periode opnieuw gesynct wordt,
+  // of als de tweede conceptplanning wordt gegenereerd.
+  {
+    const seedAuto = (date, type, time, extra = {}) =>
+      prisma.service.create({
+        data: {
+          type,
+          date: new Date(date),
+          time,
+          location: type === 'KITCHEN' ? 'Keuken' : 'Bar',
+          required: 2,
+          active: true,
+          draft: true,
+          locked: false,
+          kind: 'PERSONAL',
+          origin: 'AUTO',
+          ...extra,
+        },
+      });
+    const dayRange = (isoDay) => ({
+      gte: new Date(`${isoDay}T00:00:00.000Z`),
+      lte: new Date(`${isoDay}T23:59:59.999Z`),
+    });
+    async function ensureSlot(isoDay, type, time, extra = {}) {
+      const existing = await prisma.service.findFirst({
+        where: { type, time, date: dayRange(isoDay), active: true },
+      });
+      if (existing) return existing;
+      return seedAuto(`${isoDay}T12:00:00Z`, type, time, extra);
+    }
+    async function slotExists(isoDay, type, time) {
+      return prisma.service.findFirst({
+        where: { type, time, date: dayRange(isoDay), active: { not: false } },
+        select: { id: true, time: true, active: true, draft: true },
+      });
+    }
+    const thu1830 = await ensureSlot('2026-12-03', 'BAR', '18:30 - 00:00');
+    const thu1900 = await ensureSlot('2026-12-03', 'BAR', '19:00 - 21:30', { kind: 'TEAM', assignedTeamId: seven.id });
+    const thuDuty = await prisma.serviceTeamDuty.findFirst({ where: { serviceId: thu1900.id, teamId: seven.id } });
+    if (!thuDuty) {
+      await prisma.serviceTeamDuty.create({ data: { serviceId: thu1900.id, teamId: seven.id, reserved: 1 } });
+    }
+    await ensureSlot('2026-12-12', 'KITCHEN', '10:00 - 13:00');
+    await ensureSlot('2026-12-12', 'KITCHEN', '13:00 - 16:00');
+    await ensureSlot('2026-12-12', 'KITCHEN', '16:00 - 19:00');
+    await ensureSlot('2026-12-12', 'BAR', '16:30 - 19:30');
+
+    assert(
+      'concept-AUTO in een latere ronde wordt niet als buiten-periode gewist (regel)',
+      shouldKeepServiceOutsideGeneratedPeriod(
+        { origin: 'AUTO', draft: true, locked: false, date: new Date('2026-12-03T12:00:00Z'), enrollments: [] },
+        { rounds: [{ fromDate: new Date('2026-12-07T00:00:00Z'), toDate: new Date('2027-01-10T00:00:00Z') }] },
+      ) === true,
+    );
+
+    const firstRound = await prisma.planningRound.findFirst({
+      where: { fromDate: { not: null }, publishedAt: { not: null } },
+      orderBy: { fromDate: 'asc' },
+    });
+    assert('er is een gepubliceerde eerste planning', Boolean(firstRound));
+    await activatePlanningRound(prisma, firstRound.id);
+    const syncFirst = await trySyncPlanningFromMatches();
+    const afterFirstSlots = await Promise.all([
+      slotExists('2026-12-03', 'BAR', '18:30 - 00:00'),
+      slotExists('2026-12-03', 'BAR', '19:00 - 21:30'),
+      slotExists('2026-12-12', 'KITCHEN', '10:00 - 13:00'),
+      slotExists('2026-12-12', 'KITCHEN', '13:00 - 16:00'),
+      slotExists('2026-12-12', 'KITCHEN', '16:00 - 19:00'),
+      slotExists('2026-12-12', 'BAR', '16:30 - 19:30'),
+    ]);
+    assert(
+      'startup-sync van de eerste gepubliceerde periode wist 3-12 en 12-12 niet',
+      afterFirstSlots.every(Boolean),
+      `removed=${syncFirst.removed} missing=${['3-12 18:30','3-12 19:00','12-12 keuken ochtend','12-12 keuken middag','12-12 keuken laat','12-12 16:30'].filter((_, i) => !afterFirstSlots[i]).join(',')}`,
+    );
+
+    const secondRound = await prisma.planningRound.findFirst({
+      where: { label: { contains: 'Tweede' } },
+      orderBy: { id: 'desc' },
+    });
+    if (secondRound) await activatePlanningRound(prisma, secondRound.id);
+    const genSecond = await generateServicesFromRules({ from: '2026-12-07', to: '2027-01-10' });
+    const afterSecondSlots = await Promise.all([
+      slotExists('2026-12-03', 'BAR', '18:30 - 00:00'),
+      slotExists('2026-12-03', 'BAR', '19:00 - 21:30'),
+      slotExists('2026-12-12', 'KITCHEN', '10:00 - 13:00'),
+      slotExists('2026-12-12', 'KITCHEN', '13:00 - 16:00'),
+      slotExists('2026-12-12', 'KITCHEN', '16:00 - 19:00'),
+      slotExists('2026-12-12', 'BAR', '16:30 - 19:30'),
+    ]);
+    assert(
+      'generatie tweede planning wist donderdag 3-12 niet (gat vóór 7-12)',
+      Boolean(afterSecondSlots[0] && afterSecondSlots[1]),
+      `removed=${genSecond.removed}`,
+    );
+    assert(
+      'generatie tweede planning behoudt keukendiensten 12-12',
+      afterSecondSlots[2] && afterSecondSlots[3] && afterSecondSlots[4],
+    );
+    assert(
+      'generatie tweede planning behoudt bardienst 12-12 16:30–19:30',
+      Boolean(afterSecondSlots[5] && afterSecondSlots[5].time.startsWith('16:30')),
+    );
+    const enrollAfter = await prisma.enrollment.count();
+    assert('herstelsync raakt geen inschrijvingen-telling (smoke)', Number.isInteger(enrollAfter));
+
+    // Situatie ná #82-deploy: de drie doel-diensten zijn hard gewist. Een herstart
+    // met #83 mag geen overgebleven AUTO uitzetten. Herstel komt uit de backup van
+    // render-start vlak vóór die deploy, niet uit de dienstregels — zodat een
+    // winterstop-dienst die Chantal al had weggehaald weg blijft.
+    const hasSevenMatch = await prisma.match.findFirst({
+      where: { teamId: seven.id, home: true, date: dayRange('2026-12-03') },
+    });
+    if (!hasSevenMatch) {
+      await prisma.match.create({
+        data: {
+          date: new Date('2026-12-03T20:00:00Z'),
+          time: '20:00',
+          home: true,
+          opponent: 'Ergens 7x7',
+          matchNumber: '7x7-2026-12-03',
+          teamId: seven.id,
+        },
+      });
+    }
+    const manualKeep = await prisma.service.create({
+      data: {
+        type: 'BAR',
+        date: new Date('2026-12-12T12:00:00Z'),
+        time: '20:00 - 22:00',
+        location: 'Bar',
+        required: 1,
+        active: true,
+        draft: true,
+        locked: false,
+        kind: 'PERSONAL',
+        origin: 'MANUAL',
+        note: 'Handmatig laten staan',
+      },
+    });
+    const manualPerson = await prisma.person.create({
+      data: { name: 'Herstel Test', email: `herstel-${process.pid}@vvl.test`, active: true },
+    });
+    const manualEnroll = await prisma.enrollment.create({
+      data: { serviceId: manualKeep.id, personId: manualPerson.id, source: 'ADMIN', kind: 'PERSONAL' },
+    });
+    const frozenInactive = await prisma.service.create({
+      data: {
+        type: 'BAR',
+        date: new Date('2026-12-17T12:00:00Z'),
+        time: '18:30 - 00:00',
+        location: 'Bar',
+        required: 1,
+        active: false,
+        draft: true,
+        locked: false,
+        kind: 'PERSONAL',
+        origin: 'AUTO',
+        teamDutiesManual: true,
+        note: 'Bewust uit gezet',
+      },
+    });
+
+    const targetWhere = {
+      origin: 'AUTO',
+      OR: [
+        { date: dayRange('2026-12-03') },
+        { date: dayRange('2026-12-12'), type: 'KITCHEN' },
+        { date: dayRange('2026-12-12'), type: 'BAR', time: { startsWith: '16:30' } },
+      ],
+    };
+    const targetRows = await prisma.service.findMany({
+      where: targetWhere,
+      include: { teamDuties: true, enrollments: true },
+      orderBy: { id: 'asc' },
+    });
+    assert('doel-diensten 3-12 en 12-12 staan klaar voor de backup', targetRows.length >= 6, `n=${targetRows.length}`);
+    const targetEnroll = await prisma.enrollment.create({
+      data: { serviceId: targetRows[0].id, personId: manualPerson.id, source: 'ADMIN', kind: 'PERSONAL' },
+    });
+
+    let winter = await prisma.service.findFirst({
+      where: { date: dayRange('2026-12-26'), origin: 'AUTO' },
+    });
+    if (!winter) {
+      winter = await seedAuto('2026-12-26T12:00:00Z', 'KITCHEN', '10:00 - 13:00', { note: 'Winterstop' });
+    }
+    const winterId = winter.id;
+    const winterStamp = { type: winter.type, time: winter.time };
+    await prisma.serviceTeamDuty.deleteMany({ where: { serviceId: winterId } });
+    await prisma.enrollment.deleteMany({ where: { serviceId: winterId } });
+    await prisma.service.delete({ where: { id: winterId } });
+
+    const restoreDir = path.join(os.tmpdir(), `herstel-tweede-planning-${process.pid}`);
+    const backupDir = path.join(restoreDir, 'backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const backupFile = path.join(backupDir, 'vvl-2026-11-17T18-28-00-000Z.db');
+    await prisma.$executeRawUnsafe(`VACUUM INTO '${backupFile.replace(/'/g, "''")}'`);
+    assert('testdubbel van de #82-backup is weggeschreven', fs.existsSync(backupFile) && fs.statSync(backupFile).size > 0);
+
+    const early = await prisma.service.findFirst({
+      where: {
+        origin: 'AUTO',
+        date: { lt: new Date('2026-11-17T00:00:00.000Z') },
+        enrollments: { none: {} },
+      },
+      select: { id: true, date: true, type: true, time: true },
+    });
+
+    const wipe = await prisma.service.findMany({ where: targetWhere, select: { id: true } });
+    await prisma.serviceTeamDuty.deleteMany({ where: { serviceId: { in: wipe.map((s) => s.id) } } });
+    await prisma.enrollment.deleteMany({ where: { serviceId: { in: wipe.map((s) => s.id) } } });
+    await prisma.service.deleteMany({ where: { id: { in: wipe.map((s) => s.id) } } });
+    if (early) {
+      await prisma.serviceTeamDuty.deleteMany({ where: { serviceId: early.id } });
+      await prisma.service.delete({ where: { id: early.id } });
+    }
+
+    const snapshot = await prisma.service.findMany({
+      select: { id: true, active: true, draft: true, time: true, type: true, origin: true, teamDutiesManual: true, note: true, required: true },
+      orderBy: { id: 'asc' },
+    });
+    const enrollBeforeRestore = await prisma.enrollment.count();
+    await activatePlanningRound(prisma, firstRound.id);
+    const restartSync = await trySyncPlanningFromMatches();
+    const orphanAfter = await deactivateOrphanAutoServices(prisma);
+    const afterRestart = await prisma.service.findMany({
+      where: { id: { in: snapshot.map((s) => s.id) } },
+      select: { id: true, active: true, draft: true, time: true, type: true, origin: true, teamDutiesManual: true, note: true, required: true },
+      orderBy: { id: 'asc' },
+    });
+    const snapMap = new Map(snapshot.map((s) => [s.id, s]));
+    const missingAfterRestart = snapshot.filter((s) => !afterRestart.some((x) => x.id === s.id));
+    const deactivatedAfterRestart = afterRestart.filter((s) => s.active === false && snapMap.get(s.id)?.active !== false);
+    assert(
+      'herstart na #82 zet of verwijdert geen bestaande AUTO-diensten extra',
+      missingAfterRestart.length === 0 && deactivatedAfterRestart.length === 0,
+      `missing=${missingAfterRestart.map((s) => s.id).join(',')} deactivated=${deactivatedAfterRestart.map((s) => s.id).join(',')} orphan=${orphanAfter.deactivated} removed=${restartSync.removed}`,
+    );
+
+    const emptyDir = path.join(os.tmpdir(), `herstel-geen-backup-${process.pid}`);
+    fs.mkdirSync(emptyDir, { recursive: true });
+    const withoutBackup = await restoreMissingSecondPlanningServices(prisma, { stateDir: emptyDir });
+    assert(
+      'zonder exacte #82-backup wordt niets hersteld en geen marker gezet',
+      withoutBackup.skipped === true &&
+        withoutBackup.restored === 0 &&
+        !fs.existsSync(path.join(emptyDir, 'repaired-restore-from-backup-2026-11-17T18-28.json')) &&
+        !(await slotExists('2026-12-03', 'BAR', '18:30 - 00:00')),
+      `reason=${withoutBackup.reason}`,
+    );
+
+    const restored = await restoreMissingSecondPlanningServices(prisma, { stateDir: restoreDir });
+    const broughtBack = await Promise.all(targetRows.map((row) => prisma.service.findUnique({ where: { id: row.id } })));
+    const restoredSlots = await Promise.all([
+      slotExists('2026-12-03', 'BAR', '18:30 - 00:00'),
+      slotExists('2026-12-03', 'BAR', '19:00 - 21:30'),
+      slotExists('2026-12-12', 'KITCHEN', '10:00 - 13:00'),
+      slotExists('2026-12-12', 'KITCHEN', '13:00 - 16:00'),
+      slotExists('2026-12-12', 'KITCHEN', '16:00 - 19:00'),
+      slotExists('2026-12-12', 'BAR', '16:30 - 19:30'),
+    ]);
+    const enrollBack = await prisma.enrollment.findUnique({ where: { id: targetEnroll.id } });
+    assert(
+      'herstel uit de #82-backup zet 3-12, keukens 12-12 en bar 16:30–19:30 terug met dezelfde id’s',
+      broughtBack.every((s, i) => s && s.id === targetRows[i].id && s.type === targetRows[i].type && s.time === targetRows[i].time && s.draft === targetRows[i].draft && s.origin === targetRows[i].origin) &&
+        restoredSlots.every(Boolean) &&
+        restored.restored >= 6,
+      `restored=${restored.restored} missing=${broughtBack.map((s, i) => (s ? '' : targetRows[i].id)).filter(Boolean).join(',')}`,
+    );
+    assert(
+      'inschrijving uit de backup komt terug op de herstelde dienst',
+      enrollBack && enrollBack.serviceId === targetRows[0].id && enrollBack.personId === manualPerson.id,
+    );
+    const winterAfter = await prisma.service.findUnique({ where: { id: winterId } });
+    const winterSlotAfter = await prisma.service.findFirst({
+      where: { date: dayRange('2026-12-26'), type: winterStamp.type, time: winterStamp.time },
+    });
+    assert(
+      'handmatig verwijderde winterstop-dienst blijft weg (niet in de #82-backup)',
+      !winterAfter && !winterSlotAfter,
+    );
+    if (early) {
+      const earlyAfter = await prisma.service.findUnique({ where: { id: early.id } });
+      assert('dienst van vóór 17-11 uit de backup wordt niet teruggezet', !earlyAfter);
+    }
+    const manualAfter = await prisma.service.findUnique({ where: { id: manualKeep.id }, include: { enrollments: true } });
+    const frozenAfter = await prisma.service.findUnique({ where: { id: frozenInactive.id } });
+    const extraDec17 = await prisma.service.count({
+      where: { date: dayRange('2026-12-17'), type: 'BAR', time: { startsWith: '18:30' }, active: true },
+    });
+    const leftoverChanged = (await prisma.service.findMany({
+      where: { id: { in: snapshot.map((s) => s.id) } },
+      select: { id: true, active: true, draft: true, time: true, type: true, origin: true, teamDutiesManual: true, note: true, required: true },
+      orderBy: { id: 'asc' },
+    })).filter((s) => JSON.stringify(s) !== JSON.stringify(snapMap.get(s.id)));
+    assert(
+      'herstel laat bestaande rijen, handmatige dienst en inschrijving ongemoeid',
+      leftoverChanged.length === 0 &&
+        manualAfter &&
+        manualAfter.origin === 'MANUAL' &&
+        manualAfter.note === 'Handmatig laten staan' &&
+        manualAfter.enrollments.some((e) => e.id === manualEnroll.id) &&
+        (await prisma.enrollment.count()) === enrollBeforeRestore + 1,
+      `changed=${leftoverChanged.length} enroll=${await prisma.enrollment.count()} expected=${enrollBeforeRestore + 1}`,
+    );
+    assert(
+      'bewust inactieve dienst (#78) wordt niet teruggezet of gedupliceerd',
+      frozenAfter && frozenAfter.active === false && frozenAfter.teamDutiesManual === true && extraDec17 === 0,
+    );
+    const again = await restoreMissingSecondPlanningServices(prisma, { stateDir: restoreDir });
+    assert('herstelstap is idempotent (marker, geen extra creates)', again.already === true && (again.restored || 0) === 0);
   }
 
   // Dienstregels nogmaals ongewijzigd na alle handmatige acties + herstart

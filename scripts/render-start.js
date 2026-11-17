@@ -49,6 +49,7 @@ import {
   undoWeekdayTeamDutyStrip,
 } from '../src/backend/lib/weekdayTeamDutyRepair.js';
 import { trySyncPlanningFromMatches } from '../src/backend/lib/proposePlanning.js';
+import { restoreMissingSecondPlanningServices } from '../src/backend/lib/restoreMissingSecondPlanning.js';
 import { isRoundPublishedForVolunteers } from '../src/backend/lib/planningPeriod.js';
 import { getActiveRound } from '../src/backend/lib/planningRounds.js';
 import { toIsoDate } from '../src/backend/lib/dates.js';
@@ -336,6 +337,25 @@ try {
 } catch (err) {
   console.warn('[render-start] Losse bar 19:30–00:00:', err.message);
   strayMidnightBars = { error: err.message };
+}
+
+let secondPlanningRestore = { already: false };
+try {
+  secondPlanningRestore = await restoreMissingSecondPlanningServices(prisma, { stateDir });
+  console.log(
+    '[render-start] Herstel ontbrekende diensten uit #82-backup:',
+    JSON.stringify({
+      already: secondPlanningRestore.already || false,
+      skipped: secondPlanningRestore.skipped || false,
+      reason: secondPlanningRestore.reason || null,
+      restored: secondPlanningRestore.restored || 0,
+      enrollments: secondPlanningRestore.enrollments || 0,
+      backup: secondPlanningRestore.backup ? String(secondPlanningRestore.backup).split(/[\\/]/).pop() : null,
+    }),
+  );
+} catch (err) {
+  console.warn('[render-start] Herstel uit #82-backup:', err.message);
+  secondPlanningRestore = { error: err.message };
 }
 
 const personsAfter = await prisma.person.count();

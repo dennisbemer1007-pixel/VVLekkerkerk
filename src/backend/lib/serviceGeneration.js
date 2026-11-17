@@ -12,7 +12,7 @@ import {
   serviceKey,
   startTimeFromService,
 } from './serviceRuleLogic.js';
-import { startOfDay, toIsoDate } from './dates.js';
+import { endOfDay, startOfDay, toIsoDate } from './dates.js';
 import { periodFromRound, resolvePlanningPeriod } from './planningPeriod.js';
 import { getActiveRound } from './planningRounds.js';
 import {
@@ -42,6 +42,29 @@ import { getClubSettings, seasonRangeFromLabel } from './season.js';
 export { manualCoversSpec };
 
 export const FIXED_PERSON_REASON = 'Vaste persoon volgens dienstregel';
+
+/**
+ * Diensten buiten de periode die nu wordt gegenereerd: nooit hard wissen.
+ * Concepten, andere planningsrondes, jaarplanning, inschrijvingen en
+ * handmatige keuzes van de barcommissie blijven staan.
+ */
+export function shouldKeepServiceOutsideGeneratedPeriod(service, { rounds = [] } = {}) {
+  if (!service || service.origin !== 'AUTO') return true;
+  if (service.locked) return true;
+  if (service.teamDutiesManual) return true;
+  if (service.activityId || service.activity?.id) return true;
+  if ((service.enrollments || []).length) return true;
+  if (service.draft) return true;
+  const day = startOfDay(service.date).getTime();
+  if (Number.isNaN(day)) return true;
+  return (rounds || []).some((round) => {
+    if (!round?.fromDate || !round?.toDate) return false;
+    const from = startOfDay(round.fromDate).getTime();
+    const to = endOfDay(round.toDate).getTime();
+    return day >= from && day <= to;
+  });
+}
+
 
 export async function removeFixedPersonEnrollment(serviceId, rule) {
   const personId = rule?.fixedPersonId ? Number(rule.fixedPersonId) : null;
@@ -515,19 +538,37 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
   const strayBars = await removeStrayMidnightBarServices(prisma);
   removed += strayBars.removed;
 
-  // Lege automatische diensten buiten de nieuwe periode blijven anders inschrijfbaar.
+  // Buiten deze periode nooit hard wissen. Concepten en diensten in een
+  // andere (of toekomstige) planningsronde blijven staan. Alleen lege,
+  // gepubliceerde AUTO die in géén ronde vallen, worden verborgen.
+  const planningRounds = await prisma.planningRound.findMany({
+    where: { fromDate: { not: null }, toDate: { not: null } },
+    select: { fromDate: true, toDate: true },
+  });
   const outside = await prisma.service.findMany({
     where: {
       origin: 'AUTO',
       locked: false,
       OR: [{ date: { gt: end } }, { date: { gte: startOfDay(new Date()), lt: start } }],
     },
-    select: { id: true, enrollments: { select: { id: true } } },
+    select: {
+      id: true,
+      date: true,
+      origin: true,
+      locked: true,
+      draft: true,
+      active: true,
+      teamDutiesManual: true,
+      activityId: true,
+      enrollments: { select: { id: true } },
+    },
   });
   for (const service of outside) {
-    if (service.enrollments.length) continue;
-    await prisma.service.delete({ where: { id: service.id } });
-    removed += 1;
+    if (shouldKeepServiceOutsideGeneratedPeriod(service, { rounds: planningRounds })) continue;
+    if (service.active !== false) {
+      await prisma.service.update({ where: { id: service.id }, data: { active: false } });
+      removed += 1;
+    }
   }
 
   const existingRound = existingRoundEarly || (await getActiveRound(prisma));
