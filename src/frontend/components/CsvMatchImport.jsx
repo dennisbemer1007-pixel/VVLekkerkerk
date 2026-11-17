@@ -164,9 +164,13 @@ export default function CsvMatchImport({ onImported }) {
       const res = await api.importMatches(payload);
       const skipped = res.skipped ?? res.invalidRows?.length ?? 0;
       const dupes = res.skippedDuplicates ?? 0;
+      const updated = res.updatedExisting ?? res.updatedMatches?.length ?? 0;
       setMsg(
         `${res.created} wedstrijd(en) geïmporteerd` +
           (dupes ? ` · ${dupes} bestonden al (overgeslagen)` : '') +
+          (updated
+            ? ` · ${updated} bestaande wedstrijd(en) bijgewerkt (zelfde nummer, andere gegevens)`
+            : '') +
           (skipped ? ` · ${skipped} ongeldige rij(en) overgeslagen` : '') +
           (res.teamsRecognized != null ? ` · ${res.teamsRecognized} team(s) herkend` : '') +
           (res.unknownTeamCount
@@ -430,7 +434,8 @@ export default function CsvMatchImport({ onImported }) {
       {validPreview.length > 0 ? (
         <div className="space-y-2">
           <h4 className="text-xs font-bold uppercase text-emerald-900">
-            Voorbeeld geldige rijen ({validCount})
+            Geldige rijen ({validPreview.length}
+            {validCount > validPreview.length ? ` van ${validCount}` : ''})
           </h4>
           <div className="overflow-x-auto rounded-sm border border-emerald-200">
             <table className="w-full min-w-[640px] text-xs">

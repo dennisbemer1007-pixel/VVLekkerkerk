@@ -16,13 +16,26 @@ export async function persistValidMatchRows(prisma, validRows) {
   const index = buildTeamIndex(teams);
   const existingNums = await prisma.match.findMany({
     where: { matchNumber: { not: null } },
-    select: { matchNumber: true },
+    include: { team: true },
   });
-  const seenNumbers = new Set(existingNums.map((m) => String(m.matchNumber)));
+  const existingByNumber = new Map(
+    existingNums
+      .filter((m) => m.matchNumber)
+      .map((m) => [String(m.matchNumber), m]),
+  );
+  const seenNumbers = new Set(existingByNumber.keys());
 
   const created = [];
+  const updatedExisting = [];
   const persistErrors = [];
   let skippedDuplicates = 0;
+
+  function sameIsoDay(a, b) {
+    if (!a || !b) return !a && !b;
+    const da = new Date(a);
+    const db = new Date(b);
+    return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+  }
   const recognizedTeamNames = new Set();
   const unknownTeamNames = new Set();
   const createdTeamNames = [];
@@ -30,14 +43,6 @@ export async function persistValidMatchRows(prisma, validRows) {
   for (const row of validRows) {
     try {
       const matchNumber = (row.matchNumber || '').trim() || null;
-      if (matchNumber) {
-        if (seenNumbers.has(matchNumber)) {
-          skippedDuplicates += 1;
-          continue;
-        }
-        seenNumbers.add(matchNumber);
-      }
-
       let teamId = null;
       const teamName = (row.team || '').trim();
       if (teamName) {
@@ -60,9 +65,46 @@ export async function persistValidMatchRows(prisma, validRows) {
         recognizedTeamNames.add(found.name);
       }
 
+      const nextDate = storedDate(row.date, row.time);
+      if (matchNumber && seenNumbers.has(matchNumber)) {
+        const existing = existingByNumber.get(matchNumber);
+        if (existing) {
+          const same =
+            sameIsoDay(existing.date, nextDate) &&
+            (existing.time || null) === (row.time || null) &&
+            Boolean(existing.home) === (row.home !== false) &&
+            (existing.opponent || null) === (row.opponent || null) &&
+            Number(existing.teamId || 0) === Number(teamId || 0);
+          if (!same) {
+            const updated = await prisma.match.update({
+              where: { id: existing.id },
+              data: {
+                date: nextDate,
+                time: row.time || null,
+                home: row.home !== false,
+                opponent: row.opponent || null,
+                note: row.note || existing.note,
+                matchType: row.matchType || existing.matchType,
+                playLevel: row.playLevel || existing.playLevel,
+                teamId,
+              },
+              include: { team: true },
+            });
+            existingByNumber.set(matchNumber, updated);
+            updatedExisting.push(updated);
+          } else {
+            skippedDuplicates += 1;
+          }
+          continue;
+        }
+        skippedDuplicates += 1;
+        continue;
+      }
+      if (matchNumber) seenNumbers.add(matchNumber);
+
       const match = await prisma.match.create({
         data: {
-          date: storedDate(row.date, row.time),
+          date: nextDate,
           time: row.time || null,
           home: row.home !== false,
           opponent: row.opponent || null,
@@ -86,6 +128,7 @@ export async function persistValidMatchRows(prisma, validRows) {
 
   return {
     created,
+    updatedExisting,
     persistErrors,
     skippedDuplicates,
     teamsRecognized: [...recognizedTeamNames],

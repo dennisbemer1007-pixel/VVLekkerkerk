@@ -174,6 +174,7 @@ export default function DienstCard({
               data-testid="jaarplanning-label"
             >
               Jaarplanning
+              {dienst.activity?.openForEnrollment === false ? ' · alleen barcommissie' : ''}
             </span>
           ) : null}
           {isDraft ? (
