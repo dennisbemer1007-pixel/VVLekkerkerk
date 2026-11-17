@@ -56,9 +56,8 @@ export default function Wedstrijden() {
     load();
   }, [filters.from, filters.to]);
 
-  const filtered = useMemo(() => {
+  const matchesTeamAndPeriod = useMemo(() => {
     return matches.filter((m) => {
-      if (!showAll && !isFutureMatchDate(m.date)) return false;
       if (filters.from || filters.to) {
         const day = toDateInputValue(m.date);
         if (filters.from && day < filters.from) return false;
@@ -70,7 +69,17 @@ export default function Wedstrijden() {
       }
       return true;
     });
-  }, [matches, filters, showAll]);
+  }, [matches, filters]);
+
+  const hiddenPastCount = useMemo(
+    () => (showAll ? 0 : matchesTeamAndPeriod.filter((m) => !isFutureMatchDate(m.date)).length),
+    [matchesTeamAndPeriod, showAll],
+  );
+
+  const filtered = useMemo(() => {
+    if (showAll) return matchesTeamAndPeriod;
+    return matchesTeamAndPeriod.filter((m) => isFutureMatchDate(m.date));
+  }, [matchesTeamAndPeriod, showAll]);
 
   const closeForm = () => {
     setFormOpen(false);
@@ -186,9 +195,12 @@ export default function Wedstrijden() {
           />
           Toon alle wedstrijden (inclusief gespeelde)
         </label>
-        <p className="text-xs text-gray-600">
-          {filtered.length} van {matches.length} wedstrijd(en)
+        <p className="text-xs text-gray-600" data-testid="wedstrijden-filter-count">
+          {filtered.length} van {matchesTeamAndPeriod.length} wedstrijd(en)
           {showAll ? '' : ' · alleen toekomstig'}
+          {!showAll && hiddenPastCount > 0
+            ? ` · ${hiddenPastCount} gespeelde verborgen — vink “Toon alle wedstrijden” aan (een verzet wedstrijdnummer kan nog op de oude datum staan)`
+            : ''}
         </p>
       </div>
 

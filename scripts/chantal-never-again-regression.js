@@ -1364,6 +1364,8 @@ try {
     );
     assert('jaarplanning-aanmaak blijft draft: false', /draft:\s*false/.test(activitiesSrc) && !/draft:\s*true/.test(activitiesSrc));
     assert('dienstkaart heeft label Jaarplanning', cardSrc.includes('jaarplanning-label') && cardSrc.includes('Jaarplanning'));
+    const wedSrc = fs.readFileSync(path.join(root, 'src/frontend/pages/Wedstrijden.jsx'), 'utf8');
+    assert('Wedstrijden meldt verborgen gespeelde wedstrijden', wedSrc.includes('hiddenPastCount') && wedSrc.includes('gespeelde verborgen'));
     assert(
       'alleen barcommissie staat op de jaarplanning-kaart',
       cardSrc.includes('alleen barcommissie'),
@@ -1470,6 +1472,20 @@ try {
       { id: 1, draft: true, time: '07:30 - 12:00' },
       { id: 2, draft: false, activityId: 9, activity: { id: 9, name: 'Iets', openForEnrollment: false } },
     ]);
+    const earlierPath = path.join(root, 'scripts/fixtures/wedstrijdplanning-eerder.csv');
+    assert('eerdere KNVB-export is beschikbaar', fs.existsSync(earlierPath));
+    const earlier = validateMatchRows(parseCsv(fs.readFileSync(earlierPath, 'utf8')).rows, { format: 'knvb' });
+    const earlier72442 = earlier.rows.find((r) => r.matchNumber === '72442');
+    assert(
+      'in de eerdere export is 72442 O10-1 thuis vs Perkouw op 24-10 09:00',
+      earlier72442?.date === '2026-10-24' && earlier72442.time === '09:00' && earlier72442.team === 'O10-1' && /Perkouw/i.test(earlier72442.opponent || ''),
+      JSON.stringify(earlier72442),
+    );
+    const today = new Date('2026-11-17T12:00:00');
+    // Standaardlijst Wedstrijden verbergt 24-10 op 17-11; 12-12 blijft zichtbaar.
+    assert('24-10 is vóór 17-11 (verborgen zonder “toon alle”)', new Date('2026-10-24T09:00:00') < today);
+    assert('12-12 is ná 17-11 (zichtbaar in de standaardlijst)', new Date('2026-12-12T09:30:00') > today);
+
     assert(
       'wizard toont alleen-barcommissie jaarplanning-dienst',
       pub.jaarplanning.length === 1 && pub.jaarplanning[0].id === 2 && pub.drafts.length === 1,
