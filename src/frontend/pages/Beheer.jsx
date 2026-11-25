@@ -15,7 +15,7 @@ import {
 } from '../utils/formatDate.js';
 import { scrollToForm } from '../utils/scrollToForm.js';
 
-import { splitPlanningWizardServices } from './planningLabels.js';
+import { splitPlanningWizardServices, summarizeMandatoryFillServices } from './planningLabels.js';
 import { matchesForDienstKoppeling } from '../utils/matchDropdown.js';
 import DienstregelsBeheer from './DienstregelsBeheer.jsx';
 import ActiviteitenBeheer from './ActiviteitenBeheer.jsx';
@@ -1333,6 +1333,8 @@ function PlanningBeheer() {
   const [jaarplanningServices, setJaarplanningServices] = useState([]);
   const [periodServiceCount, setPeriodServiceCount] = useState(0);
   const [publishedOpen, setPublishedOpen] = useState(0);
+  const [skippedNotOpen, setSkippedNotOpen] = useState(0);
+  const [teamOnlyOpen, setTeamOnlyOpen] = useState(0);
   const [deadline, setDeadline] = useState('');
   const [fromDate, setFromDate] = useState(todayInputValue());
   const [toDate, setToDate] = useState(() => defaultPlanningEndInput());
@@ -1359,10 +1361,10 @@ function PlanningBeheer() {
         setDrafts(split.drafts);
         setJaarplanningServices(split.jaarplanning);
         setPeriodServiceCount(allPeriod.length);
-        const open = (published.services || []).filter(
-          (s) => !s.draft && (s.enrolled ?? s.enrollments?.length ?? 0) < (s.required ?? 0),
-        );
-        setPublishedOpen(open.length);
+        const fillSummary = summarizeMandatoryFillServices(published.services || []);
+        setPublishedOpen(fillSummary.open);
+        setSkippedNotOpen(fillSummary.skippedNotOpen);
+        setTeamOnlyOpen(fillSummary.teamOnly);
         if (r?.volunteerDeadline) {
           setDeadline(toDateInputValue(r.volunteerDeadline));
         }
@@ -1690,8 +1692,16 @@ function PlanningBeheer() {
         </p>
         <p className="text-xs text-gray-600">
           Teamdiensten vult de bardienstcoördinator via <strong>Mijn team</strong>.
-          {isPublished && publishedOpen > 0
-            ? ` Er zijn nu ${publishedOpen} open dienst(en) met nog plek.`
+          {isPublished && (publishedOpen > 0 || skippedNotOpen > 0 || teamOnlyOpen > 0)
+            ? [
+                ` Er zijn nu ${publishedOpen} open dienst(en) met nog een vrijwilligersplek.`,
+                skippedNotOpen
+                  ? ` ${skippedNotOpen} jaarplanning-dienst(en) worden overgeslagen omdat ze niet open staan voor inschrijving.`
+                  : '',
+                teamOnlyOpen
+                  ? ` ${teamOnlyOpen} dienst(en) wachten alleen nog op teamplekken (vult de bardienstcoördinator).`
+                  : '',
+              ].join('')
             : null}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -1705,13 +1715,17 @@ function PlanningBeheer() {
                 () => api.fillMandatory(periodPayload()),
                 (r) => {
                   const open = r.unfilled?.length ?? 0;
+                  const skipped = r.skippedNotOpen ?? 0;
+                  const skipNote = skipped
+                    ? ` ${skipped} jaarplanning-dienst(en) overgeslagen (niet open voor inschrijving).`
+                    : '';
                   const reasons = (r.unfilled || [])
                     .slice(0, 5)
                     .map((row) => `${row.name}: ${row.reason || 'geen plek'}`)
                     .join(' · ');
                   return open
-                    ? `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${open} nog open.${reasons ? ` ${reasons}` : ''}`
-                    : `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven.`;
+                    ? `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven. ${open} nog open.${skipNote}${reasons ? ` ${reasons}` : ''}`
+                    : `Stap 3: ${r.filled} persoonlijke plek(ken) automatisch ingeschreven.${skipNote}`;
                 },
               )
             }

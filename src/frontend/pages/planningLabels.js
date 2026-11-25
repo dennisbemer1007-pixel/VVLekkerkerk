@@ -1,3 +1,5 @@
+import { isClosedForEnrollment } from '../../backend/lib/planningPeriod.js';
+
 export const WEEKDAY_OPTIONS = [
   { id: 1, label: 'Maandag' },
   { id: 2, label: 'Dinsdag' },
@@ -47,5 +49,35 @@ export function splitPlanningWizardServices(services) {
   return {
     drafts: list.filter((row) => row.draft),
     jaarplanning: list.filter(isJaarplanningService),
+  };
+}
+
+/**
+ * Telling voor stap 3 (verplichte mensen automatisch inschrijven):
+ * alleen gepubliceerde diensten met nog een vrijwilligersplek.
+ * Teamplekken tellen als bezet (vult de bardienstcoördinator).
+ * Jaarplanning zonder «Open voor inschrijving» wordt overgeslagen.
+ */
+export function isOpenForMandatoryFill(service) {
+  if (!service || service.draft || service.active === false) return false;
+  if (isClosedForEnrollment(service)) return false;
+  const required = service.required ?? 0;
+  const enrolled = service.enrolled ?? service.enrollments?.length ?? 0;
+  return enrolled < required;
+}
+
+export function summarizeMandatoryFillServices(services) {
+  const list = Array.isArray(services) ? services : [];
+  const published = list.filter((s) => !s.draft && s.active !== false);
+  const skippedNotOpen = published.filter((s) => isClosedForEnrollment(s));
+  const open = published.filter((s) => isOpenForMandatoryFill(s));
+  const teamOnly = published.filter((s) => {
+    if (isClosedForEnrollment(s) || isOpenForMandatoryFill(s)) return false;
+    return Number(s.capacity?.teamOpen) > 0;
+  });
+  return {
+    open: open.length,
+    skippedNotOpen: skippedNotOpen.length,
+    teamOnly: teamOnly.length,
   };
 }

@@ -194,9 +194,18 @@ export async function enrollableServiceRange(prisma, now = new Date()) {
   return { from: today, to, empty: false };
 }
 
+/**
+ * Jaarplanning (of andere activiteit) die niet op «Open voor inschrijving» staat.
+ * Die diensten vult de barcommissie zelf; automatische inschrijving slaat ze over.
+ */
+export function isClosedForEnrollment(service) {
+  return service?.activity?.openForEnrollment === false;
+}
+
 /** Mag een vrijwilliger deze dienst zien/inschrijven? */
 export function volunteerMayAccessService(service, enrollablePeriod) {
   if (!service || service.active === false || service.draft) return false;
+  if (isClosedForEnrollment(service)) return false;
   if (service.activity?.openForEnrollment === true) return true;
   if (enrollablePeriod?.empty) return false;
   return isWithinPlanningPeriod(service.date, enrollablePeriod);

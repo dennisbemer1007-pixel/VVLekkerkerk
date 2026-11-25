@@ -67,7 +67,7 @@ const {
   canReassignEmptyTeamDuties,
 } = await import('../src/backend/lib/teamDutyPlanning.js');
 const { youthGender, youthTeamAliasKey } = await import('../src/backend/lib/youthTeams.js');
-const { splitPlanningWizardServices } = await import('../src/frontend/pages/planningLabels.js');
+const { splitPlanningWizardServices, summarizeMandatoryFillServices } = await import('../src/frontend/pages/planningLabels.js');
 const { matchesForDienstKoppeling } = await import('../src/frontend/utils/matchDropdown.js');
 const { parseMatchDateInput } = await import('../src/backend/lib/authz.js');
 const {
@@ -1372,6 +1372,75 @@ try {
     assert(
       'alleen barcommissie staat op de jaarplanning-kaart',
       cardSrc.includes('alleen barcommissie'),
+    );
+
+    // 25/11: niet-open jaarplanning mag niet automatisch worden gevuld;
+    // een open jaarplanning-dienst in dezelfde periode wel.
+    const mandatoryForJaar = await prisma.person.create({
+      data: {
+        name: 'Verplicht Jaarplanning',
+        email: `verplicht-jaar-${process.pid}@vvl.test`,
+        role: 'Vrijwilliger',
+        active: true,
+        obligation: 'FULL',
+      },
+    });
+    const klaverjasBefore = await prisma.enrollment.findMany({
+      where: { serviceId: klaverjas.id },
+      select: { id: true, personId: true, source: true },
+      orderBy: { id: 'asc' },
+    });
+    const fillJaar = await fillMandatoryPersonal({ from: '2026-12-07', to: '2027-01-10' });
+    const pubquizAfter = await prisma.service.findUnique({
+      where: { id: pubquiz.id },
+      include: { enrollments: true },
+    });
+    const zaalMiddagAfter = await prisma.service.findUnique({
+      where: { id: zaalMiddag.id },
+      include: { enrollments: true },
+    });
+    const zaalOchtendAfter = await prisma.service.findUnique({
+      where: { id: zaalOchtend.id },
+      include: { enrollments: true },
+    });
+    const klaverjasAfter = await prisma.enrollment.findMany({
+      where: { serviceId: klaverjas.id },
+      select: { id: true, personId: true, source: true },
+      orderBy: { id: 'asc' },
+    });
+    const openZaalFilled =
+      (zaalMiddagAfter.enrollments || []).some((e) => e.source === 'AUTO') ||
+      (zaalOchtendAfter.enrollments || []).some((e) => e.source === 'AUTO');
+    assert(
+      'niet-open jaarplanningdienst wordt niet automatisch gevuld',
+      (pubquizAfter.enrollments || []).length === 0,
+      `n=${(pubquizAfter.enrollments || []).length} skipped=${fillJaar.skippedNotOpen}`,
+    );
+    assert(
+      'open jaarplanningdienst doet wél mee met automatisch inschrijven',
+      openZaalFilled,
+      `middag=${(zaalMiddagAfter.enrollments || []).length} ochtend=${(zaalOchtendAfter.enrollments || []).length}`,
+    );
+    assert(
+      'bestaande inschrijvingen op een niet-open jaarplanning blijven ongewijzigd',
+      JSON.stringify(klaverjasBefore) === JSON.stringify(klaverjasAfter),
+    );
+    const fillSummary = summarizeMandatoryFillServices(
+      [pubquizAfter, klaverjas, zaalMiddagAfter, zaalOchtendAfter, zaalAvond].map((s) => ({
+        ...s,
+        draft: false,
+        enrolled: (s.enrollments || []).filter((e) => !e.noShow).length,
+        activity: s.activity || { openForEnrollment: s.id === pubquiz.id || s.id === klaverjas.id ? false : true },
+      })),
+    );
+    assert(
+      'telling stap 3 slaat niet-open jaarplanning over',
+      fillSummary.skippedNotOpen === 2,
+      JSON.stringify(fillSummary),
+    );
+    assert(
+      'wizard meldt overgeslagen niet-open jaarplanning',
+      beheerSrc.includes('worden overgeslagen omdat ze niet open staan voor inschrijving'),
     );
   }
 

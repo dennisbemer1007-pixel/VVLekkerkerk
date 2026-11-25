@@ -161,7 +161,9 @@ import {
   resolvePlanningPeriod,
   resolvePreviousPeriod,
   volunteerMayAccessService,
+  isClosedForEnrollment,
 } from '../src/backend/lib/planningPeriod.js';
+import { summarizeMandatoryFillServices } from '../src/frontend/pages/planningLabels.js';
 import {
   hasProtectedEnrollment,
   shouldHideUnpublishedAutoService,
@@ -3832,6 +3834,37 @@ assert(
         { active: true, draft: false, date: new Date('2026-10-17T12:00:00.000Z'), activity: null },
         openPeriod,
       ) === true,
+    );
+    assert(
+      'jaarplanning zonder open inschrijving is niet zichtbaar, ook in een gepubliceerde periode',
+      volunteerMayAccessService(
+        {
+          active: true,
+          draft: false,
+          date: new Date('2026-10-17T12:00:00.000Z'),
+          activity: { openForEnrollment: false },
+        },
+        openPeriod,
+      ) === false,
+    );
+    assert(
+      'isClosedForEnrollment herkent niet-open jaarplanning',
+      isClosedForEnrollment({ activity: { openForEnrollment: false } }) === true &&
+        isClosedForEnrollment({ activity: { openForEnrollment: true } }) === false &&
+        isClosedForEnrollment({ activity: null }) === false,
+    );
+    const fillCount = summarizeMandatoryFillServices([
+      { draft: false, required: 2, enrolled: 0, activity: null },
+      { draft: false, required: 2, enrolled: 1, activity: { openForEnrollment: true } },
+      { draft: false, required: 2, enrolled: 0, activity: { openForEnrollment: false } },
+      { draft: false, required: 2, enrolled: 0, activity: { openForEnrollment: false } },
+      { draft: true, required: 2, enrolled: 0, activity: null },
+      { draft: false, required: 2, enrolled: 2, capacity: { teamOpen: 2 }, activity: null },
+    ]);
+    assert(
+      'telling stap 3 slaat niet-open jaarplanning over en telt teamplekken apart',
+      fillCount.open === 2 && fillCount.skippedNotOpen === 2 && fillCount.teamOnly === 1,
+      JSON.stringify(fillCount),
     );
     const published = [
       {

@@ -17,7 +17,7 @@ import { blockedByMorningBarOrKitchenOnly } from './dutyRestrictions.js';
 import { writeAudit } from './audit.js';
 import { trySendScheduledConfirmation } from './mail.js';
 import { compareFillCandidates, lastPersonalAt } from './plannerOrder.js';
-import { periodFromRound, previousPlanningPeriod, resolvePlanningPeriod } from './planningPeriod.js';
+import { isClosedForEnrollment, periodFromRound, previousPlanningPeriod, resolvePlanningPeriod } from './planningPeriod.js';
 import { getActiveRound } from './planningRounds.js';
 import { friendlyEnrollmentReason, serviceCapacity } from './teamDutyPlanning.js';
 import { serviceInclude } from './serviceHelpers.js';
@@ -135,7 +135,12 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
   let filled = 0;
   const details = [];
 
+  let skippedNotOpen = 0;
   for (const service of services) {
+    if (isClosedForEnrollment(service)) {
+      skippedNotOpen += 1;
+      continue;
+    }
     let open = serviceCapacity(service).personalOpen;
     if (open <= 0) continue;
     const already = new Set(service.enrollments.map((e) => e.personId));
@@ -249,5 +254,5 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     detail: `${filled} automatisch ingepland, ${unfilled.length} verplichting(en) open`,
   });
 
-  return { filled, details, unfilled, period: { from, to } };
+  return { filled, details, unfilled, skippedNotOpen, period: { from, to } };
 }
