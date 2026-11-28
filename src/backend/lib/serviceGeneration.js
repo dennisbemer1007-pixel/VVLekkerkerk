@@ -237,7 +237,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       include: { fixedPerson: true },
     }),
     prisma.match.findMany({
-      where: { date: { gte: start, lte: end } },
+      // Afgelaste wedstrijden (Sportlink) leveren geen diensten op.
+      where: { date: { gte: start, lte: end }, cancelled: false },
       include: { team: true },
     }),
     prisma.activity.findMany({
@@ -422,6 +423,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
       note: spec.note,
       location: spec.location,
       active: true,
+      // Er is weer een speelbare thuiswedstrijd voor deze dienst: afgelasting vervalt.
+      cancelled: false,
       ...(createAsDraft ? { draft: true } : { draft: false }),
     };
 
@@ -511,6 +514,8 @@ export async function generateServicesFromRules({ from, to, weeks } = {}) {
     if (service.activityId) continue;
     if (service.enrollments?.length) continue;
     if (service.origin !== 'AUTO') continue;
+    // Afgelaste diensten blijven zichtbaar staan; die verbergt de planning-update niet.
+    if (service.cancelled) continue;
     // Handmatig aangepast of bewust uitgezet: sync mag deze dienst niet wissen of verbergen.
     if (service.teamDutiesManual) continue;
     const key = serviceKey(service.date, service.type, startTimeFromService(service));

@@ -112,6 +112,7 @@ export async function persistValidMatchRows(prisma, validRows) {
           matchNumber,
           matchType: row.matchType || null,
           playLevel: row.playLevel || null,
+          source: 'csv',
           teamId,
         },
         include: { team: true },

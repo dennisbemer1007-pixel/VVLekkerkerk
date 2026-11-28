@@ -13,6 +13,7 @@ export function serviceStatus(service) {
 }
 
 function dotClass(status) {
+  if (status === 'cancelled') return 'bg-gray-400';
   if (status === 'full') return 'bg-emerald-500';
   if (status === 'almost') return 'bg-amber-400';
   return 'bg-red-500';

@@ -166,6 +166,11 @@ router.post(
         where: { id: Number(serviceId) },
         include: serviceInclude,
       });
+      if (servicePreview?.cancelled) {
+        return res.status(400).json({
+          error: 'Deze dienst vervalt omdat de wedstrijd is afgelast. Inschrijven kan niet.',
+        });
+      }
       if (servicePreview && !isAdminRole(req.person.role)) {
         if (startOfDay(servicePreview.date) < startOfDay(new Date())) {
           return res.status(400).json({

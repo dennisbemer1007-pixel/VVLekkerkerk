@@ -32,6 +32,7 @@ export async function buildPlanningControls(now = new Date()) {
     where: {
       active: true,
       draft: false,
+      cancelled: false,
       date: { gte: w.from, lte: w.to },
     },
     include: {

@@ -138,6 +138,15 @@ model Match {
   team        Team?    @relation(fields: [teamId], references: [id])
   services    Service[]
   refereeAssignment RefereeAssignment?
+  /** Veld / accommodatie volgens Sportlink (vrije tekst). */
+  field       String?
+  /** manual | csv | sportlink. Leeg = ouder dan deze kolom. */
+  source      String?
+  /** Afgelast volgens Sportlink. De wedstrijd blijft staan (nooit hard verwijderen). */
+  cancelled   Boolean  @default(false)
+  /** Handmatig aangepast of aangemaakt in de app. Sportlink-sync slaat deze over. */
+  manualEdit  Boolean  @default(false)
+  changes     MatchChange[]
   updatedAt   DateTime @updatedAt
 }
 
@@ -215,6 +224,8 @@ model Service {
   origin         String       @default("AUTO")
   /** Barcommissie heeft het team verplaatst of de teamplek weggehaald. Sync laat die keuze staan. */
   teamDutiesManual Boolean    @default(false)
+  /** Wedstrijd is afgelast (Sportlink-sync). Blijft zichtbaar, inschrijvingen blijven, telt niet als open plek. */
+  cancelled      Boolean      @default(false)
   slot           String?
   note           String?
   matchId        Int?
@@ -346,7 +357,57 @@ model ClubSettings {
   refereesEnabled      Boolean  @default(false)
   /** Agenda-koppeling uit tot een admin de schakelaar aanzet. */
   calendarEnabled      Boolean  @default(false)
+  /** Naam waarmee eigen teams in Sportlink/KNVB-export worden herkend. Leeg = Lekkerkerk. */
+  clubName             String   @default("")
+  /** Sportlink Club.Dataservice: uit tot een admin de schakelaar aanzet. */
+  sportlinkEnabled     Boolean  @default(false)
+  /** Versleuteld opgeslagen (zoals het SMTP-wachtwoord). Nooit terug naar de browser. */
+  sportlinkClientId    String   @default("")
+  sportlinkLastSyncAt  DateTime?
+  /** ok | error | partial | "" (nog nooit) */
+  sportlinkLastStatus  String   @default("")
+  /** JSON met aantallen en fouten van de laatste sync. */
+  sportlinkLastReport  String   @default("")
   updatedAt            DateTime @updatedAt
+}
+
+/** Een door Sportlink gemelde verplaatsing of afgelasting. Basis voor dashboardmelding en mail-dedup. */
+model MatchChange {
+  id               Int       @id @default(autoincrement())
+  matchId          Int?
+  match            Match?    @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  /** MOVED | CANCELLED | RESTORED */
+  kind             String
+  label            String    @default("")
+  oldDate          DateTime?
+  oldTime          String?
+  newDate          DateTime?
+  newTime          String?
+  /** JSON-lijst met per dienst wat er gebeurd is (verplaatst, afgelast, beschermd, conflict). */
+  detail           String    @default("[]")
+  servicesMoved    Int       @default(0)
+  servicesCancelled Int      @default(0)
+  servicesProtected Int      @default(0)
+  mailsSent        Int       @default(0)
+  mailsFailed      Int       @default(0)
+  createdAt        DateTime  @default(now())
+  acknowledgedAt   DateTime?
+  acknowledgedById Int?
+  mails            MatchChangeMail[]
+
+  @@index([acknowledgedAt, createdAt])
+}
+
+/** Maximaal één mail per persoon per wijziging. */
+model MatchChangeMail {
+  id        Int         @id @default(autoincrement())
+  changeId  Int
+  change    MatchChange @relation(fields: [changeId], references: [id], onDelete: Cascade)
+  personId  Int
+  sent      Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  @@unique([changeId, personId])
 }
 
 /** Geheim token voor een iCalendar-feed. Eén per persoon of per team. */
@@ -511,7 +572,7 @@ model MailSettings {
   password  String   @default("")
   fromEmail String   @default("")
   fromName  String   @default("V.V. Lekkerkerk")
-  /** JSON: invite, scheduled, reminder, planningReady — leeg = standaardteksten */
+  /** JSON: invite, scheduled, reminder, planningReady, matchMoved, matchCancelled — leeg = standaardteksten */
   templates String   @default("")
   updatedAt DateTime @updatedAt
 }

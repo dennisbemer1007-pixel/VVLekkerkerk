@@ -102,7 +102,7 @@ export async function buildPersonalIcs(person, { appUrl = '', now = new Date() }
       where: {
         personId: person.id,
         noShow: false,
-        service: { active: true, draft: false, date: { gte: from } },
+        service: { active: true, draft: false, cancelled: false, date: { gte: from } },
       },
       include: { service: true },
     }),
@@ -156,7 +156,7 @@ export async function buildTeamIcs(team, { appUrl = '', now = new Date() } = {})
     prisma.serviceTeamDuty.findMany({
       where: {
         teamId: team.id,
-        service: { active: true, draft: false, date: { gte: from } },
+        service: { active: true, draft: false, cancelled: false, date: { gte: from } },
       },
       include: { service: true },
     }),

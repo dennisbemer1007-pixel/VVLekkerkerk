@@ -114,6 +114,7 @@ router.get(
         where: {
           active: true,
           draft: false,
+          cancelled: false,
           kind: { not: 'TEAM' },
           date: { gte: from, lte: to },
         },

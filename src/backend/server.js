@@ -30,6 +30,8 @@ import swapsRouter from './routes/swaps.js';
 import notificationsRouter from './routes/notifications.js';
 import refereesRouter from './routes/referees.js';
 import calendarRouter from './routes/calendar.js';
+import sportlinkRouter from './routes/sportlink.js';
+import { applyStoredClubName, maybeRunNightlySportlinkSync } from './lib/sportlink/sync.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -206,6 +208,7 @@ app.use('/api/pdf', pdfRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/tournaments', tournamentsRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/sportlink', sportlinkRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Niet gevonden' });
@@ -237,6 +240,7 @@ app.use((err, _req, res, _next) => {
 
 ensureAdmin()
   .then(() => ensureClubDefaults())
+  .then(() => applyStoredClubName().catch((err) => console.error('[sportlink] clubnaam laden mislukt:', err.message)))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`VVL Planning API op http://localhost:${PORT}`);
@@ -280,6 +284,11 @@ ensureAdmin()
       setInterval(() => {
         maybeRunDutyReminders().catch((err) => console.error('[reminders]', err.message));
       }, 60 * 60 * 1000);
+      // Sportlink: elke 30 min kijken of de nachtelijke run (vanaf 04:00 Amsterdam) aan de beurt is.
+      const sportlinkTick = () =>
+        maybeRunNightlySportlinkSync().catch((err) => console.error('[sportlink]', err.message));
+      setInterval(sportlinkTick, 30 * 60 * 1000);
+      setTimeout(sportlinkTick, 60 * 1000);
     });
   })
   .catch((err) => {

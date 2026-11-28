@@ -10,6 +10,7 @@ export const CHANTAL_MIGRATION = '20261004150000_chantal_tester';
 export const CHANTAL3_MIGRATION = '20261006100000_chantal_ronde3';
 export const CHANTAL5_MIGRATION = '20261009120000_chantal_herinnering_o19';
 export const TEAM_DUTIES_MANUAL_MIGRATION = '20261018200000_team_duties_manual';
+export const SPORTLINK_MIGRATION = '20261128120000_sportlink_dataservice';
 
 export const LIVE_MIGRATIONS = [
   TOURNAMENT_MIGRATION,
@@ -19,6 +20,7 @@ export const LIVE_MIGRATIONS = [
   CHANTAL3_MIGRATION,
   CHANTAL5_MIGRATION,
   TEAM_DUTIES_MANUAL_MIGRATION,
+  SPORTLINK_MIGRATION,
 ];
 
 export function deployStateDir(dbFile) {

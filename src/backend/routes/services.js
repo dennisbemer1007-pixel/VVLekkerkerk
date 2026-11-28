@@ -118,7 +118,7 @@ router.get(
       });
 
       if (filter === 'open') {
-        services = services.filter((s) => s.status !== 'full');
+        services = services.filter((s) => s.status !== 'full' && s.status !== 'cancelled');
       }
       if (!adminViewer && filter !== 'mine') {
         services = services.filter((s) => volunteerMayAccessService(s, enrollablePeriod));

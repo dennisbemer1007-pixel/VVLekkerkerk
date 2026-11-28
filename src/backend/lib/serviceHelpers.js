@@ -34,7 +34,9 @@ export function mapService(service) {
     teamDuties,
     enrolled: occupiedSlots(capacity),
     capacity,
-    status: occupancyStatus(occupiedSlots(capacity), required),
+    cancelled: Boolean(service.cancelled),
+    // Afgelast: telt nergens als vol/bijna/open; de UI toont een eigen label.
+    status: service.cancelled ? 'cancelled' : occupancyStatus(occupiedSlots(capacity), required),
     assignedTeam: service.assignedTeam
       ? { id: service.assignedTeam.id, name: service.assignedTeam.name }
       : service.assignedTeam === null

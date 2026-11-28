@@ -101,12 +101,14 @@ export function occupancyStatus(enrolled, required) {
 }
 
 export function statusStyles(status) {
+  if (status === 'cancelled') return 'bg-gray-200 text-gray-800 border-gray-400 line-through';
   if (status === 'full') return 'bg-emerald-100 text-emerald-900 border-emerald-400';
   if (status === 'almost') return 'bg-amber-100 text-amber-900 border-amber-400';
   return 'bg-red-100 text-red-900 border-red-400';
 }
 
 export function statusLabel(status) {
+  if (status === 'cancelled') return 'Afgelast';
   if (status === 'full') return 'Vol';
   if (status === 'almost') return 'Nog 1 nodig';
   return 'Open';

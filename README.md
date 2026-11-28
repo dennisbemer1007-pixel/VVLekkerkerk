@@ -24,6 +24,10 @@ In de app: **Beheer → E-mail**.
 
 Als dit aanstaat, gaan uitnodigingen automatisch per e-mail. Zo niet, blijft de deeplink beschikbaar om te kopiëren.
 
+## Sportlink-koppeling (optioneel)
+
+Wedstrijden automatisch uit Sportlink Club.Dataservice lezen: zie [docs/SPORTLINK-KOPPELING.md](docs/SPORTLINK-KOPPELING.md).
+
 ## Accounts & uitnodigingen
 
 1. Log in als beheerder: `admin@vvl.local` / `admin123` (alleen lokaal)
