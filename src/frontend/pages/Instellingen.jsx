@@ -6,6 +6,7 @@ import { isAdminRoleName } from '../navConfig.js';
 import { useTournamentFeature } from '../toernooi/feature.jsx';
 import { useRefereeFeature } from '../scheids/feature.jsx';
 import { useCalendarFeature } from '../agenda/feature.jsx';
+import SportlinkStatus from '../components/SportlinkStatus.jsx';
 
 const LINKS = [
   { to: '/beheer?tab=regels', label: 'Dienstregels' },
@@ -319,6 +320,154 @@ function AgendaSchakelaar() {
   );
 }
 
+function SportlinkBlok() {
+  const [settings, setSettings] = useState(null);
+  const [clientId, setClientId] = useState('');
+  const [clubName, setClubName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .getSportlinkSettings()
+      .then((s) => {
+        setSettings(s);
+        setClubName(s.clubName || '');
+      })
+      .catch((err) => setError(err.message || 'Laden mislukt'));
+  }, []);
+
+  async function save(data, okMessage) {
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const next = await api.saveSportlinkSettings(data);
+      setSettings(next);
+      setClientId('');
+      setMsg(okMessage);
+    } catch (err) {
+      setError(err.message || 'Opslaan mislukt');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function syncNow() {
+    setSyncing(true);
+    setError('');
+    setMsg('');
+    try {
+      const res = await api.syncSportlink();
+      setSettings(res.settings);
+      setMsg(res.report?.status === 'error' ? '' : 'Synchronisatie klaar.');
+      if (res.report?.status === 'error') setError(res.report.errors?.[0] || 'Synchroniseren mislukt');
+    } catch (err) {
+      setError(err.message || 'Synchroniseren mislukt');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const enabled = Boolean(settings?.enabled);
+
+  return (
+    <div className="vvl-card space-y-3" data-testid="sportlink-blok">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-base font-black uppercase">Sportlink-koppeling</h2>
+          <p className="text-sm text-gray-700">
+            Leest elke nacht (rond 04:00) het thuisprogramma van je club uit Sportlink Club.Dataservice. Nieuwe
+            wedstrijden komen erbij, verplaatste en afgelaste wedstrijden worden bijgewerkt. Er wordt nooit iemand
+            automatisch ingedeeld.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Sportlink-koppeling"
+          data-testid="sportlink-schakelaar"
+          disabled={busy || !settings}
+          onClick={() => save({ enabled: !enabled }, !enabled ? 'Koppeling staat aan.' : 'Koppeling staat uit.')}
+          className="inline-flex min-h-11 items-center gap-2"
+        >
+          <span className="text-xs font-bold uppercase tracking-wide">{enabled ? 'Aan' : 'Uit'}</span>
+          <span className={`relative h-7 w-12 rounded-full ${enabled ? 'bg-black' : 'bg-vvl-border'}`}>
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white ${enabled ? 'left-5' : 'left-0.5'}`} />
+          </span>
+        </button>
+      </div>
+
+      <label className="block">
+        <span className="vvl-label">Sportlink Client ID</span>
+        <input
+          className="vvl-input"
+          data-testid="sportlink-client-id"
+          type="password"
+          autoComplete="off"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          placeholder={settings?.clientIdSet ? '•••••••• (opgeslagen, leeg laten om te behouden)' : 'Code uit Sportlink Club'}
+        />
+        <span className="mt-1 block text-xs text-gray-600">
+          Te vinden in Sportlink Club onder Koppelingen → Club.Dataservice. We slaan hem versleuteld op en tonen hem
+          nergens meer.
+        </span>
+      </label>
+
+      <label className="block">
+        <span className="vvl-label">Clubnaam zoals Sportlink die gebruikt</span>
+        <input
+          className="vvl-input"
+          data-testid="sportlink-clubnaam"
+          value={clubName}
+          onChange={(e) => setClubName(e.target.value)}
+          placeholder="Lekkerkerk"
+        />
+        <span className="mt-1 block text-xs text-gray-600">
+          Hiermee herkennen we eigen teams (bijvoorbeeld &quot;Lekkerkerk JO12-1&quot;). Leeg = Lekkerkerk.
+        </span>
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="vvl-btn-outline min-h-11"
+          data-testid="sportlink-opslaan"
+          disabled={busy || !settings}
+          onClick={() =>
+            save(
+              { clubName, ...(clientId.trim() ? { clientId: clientId.trim() } : {}) },
+              'Instellingen opgeslagen.',
+            )
+          }
+        >
+          {busy ? 'Bezig…' : 'Opslaan'}
+        </button>
+        <button
+          type="button"
+          className="vvl-btn-primary min-h-11"
+          data-testid="sportlink-sync-nu"
+          disabled={syncing || !enabled || !settings?.clientIdSet}
+          onClick={syncNow}
+        >
+          {syncing ? 'Bezig met synchroniseren…' : 'Nu synchroniseren'}
+        </button>
+      </div>
+      {!enabled ? (
+        <p className="text-xs text-gray-600">Zet de koppeling aan (met een Client ID) om te kunnen synchroniseren.</p>
+      ) : null}
+
+      {settings ? <SportlinkStatus settings={settings} /> : null}
+      {msg ? <p className="text-sm font-semibold text-emerald-800">{msg}</p> : null}
+      {error ? <p className="text-sm font-semibold text-red-800">{error}</p> : null}
+    </div>
+  );
+}
+
 function ScheidsSchakelaar() {
   const { refresh } = useRefereeFeature();
   const [enabled, setEnabled] = useState(false);
@@ -388,6 +537,7 @@ export default function Instellingen() {
 
       {admin ? <ScheidsSchakelaar /> : null}
       {admin ? <AgendaSchakelaar /> : null}
+      {admin ? <SportlinkBlok /> : null}
 
       <SettingsNavList items={LINKS} />
 

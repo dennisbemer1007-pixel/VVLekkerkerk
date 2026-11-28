@@ -66,6 +66,7 @@ export default function DienstCard({
   const inactive = dienst.active === false;
   const isDraft = Boolean(dienst.draft);
   const isLocked = Boolean(dienst.locked);
+  const isCancelled = Boolean(dienst.cancelled);
   const capacity = dienst.capacity;
   const teamDuties = dienst.teamDuties || [];
   const slot = slotLabel(dienst.slot);
@@ -85,6 +86,7 @@ export default function DienstCard({
     showActions &&
     !inactive &&
     !isDraft &&
+    !isCancelled &&
     householdOpen.length > 0 &&
     !servicePast &&
     status !== 'full' &&
@@ -124,7 +126,7 @@ export default function DienstCard({
               Jeugdteam
             </span>
           ) : null}
-          <StatusBadge status={status} />
+          <StatusBadge status={isCancelled ? 'cancelled' : status} />
           {canSelfEnroll ? (
             <button
               type="button"
@@ -141,8 +143,8 @@ export default function DienstCard({
 
   return (
     <article
-      className={`vvl-card flex flex-col gap-3 ${inactive || isDraft ? 'opacity-80' : ''} border-l-4 ${
-        isDraft
+      className={`vvl-card flex flex-col gap-3 ${inactive || isDraft || isCancelled ? 'opacity-80' : ''} border-l-4 ${
+        isDraft || isCancelled
           ? 'border-l-gray-400'
           : status === 'full'
             ? 'border-l-emerald-500'
@@ -186,7 +188,7 @@ export default function DienstCard({
               Concept – nog niet zichtbaar voor vrijwilligers
             </span>
           ) : (
-            <StatusBadge status={status} />
+            <StatusBadge status={isCancelled ? 'cancelled' : status} />
           )}
           {isLocked ? (
             <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold uppercase text-emerald-900">
@@ -196,6 +198,16 @@ export default function DienstCard({
           {headerActions}
         </div>
       </div>
+
+      {isCancelled ? (
+        <p
+          className="rounded-sm border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-900"
+          data-testid="dienst-afgelast"
+        >
+          Deze dienst vervalt: de wedstrijd is afgelast. Inschrijvingen blijven bewaard. De barcommissie laat
+          het weten als er een vervangende dienst is.
+        </p>
+      ) : null}
 
       <p className="text-sm">
         Bezetting: <strong>{occupancyFraction(dienst)}</strong>

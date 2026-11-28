@@ -21,7 +21,32 @@ const emptyForm = {
   opponent: '',
   note: '',
   teamId: '',
+  manualEdit: true,
 };
+
+function MatchBadges({ match }) {
+  return (
+    <>
+      {match.cancelled ? (
+        <span
+          className="ml-2 rounded-sm bg-red-100 px-2 py-0.5 text-xs font-bold uppercase text-red-900"
+          data-testid="wedstrijd-afgelast"
+        >
+          Afgelast
+        </span>
+      ) : null}
+      {match.manualEdit ? (
+        <span
+          className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase text-amber-950"
+          title="Sportlink-sync overschrijft deze wedstrijd niet"
+          data-testid="wedstrijd-handmatig"
+        >
+          Handmatig
+        </span>
+      ) : null}
+    </>
+  );
+}
 
 export default function Wedstrijden() {
   const { can } = useAuth();
@@ -102,6 +127,7 @@ export default function Wedstrijden() {
       opponent: m.opponent || '',
       note: m.note || '',
       teamId: m.teamId ? String(m.teamId) : m.team?.id ? String(m.team.id) : '',
+      manualEdit: true,
     });
     setFormOpen(true);
   };
@@ -218,6 +244,7 @@ export default function Wedstrijden() {
           <li key={m.id} className="vvl-card text-sm">
             <p className="font-semibold">
               {formatMatchDate(m.date)} · {m.team?.name || '—'}
+              <MatchBadges match={m} />
             </p>
             <p>
               {m.time || '—'} · {m.home ? 'Thuis' : 'Uit'} vs {m.opponent || '—'}
@@ -262,7 +289,10 @@ export default function Wedstrijden() {
                 <tr key={m.id} className="border-t border-vvl-border">
                   <td className="p-3 whitespace-nowrap">{formatMatchDate(m.date)}</td>
                   <td className="p-3">{m.time || '—'}</td>
-                  <td className="p-3 font-semibold">{m.team?.name || '—'}</td>
+                  <td className="p-3 font-semibold">
+                    {m.team?.name || '—'}
+                    <MatchBadges match={m} />
+                  </td>
                   <td className="p-3">{m.home ? 'Thuis' : 'Uit'}</td>
                   <td className="p-3">{m.opponent || '—'}</td>
                   <td className="p-3">{m.matchType || '—'}</td>
@@ -358,6 +388,20 @@ export default function Wedstrijden() {
                 />
                 Thuiswedstrijd
               </label>
+              {editId ? (
+                <label className="flex items-start gap-2 text-sm sm:col-span-2" data-testid="wedstrijd-handmatig-vinkje">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={form.manualEdit !== false}
+                    onChange={(e) => setForm({ ...form, manualEdit: e.target.checked })}
+                  />
+                  <span>
+                    <strong>Handmatig aangepast.</strong> De Sportlink-koppeling overschrijft deze wedstrijd dan niet
+                    meer. Haal het vinkje weg om Sportlink weer te laten bijwerken.
+                  </span>
+                </label>
+              ) : null}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <button type="submit" className="vvl-btn-primary min-h-[44px]">
                   {editId ? 'Opslaan' : 'Wedstrijd opslaan'}

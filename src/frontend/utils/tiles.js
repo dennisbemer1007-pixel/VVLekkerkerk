@@ -2,6 +2,7 @@ import { occupancyStatus } from './formatDate.js';
 
 /** Zelfde indeling als de tegels Vol / Nog 1 nodig / Open. */
 export function serviceTileStatus(service) {
+  if (service?.cancelled || service?.status === 'cancelled') return 'cancelled';
   if (service?.status === 'full' || service?.status === 'almost' || service?.status === 'open') {
     return service.status;
   }
@@ -12,7 +13,9 @@ export function serviceTileStatus(service) {
 
 /** Aantal op een tegel is de lengte van de gefilterde lijst. */
 export function tileGroups(services) {
-  const list = (services || []).filter((service) => service.active !== false && !service.draft);
+  const list = (services || []).filter(
+    (service) => service.active !== false && !service.draft && !service.cancelled,
+  );
   const of = (key) => list.filter((service) => serviceTileStatus(service) === key);
   return {
     list,

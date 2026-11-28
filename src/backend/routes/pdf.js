@@ -40,6 +40,7 @@ router.get('/planning', requirePdfAuth, async (req, res, next) => {
       where: {
         active: true,
         draft: false,
+        cancelled: false,
         date: { gte: from, lte: to },
       },
       include: {

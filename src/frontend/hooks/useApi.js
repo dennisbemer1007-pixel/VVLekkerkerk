@@ -334,6 +334,13 @@ export const api = {
   reassignEnrollment: (id, data) =>
     json(`/enrollments/${id}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
   getClubSettings: () => json('/settings/club'),
+  getSportlinkSettings: () => json('/sportlink/settings'),
+  saveSportlinkSettings: (data) =>
+    json('/sportlink/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  syncSportlink: () => json('/sportlink/sync', { method: 'POST', body: '{}' }),
+  getSportlinkChanges: () => json('/sportlink/changes'),
+  ackSportlinkChange: (id) => json(`/sportlink/changes/${id}/ack`, { method: 'POST', body: '{}' }),
+  ackAllSportlinkChanges: () => json('/sportlink/changes/ack-all', { method: 'POST', body: '{}' }),
   setTournamentsEnabled: (enabled) =>
     json('/settings/club', { method: 'PATCH', body: JSON.stringify({ tournamentsEnabled: Boolean(enabled) }) }),
   listTournaments: () => json('/tournaments'),

@@ -6,7 +6,14 @@ import {
 } from './mailLayout.js';
 import { resolvePublicAppUrl } from './appUrl.js';
 
-export const MAIL_TEMPLATE_KEYS = ['invite', 'scheduled', 'reminder', 'planningReady'];
+export const MAIL_TEMPLATE_KEYS = [
+  'invite',
+  'scheduled',
+  'reminder',
+  'planningReady',
+  'matchMoved',
+  'matchCancelled',
+];
 
 export const DEFAULT_MAIL_TEMPLATES = {
   invite: {
@@ -54,9 +61,39 @@ Bekijk het rooster: {link}
 Groet,
 V.V. Lekkerkerk`,
   },
+  matchMoved: {
+    subject: 'Je dienst is verplaatst: {oudedatum}',
+    body: `Hoi {naam},
+
+De wedstrijd {wedstrijd} is verplaatst, daarom schuift je {dienst} mee.
+
+Was: {oudedatum}, {oudetijd}
+Wordt: {nieuwedatum}, {nieuwetijd}
+
+Je inschrijving blijft staan. Past de nieuwe datum of tijd niet? Neem dan contact op met de barcommissie of ruil via de app.
+
+Bekijk de planning: {link}
+
+Groet,
+V.V. Lekkerkerk`,
+  },
+  matchCancelled: {
+    subject: 'Je dienst vervalt: {oudedatum}',
+    body: `Hoi {naam},
+
+De wedstrijd {wedstrijd} is afgelast. Je {dienst} van {oudedatum}, {oudetijd} vervalt daardoor.
+
+Je inschrijving blijft bewaard. De barcommissie laat het weten als er een vervangende dienst is.
+
+Bekijk de planning: {link}
+
+Groet,
+V.V. Lekkerkerk`,
+  },
 };
 
-const PLACEHOLDER = /\{(naam|datum|tijd|dienst|link)\}/g;
+const PLACEHOLDER =
+  /\{(naam|datum|tijd|dienst|link|wedstrijd|oudedatum|oudetijd|nieuwedatum|nieuwetijd)\}/g;
 
 export function resolveMailTemplates(raw) {
   let stored = {};
@@ -144,6 +181,11 @@ export function renderMail(template, vars = {}, options = {}) {
     tijd: vars.tijd || '',
     dienst: vars.dienst || '',
     link: vars.link || '',
+    wedstrijd: vars.wedstrijd || '',
+    oudedatum: vars.oudedatum || '',
+    oudetijd: vars.oudetijd || '',
+    nieuwedatum: vars.nieuwedatum || '',
+    nieuwetijd: vars.nieuwetijd || '',
   };
   const fill = (input) => String(input || '').replace(PLACEHOLDER, (_, key) => dict[key]);
   const subject = fill(template.subject).replace(/[\r\n]/g, ' ').trim();

@@ -81,6 +81,7 @@ export async function fillMandatoryPersonal({ actorId = null, from, to, weeks } 
     where: {
       active: true,
       draft: false,
+      cancelled: false,
       date: { gte: from, lte: to },
     },
     include: serviceInclude,

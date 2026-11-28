@@ -61,6 +61,11 @@ export function exampleMailVars(overrides = {}) {
     tijd: '12:00 - 16:30',
     dienst: 'bardienst',
     link,
+    wedstrijd: 'Lekkerkerk 1 - Voorbeeld FC',
+    oudedatum: 'zaterdag 4 oktober',
+    oudetijd: '12:00 - 16:30',
+    nieuwedatum: 'zondag 5 oktober',
+    nieuwetijd: '12:00 - 16:30',
     ...overrides,
   };
 }
@@ -74,6 +79,9 @@ export function ctaLabelForTemplateKey(key) {
       return 'Bekijk dienst';
     case 'planningReady':
       return 'Bekijk rooster';
+    case 'matchMoved':
+    case 'matchCancelled':
+      return 'Bekijk planning';
     case 'passwordReset':
       return 'Nieuw wachtwoord';
     case 'swap':

@@ -77,6 +77,7 @@ async function sendPersonalReminders({ from, to, templates, appUrl }) {
       service: {
         active: true,
         draft: false,
+        cancelled: false,
         date: { gte: from, lte: to },
       },
       person: { active: true, email: { not: null } },
@@ -132,6 +133,7 @@ async function sendTeamCoordinatorReminders({ from, to, appUrl }) {
       service: {
         active: true,
         draft: false,
+        cancelled: false,
         date: { gte: from, lte: to },
       },
       team: {

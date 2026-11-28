@@ -3,7 +3,7 @@ import { isRoundPublishedForVolunteers } from './planningPeriod.js';
 
 /** Dashboard Vol / Nog 1 / Open: alleen actieve niet-concept diensten. */
 export function dashboardServiceCounts(services) {
-  const list = (services || []).filter((s) => s && s.active !== false && !s.draft);
+  const list = (services || []).filter((s) => s && s.active !== false && !s.draft && !s.cancelled);
   let full = 0;
   let almost = 0;
   let open = 0;

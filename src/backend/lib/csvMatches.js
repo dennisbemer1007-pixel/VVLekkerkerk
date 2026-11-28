@@ -2,7 +2,7 @@
  * CSV/XLSX-validatie voor wedstrijdimport (KNVB-export en legacy).
  * Alleen volledig geldige rijen mogen de database in.
  */
-import { deriveClubSides } from './knvbTeams.js';
+import { deriveClubSides, getClubName } from './knvbTeams.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_OPPONENT = 160;
@@ -412,7 +412,7 @@ function validateOneRow(row) {
       rowErrors.push({
         row: line,
         field: 'team',
-        message: `Geen Lekkerkerk-team in Thuis/Uit ("${row.homeTeam}" vs "${row.awayTeam}")`,
+        message: `Geen ${getClubName()}-team in Thuis/Uit ("${row.homeTeam}" vs "${row.awayTeam}")`,
       });
     }
     home = row.home === 'false' ? false : true;

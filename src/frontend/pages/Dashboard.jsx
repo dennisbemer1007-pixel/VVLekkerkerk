@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import BeheerNavButtons from '../components/BeheerNavButtons.jsx';
 import DownloadPlanningButtons from '../components/DownloadPlanningButtons.jsx';
 import PlanningRoundSwitcher from '../components/PlanningRoundSwitcher.jsx';
+import SportlinkWijzigingen from '../components/SportlinkWijzigingen.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../hooks/useApi.js';
 import { occupancyStatus } from '../utils/formatDate.js';
@@ -139,6 +140,8 @@ export default function Dashboard({ focus = 'week' }) {
       ) : null}
 
       {can('beheer') ? <PlanningRoundSwitcher onActivated={loadPlanningPeriod} /> : null}
+
+      {can('beheer') ? <SportlinkWijzigingen /> : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <DownloadPlanningButtons period={period} />

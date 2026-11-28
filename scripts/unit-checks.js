@@ -5218,5 +5218,12 @@ assert(
   chantalNeverAgain.status === 0,
 );
 
+const sportlinkSync = spawnSync(process.execPath, ['scripts/sportlink-sync-check.js'], {
+  cwd: unitRoot,
+  stdio: 'inherit',
+  env: { ...process.env, TZ: 'UTC', NODE_ENV: 'production', SEED_DEMO: '' },
+});
+assert('Sportlink-koppeling: sync, verplaatst/afgelast, mail, beschermd, geen dubbele mail', sportlinkSync.status === 0);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

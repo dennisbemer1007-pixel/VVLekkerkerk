@@ -55,7 +55,7 @@ router.get(
       return res.status(403).json({ error: 'Geen toegang tot planningsstatistieken' });
     }
     const services = await prisma.service.findMany({
-      where: { active: true, draft: false },
+      where: { active: true, draft: false, cancelled: false },
       include: { enrollments: true },
     });
 
@@ -79,7 +79,7 @@ router.get(
     const [personCount, serviceCount, enrollmentCount, teamCount, matchCount, draftCount, pendingSwapCount] =
       await Promise.all([
         prisma.person.count({ where: { active: true } }),
-        prisma.service.count({ where: { active: true, draft: false } }),
+        prisma.service.count({ where: { active: true, draft: false, cancelled: false } }),
         prisma.enrollment.count(),
         prisma.team.count(),
         prisma.match.count(),
@@ -642,7 +642,7 @@ router.get(
       const from = req.query.from ? startOfDay(new Date(req.query.from)) : roundPeriod.from;
       const to = req.query.to ? endOfDay(new Date(req.query.to)) : roundPeriod.to;
       const services = await prisma.service.findMany({
-        where: { active: true, draft: false, date: { gte: from, lte: to } },
+        where: { active: true, draft: false, cancelled: false, date: { gte: from, lte: to } },
         include: {
           enrollments: {
             include: { person: true, forTeam: true },

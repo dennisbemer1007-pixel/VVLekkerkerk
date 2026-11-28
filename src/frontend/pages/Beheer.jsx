@@ -1974,6 +1974,8 @@ function MailBeheer() {
       scheduled: { subject: '', body: '' },
       reminder: { subject: '', body: '' },
       planningReady: { subject: '', body: '' },
+      matchMoved: { subject: '', body: '' },
+      matchCancelled: { subject: '', body: '' },
     },
   });
   const [passwordSet, setPasswordSet] = useState(false);
@@ -2250,7 +2252,8 @@ function MailBeheer() {
         <div className="sm:col-span-2 space-y-4 border-t border-vvl-border pt-4">
           <h3 className="font-heading text-base font-black uppercase">E-mailteksten</h3>
           <p className="text-xs text-gray-600">
-            Placeholders: {'{naam}'}, {'{datum}'}, {'{tijd}'}, {'{dienst}'}, {'{link}'}. De layout
+            Placeholders: {'{naam}'}, {'{datum}'}, {'{tijd}'}, {'{dienst}'}, {'{link}'}. Bij verplaatst/afgelast
+            ook {'{wedstrijd}'}, {'{oudedatum}'}, {'{oudetijd}'}, {'{nieuwedatum}'}, {'{nieuwetijd}'}. De layout
             (logo, knop, footer) komt er automatisch omheen. Leeg opslaan valt terug op de standaard.
             Testmails gaan naar het adres hierboven bij Testmail.
           </p>
@@ -2259,6 +2262,8 @@ function MailBeheer() {
             ['scheduled', 'Bevestiging bij inplannen'],
             ['reminder', 'Herinnering, twee dagen van tevoren'],
             ['planningReady', 'Planning klaar'],
+            ['matchMoved', 'Dienst verplaatst (wedstrijd verplaatst, via Sportlink)'],
+            ['matchCancelled', 'Dienst vervalt (wedstrijd afgelast, via Sportlink)'],
           ].map(([key, label]) => (
             <div key={key} className="space-y-2 rounded-sm border border-vvl-border p-3" data-testid={`mail-template-${key}`}>
               <p className="text-sm font-bold">{label}</p>

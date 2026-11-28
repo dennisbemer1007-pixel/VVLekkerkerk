@@ -113,6 +113,9 @@ router.post(
           matchType: matchType?.trim() || null,
           playLevel: playLevel?.trim() || null,
           teamId: teamId ? Number(teamId) : null,
+          // Handmatig aangemaakt: de Sportlink-sync blijft hiervan af.
+          source: 'manual',
+          manualEdit: true,
         },
         include: { team: true },
       });
@@ -161,6 +164,8 @@ router.put(
           matchType: matchType?.trim() || null,
           playLevel: playLevel?.trim() || null,
           teamId: teamId ? Number(teamId) : null,
+          // Handmatig bewerkt: sync overschrijft dit niet meer, tenzij de barcommissie dat uitzet.
+          manualEdit: typeof req.body.manualEdit === 'boolean' ? req.body.manualEdit : true,
         },
         include: { team: true },
       });

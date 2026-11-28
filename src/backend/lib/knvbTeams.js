@@ -1,8 +1,46 @@
 import { gendersCompatible, jmAlternateAliasKeys, youthTeamAliasKey } from './youthTeams.js';
 
-/** Clubnaam in KNVB-export (Thuis / Uit). */
-const CLUB_RE = /\blekkerkerk\b/i;
-const SENIOR_BARE_RE = /^lekkerkerk\s+\d+[a-z]?$/i;
+export const DEFAULT_CLUB_NAME = 'Lekkerkerk';
+
+/** Clubnaam in KNVB-export (Thuis / Uit). Instelbaar per club (ClubSettings.clubName). */
+let clubName = DEFAULT_CLUB_NAME;
+let CLUB_RE = clubNameRegex(clubName);
+let SENIOR_BARE_RE = seniorBareRegex(clubName);
+let CLUB_PREFIX_RE = prefixRegex(clubName);
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function clubNamePattern(name) {
+  return escapeRegex(name).replace(/\s+/g, '\\s+');
+}
+
+function clubNameRegex(name) {
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${clubNamePattern(name)}(?![\\p{L}\\p{N}])`, 'iu');
+}
+
+function seniorBareRegex(name) {
+  return new RegExp(`^${clubNamePattern(name)}\\s+\\d+[a-z]?$`, 'i');
+}
+
+function prefixRegex(name) {
+  return new RegExp(`^${clubNamePattern(name)}\\s+`, 'i');
+}
+
+/** Stelt de clubnaam in waarmee eigen teams worden herkend. Leeg = Lekkerkerk. */
+export function setClubName(name) {
+  const next = String(name || '').replace(/\s+/g, ' ').trim() || DEFAULT_CLUB_NAME;
+  clubName = next;
+  CLUB_RE = clubNameRegex(next);
+  SENIOR_BARE_RE = seniorBareRegex(next);
+  CLUB_PREFIX_RE = prefixRegex(next);
+  return clubName;
+}
+
+export function getClubName() {
+  return clubName;
+}
 
 export function isClubTeamName(name) {
   return CLUB_RE.test(String(name || ''));
@@ -62,9 +100,9 @@ export function clubTeamLabel(fullName, opts = {}) {
     .trim();
   // Al gesplitst behouden
   if (/\((za|zo)\)$/i.test(cleaned)) return cleaned;
-  const stripped = cleaned.replace(/^lekkerkerk\s+/i, '').trim();
+  const stripped = cleaned.replace(CLUB_PREFIX_RE, '').trim();
   if (!stripped) return cleaned;
-  let label = /^\d+[a-z]?$/i.test(stripped) ? `Lekkerkerk ${stripped}` : stripped;
+  let label = /^\d+[a-z]?$/i.test(stripped) ? `${clubName} ${stripped}` : stripped;
   if (isBareSeniorClubTeam(label)) {
     label = `${label}${seniorWeekendSuffix(opts.date)}`;
   }
@@ -78,7 +116,7 @@ export function teamLookupKeys(name) {
     .replace(/\s+/g, ' ')
     .trim();
   const keys = new Set([n, n.replace(/\s+/g, '')]);
-  const stripped = n.replace(/^lekkerkerk\s+/, '');
+  const stripped = n.replace(CLUB_PREFIX_RE, '');
   if (stripped && stripped !== n) {
     keys.add(stripped);
     keys.add(stripped.replace(/\s+/g, ''));
